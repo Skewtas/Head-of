@@ -56,7 +56,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     res.status(response.status).json(jsonData);
   } catch (err: any) {
-    console.error("Timewave API Fetch Error:", err);
-    res.status(500).json({ error: "Failed to fetch from Timewave API" });
+    console.error("Timewave API Fetch Error:", err?.message, err?.stack);
+    res.status(500).json({ error: "Failed to fetch from Timewave API", details: err?.message });
   }
 }
