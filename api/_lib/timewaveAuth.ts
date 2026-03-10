@@ -20,14 +20,18 @@ export async function getTimewaveToken(): Promise<string> {
 
   if (!tokenPromise) {
     tokenPromise = (async () => {
-      const tokenBody = new FormData();
-      tokenBody.append("client_id", clientId);
-      tokenBody.append("client_secret", apiKey);
-      tokenBody.append("grant_type", "client_credentials");
+      const tokenBody = new URLSearchParams({
+        client_id: clientId,
+        client_secret: apiKey,
+        grant_type: "client_credentials",
+      });
 
       const tokenRes = await fetch(`${timewaveBaseUrl}/oauth/token`, {
         method: "POST",
-        body: tokenBody,
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: tokenBody.toString(),
       });
 
       if (!tokenRes.ok) {
