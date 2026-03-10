@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { getTimewaveToken } from '../_lib/timewaveAuth';
+import { getTimewaveToken } from '../_lib/timewaveAuth.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const apiKey = process.env.TIMEWAVE_API_KEY;

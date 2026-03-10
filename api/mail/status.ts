@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { userTokens } from '../_lib/tokenStore';
-import { parseCookies } from '../_lib/cookies';
+import { userTokens } from '../_lib/tokenStore.js';
+import { parseCookies } from '../_lib/cookies.js';
 
 export default function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'GET') {

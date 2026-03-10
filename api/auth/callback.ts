@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { userTokens, generateSessionId } from '../_lib/tokenStore';
-import { setSessionCookie } from '../_lib/cookies';
+import { userTokens, generateSessionId } from '../_lib/tokenStore.js';
+import { setSessionCookie } from '../_lib/cookies.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const { code, error } = req.query;
