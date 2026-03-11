@@ -1351,7 +1351,7 @@ export default function App() {
           <aside className="w-full md:w-64 bg-white border-r border-gray-100 flex-shrink-0 flex flex-col">
             <div className="p-6 flex flex-col items-center text-center">
               <img src="/logotyp1.png" alt="Städona Logo" className="h-10 w-auto mb-1" />
-              <p className="text-sm text-gray-800 font-serif italic tracking-wide">Head of</p>
+              <p className="text-sm text-gray-800 font-serif italic tracking-wide">Dashboard</p>
             </div>
             <nav className="px-4 pb-6 space-y-1.5 flex-1">
               {tabs.map((tab) => {
