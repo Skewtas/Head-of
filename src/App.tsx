@@ -4,6 +4,7 @@
  */
 
 import React, { useState } from 'react';
+import { Show, SignIn, UserButton } from '@clerk/react';
 import {
   LayoutDashboard,
   Users,
@@ -290,14 +291,14 @@ const OverviewView = () => {
     const fetchStats = async () => {
       try {
         const [customersRes, employeesRes, missionsRes, issuesRes, invoicesRes] = await Promise.all([
-          timewaveService.getCustomers().catch(() => ({ data: [] })),
-          timewaveService.getEmployees().catch(() => ({ data: [] })),
+          timewaveService.getCustomers().catch(() => ({ data: [], total: 0 })),
+          timewaveService.getEmployees().catch(() => ({ data: [], total: 0 })),
           timewaveService.getSchedule(
             new Date().toISOString().split('T')[0],
             new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-          ).catch(() => ({ data: [] })),
-          timewaveService.getIssues().catch(() => ({ data: [] })),
-          timewaveService.getSalesData().catch(() => ({ data: [] }))
+          ).catch(() => ({ data: [], total: 0 })),
+          timewaveService.getIssues().catch(() => ({ data: [], total: 0 })),
+          timewaveService.getSalesData().catch(() => ({ data: [], total: 0 }))
         ]);
 
         let updatedSalesData = [...salesData];
@@ -324,10 +325,10 @@ const OverviewView = () => {
         }
 
         setStats({
-          customers: customersRes?.data?.filter((c: any) => c.status === 'active').length || customersRes?.data?.length || 0,
-          employees: employeesRes?.data?.length || 0,
-          missions: missionsRes?.data?.length || 0,
-          issues: issuesRes?.data?.length || 0,
+          customers: customersRes?.total || customersRes?.data?.length || 0,
+          employees: employeesRes?.total || employeesRes?.data?.length || 0,
+          missions: missionsRes?.total || missionsRes?.data?.length || 0,
+          issues: issuesRes?.total || issuesRes?.data?.length || 0,
           salesData: updatedSalesData,
           isLoading: false
         });
@@ -461,15 +462,15 @@ const CustomersView = () => {
     const fetchCustomersAndTickets = async () => {
       try {
         const [customersRes, issuesRes] = await Promise.all([
-          timewaveService.getCustomers().catch(() => ({ data: [] })),
-          timewaveService.getIssues().catch(() => ({ data: [] }))
+          timewaveService.getCustomers().catch(() => ({ data: [], total: 0 })),
+          timewaveService.getIssues().catch(() => ({ data: [], total: 0 }))
         ]);
 
         setStats({
-          active: customersRes?.data?.filter((c: any) => c.status === 'active').length || customersRes?.data?.length || 0,
+          active: customersRes?.total || customersRes?.data?.length || 0,
           newSingle: 15, // Mock data kept for now
           newRecurring: 8, // Mock data kept for now
-          incomingTickets: issuesRes?.data?.length || 0,
+          incomingTickets: issuesRes?.total || issuesRes?.data?.length || 0,
           isLoading: false
         });
       } catch (error) {
@@ -668,13 +669,13 @@ const StaffView = () => {
     const fetchStaffStats = async () => {
       try {
         const [employeesRes, issuesRes, customersRes] = await Promise.all([
-          timewaveService.getEmployees().catch(() => ({ data: [] })),
-          timewaveService.getIssues().catch(() => ({ data: [] })),
-          timewaveService.getCustomers().catch(() => ({ data: [] }))
+          timewaveService.getEmployees().catch(() => ({ data: [], total: 0 })),
+          timewaveService.getIssues().catch(() => ({ data: [], total: 0 })),
+          timewaveService.getCustomers().catch(() => ({ data: [], total: 0 }))
         ]);
 
-        const activeEmployees = employeesRes?.data?.length || 0;
-        const activeCustomers = customersRes?.data?.filter((c: any) => c.status === 'active').length || customersRes?.data?.length || 0;
+        const activeEmployees = employeesRes?.total || employeesRes?.data?.length || 0;
+        const activeCustomers = customersRes?.total || customersRes?.data?.length || 0;
 
         let avgCustomersPerStaff = 0;
         if (activeEmployees > 0) {
@@ -684,7 +685,7 @@ const StaffView = () => {
         setStats({
           totalStaff: activeEmployees,
           avgCustomersPerStaff: avgCustomersPerStaff || 18, // Fallback if 0
-          incomingTickets: issuesRes?.data?.length || 0,
+          incomingTickets: issuesRes?.total || issuesRes?.data?.length || 0,
           isLoading: false
         });
       } catch (error) {
@@ -1333,55 +1334,73 @@ export default function App() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#faf9f9] flex flex-col md:flex-row font-sans text-gray-900">
-      {/* Sidebar */}
-      <aside className="w-full md:w-64 bg-white border-r border-gray-100 flex-shrink-0">
-        <div className="p-6 flex flex-col items-center text-center">
-          <img src="/logotyp1.png" alt="Städona Logo" className="h-10 w-auto mb-1" />
-          <p className="text-sm text-gray-800 font-serif italic tracking-wide">Head of</p>
-        </div>
-        <nav className="px-4 pb-6 space-y-1.5">
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
-            const isActive = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={cn(
-                  "w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200",
-                  isActive
-                    ? "bg-rose-50 text-rose-700 shadow-sm"
-                    : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"
-                )}
-              >
-                <Icon className={cn("w-5 h-5", isActive ? "text-rose-600" : "text-gray-400")} />
-                {tab.label}
-              </button>
-            );
-          })}
-        </nav>
-      </aside>
+    <>
+      <Show
+        when="signed-in"
+        fallback={
+          <div className="min-h-screen bg-[#faf9f9] flex items-center justify-center font-sans">
+            <div className="flex flex-col items-center">
+              <img src="/logotyp1.png" alt="Städona Logo" className="h-14 w-auto mb-6" />
+              <SignIn />
+            </div>
+          </div>
+        }
+      >
+        <div className="min-h-screen bg-[#faf9f9] flex flex-col md:flex-row font-sans text-gray-900">
+          {/* Sidebar */}
+          <aside className="w-full md:w-64 bg-white border-r border-gray-100 flex-shrink-0 flex flex-col">
+            <div className="p-6 flex flex-col items-center text-center">
+              <img src="/logotyp1.png" alt="Städona Logo" className="h-10 w-auto mb-1" />
+              <p className="text-sm text-gray-800 font-serif italic tracking-wide">Head of</p>
+            </div>
+            <nav className="px-4 pb-6 space-y-1.5 flex-1">
+              {tabs.map((tab) => {
+                const Icon = tab.icon;
+                const isActive = activeTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={cn(
+                      "w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200",
+                      isActive
+                        ? "bg-rose-50 text-rose-700 shadow-sm"
+                        : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"
+                    )}
+                  >
+                    <Icon className={cn("w-5 h-5", isActive ? "text-rose-600" : "text-gray-400")} />
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </nav>
+            <div className="px-6 py-4 border-t border-gray-100 flex items-center gap-3">
+              <UserButton afterSignOutUrl="/" />
+              <span className="text-xs text-gray-500">Konto</span>
+            </div>
+          </aside>
 
-      {/* Main Content */}
-      <main className="flex-1 overflow-auto bg-[#faf9f9]">
-        <header className="bg-white/80 backdrop-blur-md border-b border-gray-100 px-8 py-6 sticky top-0 z-10">
-          <h2 className="text-2xl font-bold text-gray-800 tracking-tight">
-            {tabs.find(t => t.id === activeTab)?.label}
-          </h2>
-        </header>
-        <div className="p-8 max-w-7xl mx-auto">
-          {activeTab === 'overview' && <OverviewView />}
-          {activeTab === 'customers' && <CustomersView />}
-          {activeTab === 'sales' && <SalesView />}
-          {activeTab === 'quality' && <QualityView />}
-          {activeTab === 'staff' && <StaffView />}
-          {activeTab === 'schedule' && <ScheduleView />}
-          {activeTab === 'actions' && <ActionListView />}
-          {activeTab === 'tickets' && <TicketsView />}
-          {activeTab === 'mail' && <MailView />}
+          {/* Main Content */}
+          <main className="flex-1 overflow-auto bg-[#faf9f9]">
+            <header className="bg-white/80 backdrop-blur-md border-b border-gray-100 px-8 py-6 sticky top-0 z-10">
+              <h2 className="text-2xl font-bold text-gray-800 tracking-tight">
+                {tabs.find(t => t.id === activeTab)?.label}
+              </h2>
+            </header>
+            <div className="p-8 max-w-7xl mx-auto">
+              {activeTab === 'overview' && <OverviewView />}
+              {activeTab === 'customers' && <CustomersView />}
+              {activeTab === 'sales' && <SalesView />}
+              {activeTab === 'quality' && <QualityView />}
+              {activeTab === 'staff' && <StaffView />}
+              {activeTab === 'schedule' && <ScheduleView />}
+              {activeTab === 'actions' && <ActionListView />}
+              {activeTab === 'tickets' && <TicketsView />}
+              {activeTab === 'mail' && <MailView />}
+            </div>
+          </main>
         </div>
-      </main>
-    </div>
+      </Show>
+    </>
   );
 }

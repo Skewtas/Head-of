@@ -2,12 +2,14 @@ import express from "express";
 import { createServer as createViteServer } from "vite";
 import cookieParser from "cookie-parser";
 import axios from "axios";
+import { clerkMiddleware } from "@clerk/express";
 
 const app = express();
 const PORT = 3000;
 
 app.use(cookieParser());
 app.use(express.json());
+app.use(clerkMiddleware());
 
 // In-memory store for tokens (for prototype purposes)
 // In a real app, store this securely in a database associated with a user session
