@@ -73,5 +73,20 @@ export const timewaveService = {
       console.error('Error fetching issues from Timewave:', error);
       throw error;
     }
+  },
+
+  /**
+   * Fetch full monthly mission summary (all pages aggregated server-side)
+   */
+  async getMissionsSummary(startDate: string, endDate: string) {
+    try {
+      const response = await axios.get('/api/timewave-summary/missions', {
+        params: { startDate, endDate }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching missions summary:', error);
+      throw error;
+    }
   }
 };

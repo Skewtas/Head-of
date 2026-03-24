@@ -210,14 +210,14 @@ const DraggableJobCard = ({ job, isOverlay = false }: { job: Job, isOverlay?: bo
       {...attributes}
       className={cn(
         "p-3 rounded-2xl border shadow-sm cursor-grab active:cursor-grabbing transition-all",
-        colors[job.type] || 'bg-gray-50 border-gray-200 text-gray-800',
+        colors[job.type] || 'bg-gray-50 border-gray-200 text-brand-dark',
         isDragging && !isOverlay ? "opacity-30" : "opacity-100",
         isOverlay && "shadow-xl scale-105 rotate-2"
       )}
     >
       <div className="flex justify-between items-start mb-1">
         <span className="font-semibold text-sm truncate pr-2">{job.customerName}</span>
-        {job.priority === 'HIGH' && <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />}
+        {job.priority === 'HIGH' && <AlertCircle className="w-4 h-4 text-brand-accent shrink-0" />}
       </div>
       <div className="flex items-center gap-1 text-xs opacity-80 mb-1">
         <MapPin className="w-3 h-3" /> {job.areaCode}
@@ -241,8 +241,8 @@ const DroppableSlot = ({ id, cleanerId, dayIndex, startMin, children, isConflict
       ref={setNodeRef}
       className={cn(
         "h-12 border-b border-gray-100 border-r relative transition-colors",
-        isOver ? "bg-rose-50/50" : "bg-white",
-        isConflict && "ring-2 ring-inset ring-rose-300 bg-rose-50/20"
+        isOver ? "bg-brand-accent/10/50" : "bg-white",
+        isConflict && "ring-2 ring-inset ring-rose-300 bg-brand-accent/10/20"
       )}
     >
       {children}
@@ -273,7 +273,7 @@ const ScheduledJob = ({ job, isConflict, onClick }: { job: Job, isConflict: bool
       onClick={(e) => { e.stopPropagation(); onClick(); }}
       className={cn(
         "absolute left-1 right-1 rounded-xl border p-2 shadow-sm cursor-grab active:cursor-grabbing overflow-hidden z-10 backdrop-blur-sm",
-        colors[job.type] || 'bg-gray-100 border-gray-200 text-gray-900',
+        colors[job.type] || 'bg-gray-100 border-gray-200 text-brand-dark',
         isDragging ? "opacity-30" : "opacity-100",
         isConflict && "ring-2 ring-rose-400 shadow-rose-200",
         job.status === 'COMPLETED' && "opacity-60 grayscale"
@@ -465,25 +465,25 @@ export default function DispatchBoard() {
 
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-      <div className="h-screen flex flex-col bg-[#F4F1EB] text-gray-800 font-sans overflow-hidden">
+      <div className="h-screen flex flex-col bg-[#F4F1EB] text-brand-dark  overflow-hidden">
         
         {/* TOP BAR */}
         <header className="h-16 bg-white border-b border-[#E5E0D8] px-6 flex items-center justify-between shrink-0 z-20">
           <div className="flex items-center gap-4">
-            <h1 className="text-xl font-bold tracking-tight text-gray-900">DISPATCH / JOBBPOOL</h1>
+            <h1 className="text-xl font-bold tracking-tight text-brand-dark">DISPATCH / JOBBPOOL</h1>
             <div className="h-6 w-px bg-gray-200" />
-            <span className="text-sm font-medium text-gray-500">Vecka 42</span>
+            <span className="text-sm font-medium text-brand-muted">Vecka 42</span>
           </div>
           <div className="flex items-center gap-3">
             <button 
               onClick={fetchData} 
               disabled={isLoading}
-              className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-600 rounded-xl text-sm font-bold tracking-wider uppercase hover:bg-gray-50 transition-all disabled:opacity-50"
+              className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-brand-muted rounded-xl text-sm font-bold tracking-wider uppercase hover:bg-gray-50 transition-all disabled:opacity-50"
             >
               <RefreshCw className={cn("w-4 h-4", isLoading && "animate-spin")} />
               Uppdatera
             </button>
-            <button onClick={() => setShowCapacity(!showCapacity)} className={cn("px-4 py-2 rounded-xl text-sm font-bold tracking-wider uppercase transition-all", showCapacity ? "bg-rose-100 text-rose-800" : "bg-gray-100 text-gray-600 hover:bg-gray-200")}>
+            <button onClick={() => setShowCapacity(!showCapacity)} className={cn("px-4 py-2 rounded-xl text-sm font-bold tracking-wider uppercase transition-all", showCapacity ? "bg-brand-accent/20 text-rose-800" : "bg-gray-100 text-brand-muted hover:bg-gray-200")}>
               Kapacitetsvy
             </button>
             <div className="h-6 w-px bg-gray-200" />
@@ -503,9 +503,9 @@ export default function DispatchBoard() {
                 <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input type="text" placeholder="Sök jobb..." className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500" />
               </div>
-              <div className="flex items-center justify-between text-xs font-bold text-gray-500 uppercase tracking-wider">
+              <div className="flex items-center justify-between text-xs font-bold text-brand-muted uppercase tracking-wider">
                 <span>Obokade jobb: {unassignedJobs.length}</span>
-                <Filter className="w-4 h-4 cursor-pointer hover:text-gray-800" />
+                <Filter className="w-4 h-4 cursor-pointer hover:text-brand-dark" />
               </div>
             </div>
             
@@ -525,12 +525,12 @@ export default function DispatchBoard() {
               {/* Grid Header */}
               <div className="sticky top-0 z-30 flex bg-white border-b border-[#E5E0D8] shadow-sm">
                 <div className="w-64 shrink-0 border-r border-[#E5E0D8] p-4 bg-[#FAFAF9] flex items-center justify-between">
-                  <span className="font-bold text-gray-700 text-sm uppercase tracking-wider">Personal ({cleaners.length})</span>
+                  <span className="font-bold text-brand-muted text-sm uppercase tracking-wider">Personal ({cleaners.length})</span>
                   <Settings2 className="w-4 h-4 text-gray-400" />
                 </div>
                 {days.map((day, dIdx) => (
                   <div key={dIdx} className="flex-1 min-w-[300px] border-r border-[#E5E0D8]">
-                    <div className="p-2 text-center font-bold text-gray-800 bg-[#F4F1EB]/50 border-b border-[#E5E0D8]">{day}</div>
+                    <div className="p-2 text-center font-serif text-brand-dark bg-[#F4F1EB]/50 border-b border-[#E5E0D8]">{day}</div>
                     <div className="flex">
                       {timeSlots.filter((_, i) => i % 2 === 0).map((time, i) => (
                         <div key={i} className="flex-1 text-center text-[10px] text-gray-400 py-1 border-r border-gray-100 last:border-0">
@@ -553,20 +553,20 @@ export default function DispatchBoard() {
                       {/* Cleaner Info */}
                       <div className="w-64 shrink-0 border-r border-[#E5E0D8] p-3 bg-white group-hover:bg-[#FAFAF9] transition-colors sticky left-0 z-20 flex flex-col justify-center">
                         <div className="flex justify-between items-center mb-1">
-                          <span className="font-bold text-sm text-gray-900 flex items-center gap-2">
+                          <span className="font-bold text-sm text-brand-dark flex items-center gap-2">
                             {cleaner.name}
                             {cleaner.transportMode === 'CAR' ? <Car className="w-3 h-3 text-gray-400" /> : <Train className="w-3 h-3 text-gray-400" />}
                           </span>
                           <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded-md uppercase tracking-wider", 
                             cleaner.status === 'WORKING' ? "bg-[#A8E6CF]/20 text-emerald-700" : 
-                            cleaner.status === 'SICK' ? "bg-[#FF6B6B]/20 text-rose-700" : "bg-gray-100 text-gray-600"
+                            cleaner.status === 'SICK' ? "bg-[#FF6B6B]/20 text-brand-accent" : "bg-gray-100 text-brand-muted"
                           )}>
                             {cleaner.status}
                           </span>
                         </div>
-                        <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
+                        <div className="flex items-center justify-between text-xs text-brand-muted mb-1">
                           <span>{weeklyHours.toFixed(1)}h / 40h</span>
-                          {isOvertime && <span className="text-rose-500 font-bold text-[10px] uppercase">Övertid</span>}
+                          {isOvertime && <span className="text-brand-accent font-bold text-[10px] uppercase">Övertid</span>}
                         </div>
                         <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
                           <div className={cn("h-full", isOvertime ? "bg-rose-400" : "bg-[#A8E6CF]")} style={{ width: `${Math.min(100, (weeklyHours/40)*100)}%` }} />
@@ -618,48 +618,48 @@ export default function DispatchBoard() {
           {selectedJob && (
             <div className="w-80 bg-white border-l border-[#E5E0D8] flex flex-col shrink-0 z-20 shadow-xl">
               <div className="p-4 border-b border-[#E5E0D8] flex justify-between items-center bg-[#FAFAF9]">
-                <h3 className="font-bold text-sm uppercase tracking-wider text-gray-800">Job Inspector</h3>
-                <button onClick={() => setSelectedJob(null)} className="p-1 hover:bg-gray-200 rounded-lg transition-colors"><X className="w-4 h-4 text-gray-500" /></button>
+                <h3 className="font-bold text-sm uppercase tracking-wider text-brand-dark">Job Inspector</h3>
+                <button onClick={() => setSelectedJob(null)} className="p-1 hover:bg-gray-200 rounded-lg transition-colors"><X className="w-4 h-4 text-brand-muted" /></button>
               </div>
               
               <div className="p-6 space-y-6 overflow-y-auto">
                 <div>
-                  <h2 className="text-xl font-bold text-gray-900 mb-1">{selectedJob.customerName}</h2>
-                  <div className="flex items-center gap-2 text-sm text-gray-500">
+                  <h2 className="text-xl font-serif text-brand-dark mb-1">{selectedJob.customerName}</h2>
+                  <div className="flex items-center gap-2 text-sm text-brand-muted">
                     <MapPin className="w-4 h-4" /> {selectedJob.areaCode}
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="bg-[#F4F1EB]/50 p-3 rounded-xl">
-                    <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Typ</div>
-                    <div className="text-sm font-medium text-gray-900">{selectedJob.type}</div>
+                    <div className="text-[10px] font-bold text-brand-muted uppercase tracking-wider mb-1">Typ</div>
+                    <div className="text-sm font-medium text-brand-dark">{selectedJob.type}</div>
                   </div>
                   <div className="bg-[#F4F1EB]/50 p-3 rounded-xl">
-                    <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Tid</div>
-                    <div className="text-sm font-medium text-gray-900">{selectedJob.estMinutes} min</div>
+                    <div className="text-[10px] font-bold text-brand-muted uppercase tracking-wider mb-1">Tid</div>
+                    <div className="text-sm font-medium text-brand-dark">{selectedJob.estMinutes} min</div>
                   </div>
                 </div>
 
                 {selectedJob.cleanerId && (
                   <div className="bg-white border border-gray-200 p-4 rounded-xl shadow-sm">
                     <div className="flex items-center gap-3 mb-3">
-                      <div className="w-10 h-10 bg-rose-100 rounded-full flex items-center justify-center text-rose-700 font-bold">
+                      <div className="w-10 h-10 bg-brand-accent/20 rounded-full flex items-center justify-center text-brand-accent font-bold">
                         {mockCleaners.find(c => c.id === selectedJob.cleanerId)?.name.charAt(0)}
                       </div>
                       <div>
-                        <div className="text-sm font-bold text-gray-900">{mockCleaners.find(c => c.id === selectedJob.cleanerId)?.name}</div>
-                        <div className="text-xs text-gray-500">Tilldelad städare</div>
+                        <div className="text-sm font-serif text-brand-dark">{mockCleaners.find(c => c.id === selectedJob.cleanerId)?.name}</div>
+                        <div className="text-xs text-brand-muted">Tilldelad städare</div>
                       </div>
                     </div>
                     
                     <div className="space-y-2 pt-3 border-t border-gray-100">
                       <div className="flex justify-between text-xs">
-                        <span className="text-gray-500">Starttid:</span>
+                        <span className="text-brand-muted">Starttid:</span>
                         <span className="font-medium">{Math.floor(selectedJob.startMin! / 60).toString().padStart(2, '0')}:{(selectedJob.startMin! % 60).toString().padStart(2, '0')}</span>
                       </div>
                       <div className="flex justify-between text-xs">
-                        <span className="text-gray-500">Transport:</span>
+                        <span className="text-brand-muted">Transport:</span>
                         <span className="font-medium">{mockCleaners.find(c => c.id === selectedJob.cleanerId)?.transportMode}</span>
                       </div>
                     </div>
@@ -667,8 +667,8 @@ export default function DispatchBoard() {
                 )}
 
                 <div>
-                  <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Anteckningar</div>
-                  <p className="text-sm text-gray-700 bg-gray-50 p-3 rounded-xl border border-gray-100">{selectedJob.notes}</p>
+                  <div className="text-[10px] font-bold text-brand-muted uppercase tracking-wider mb-2">Anteckningar</div>
+                  <p className="text-sm text-brand-muted bg-gray-50 p-3 rounded-xl border border-gray-100">{selectedJob.notes}</p>
                 </div>
 
                 <div className="pt-4 border-t border-gray-100 space-y-2">
@@ -687,7 +687,7 @@ export default function DispatchBoard() {
                       setJobs(prev => prev.map(j => j.id === selectedJob.id ? { ...j, status: 'UNASSIGNED', cleanerId: null, dayIndex: null, startMin: null, endMin: null } : j));
                       setSelectedJob(null);
                     }}
-                    className="w-full py-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl text-sm font-bold tracking-wider uppercase hover:bg-gray-50 transition-colors"
+                    className="w-full py-2.5 bg-white border border-gray-200 text-brand-muted rounded-xl text-sm font-bold tracking-wider uppercase hover:bg-gray-50 transition-colors"
                   >
                     Avboka / Återgå till pool
                   </button>
@@ -703,7 +703,7 @@ export default function DispatchBoard() {
         {/* TOAST */}
         {toast && (
           <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-gray-900 text-white px-6 py-3 rounded-2xl shadow-2xl text-sm font-medium flex items-center gap-3 z-50 animate-in fade-in slide-in-from-bottom-4">
-            <AlertCircle className="w-4 h-4 text-rose-400" />
+            <AlertCircle className="w-4 h-4 text-brand-accent" />
             {toast}
           </div>
         )}
