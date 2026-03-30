@@ -21,7 +21,9 @@ import {
   MoveDown,
   GripVertical,
   Bold,
-  Italic
+  Italic,
+  Smartphone,
+  Mail
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -90,6 +92,12 @@ export default function NewsletterView() {
   const [subject, setSubject] = useState('');
   const [category, setCategory] = useState('Allmänt');
 
+  // Channel: email, sms, or both
+  type SendChannel = 'email' | 'sms' | 'both';
+  const [sendChannel, setSendChannel] = useState<SendChannel>('email');
+  const [smsMessage, setSmsMessage] = useState('');
+  const [includeOptOutLink, setIncludeOptOutLink] = useState(false);
+
   // Recipients
   const [recipients, setRecipients] = useState<string[]>([]);
   const [emailInput, setEmailInput] = useState('');
@@ -107,9 +115,14 @@ export default function NewsletterView() {
   const [segments, setSegments] = useState<{
     areas: { name: string; count: number }[];
     clientTypes: { name: string; count: number }[];
+    serviceTypes?: { name: string; count: number }[];
   }>({ areas: [], clientTypes: [] });
   const [selectedAreas, setSelectedAreas] = useState<string[]>([]);
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
+
+  // Computed: customers with phone numbers for SMS sending who haven't opted out
+  const smsRecipients = allCustomers.filter((c: any) => c.phone && !c.optedOutSms && recipients.includes(c.email));
+  const emailRecipients = allCustomers.filter((c: any) => !c.optedOutEmail && recipients.includes(c.email));
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const activeImageBlockRef = useRef<string | null>(null);
@@ -126,7 +139,15 @@ export default function NewsletterView() {
     }
   }, []);
 
-  React.useEffect(() => { fetchHistory(); }, [fetchHistory]);
+  const [hasLoadedBase, setHasLoadedBase] = useState(false);
+
+  React.useEffect(() => { 
+    fetchHistory(); 
+    if (!hasLoadedBase) {
+      importCustomers(false);
+      setHasLoadedBase(true);
+    }
+  }, [fetchHistory, hasLoadedBase]);
 
   // --- Block operations ---
   const updateBlock = (id: string, updates: Partial<EditorBlock>) => {
@@ -191,17 +212,53 @@ export default function NewsletterView() {
     }
   };
 
-  const handleBulkAdd = () => {
+  const handleBulkAdd = async () => {
     const emails = bulkInput.split(/[,;\n]+/).map(e => e.trim().toLowerCase()).filter(e => e && e.includes('@'));
-    setRecipients(prev => [...new Set([...prev, ...emails])]);
-    setBulkInput('');
-    setShowBulkInput(false);
-  };
-
-  const importCustomers = async () => {
+    if (emails.length === 0) return;
+    
     setIsLoadingCustomers(true);
     try {
-      const res = await fetch('/api/newsletter/customers');
+      const newContacts = emails.map(e => ({ email: e, name: 'Manuell', phone: '' }));
+      await fetch('/api/newsletter/customers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contacts: newContacts })
+      });
+      setRecipients(prev => [...new Set([...prev, ...emails])]);
+      setBulkInput('');
+      setShowBulkInput(false);
+      importCustomers(false); // Ladda om listan med de nyligen sparade
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsLoadingCustomers(false);
+    }
+  };
+
+  const handleAddSingleEmail = async () => {
+    const trimmed = emailInput.trim().toLowerCase();
+    if (!trimmed.includes('@')) return;
+    setIsLoadingCustomers(true);
+    try {
+      await fetch('/api/newsletter/customers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contacts: [{ email: trimmed, name: 'Manuell', phone: '' }] })
+      });
+      addEmail(trimmed);
+      setEmailInput('');
+      importCustomers(false);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsLoadingCustomers(false);
+    }
+  };
+
+  const importCustomers = async (sync = false) => {
+    setIsLoadingCustomers(true);
+    try {
+      const res = await fetch(`/api/newsletter/customers${sync ? '?sync=true' : ''}`);
       if (res.ok) {
         const data = await res.json();
         setAllCustomers(data.customers);
@@ -211,10 +268,12 @@ export default function NewsletterView() {
           const emails = data.customers.map((c: any) => c.email);
           setRecipients(prev => [...new Set([...prev, ...emails])]);
         }
-        setSendResult({ success: true, message: `${data.total} kunder laddade! Välj segment nedan för att filtrera.` });
+        if (sync) {
+          setSendResult({ success: true, message: `Synkroniserade ${data.total} kunder från Timewave!` });
+        }
       }
     } catch (err) {
-      setSendResult({ success: false, message: 'Kunde inte hämta kunder.' });
+      if (sync) setSendResult({ success: false, message: 'Kunde inte synkronisera med Timewave.' });
     } finally {
       setIsLoadingCustomers(false);
     }
@@ -297,49 +356,87 @@ export default function NewsletterView() {
 
   // --- Send ---
   const handleSend = async () => {
-    if (!subject.trim()) {
-      setSendResult({ success: false, message: 'Ange en ämnesrad.' });
-      return;
-    }
     if (recipients.length === 0) {
       setSendResult({ success: false, message: 'Lägg till minst en mottagare.' });
       return;
     }
-    if (blocks.every(b => !b.content && !b.imageData)) {
-      setSendResult({ success: false, message: 'Nyhetsbrevet har inget innehåll.' });
+
+    const willSendEmail = sendChannel === 'email' || sendChannel === 'both';
+    const willSendSms = sendChannel === 'sms' || sendChannel === 'both';
+
+    if (willSendEmail) {
+      if (!subject.trim()) {
+        setSendResult({ success: false, message: 'Ange en ämnesrad för e-post.' });
+        return;
+      }
+      if (blocks.every(b => !b.content && !b.imageData)) {
+        setSendResult({ success: false, message: 'Nyhetsbrevet har inget innehåll.' });
+        return;
+      }
+    }
+
+    if (willSendSms && !smsMessage.trim()) {
+      setSendResult({ success: false, message: 'Skriv ett SMS-meddelande.' });
+      return;
+    }
+
+    if (willSendSms && smsRecipients.length === 0) {
+      setSendResult({ success: false, message: 'Inga valda mottagare har telefonnummer.' });
       return;
     }
 
     setIsSending(true);
     setSendResult(null);
+    const results: string[] = [];
 
     try {
-      const htmlContent = buildHtmlFromBlocks();
-      const res = await fetch('/api/newsletter/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          subject,
-          introText: '',
-          embedUrl: null,
-          imageData: null,
-          htmlContent,
-          recipients,
-          category
-        })
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setSendResult({ success: true, message: data.message });
+      // Send email
+      if (willSendEmail) {
+        const htmlContent = buildHtmlFromBlocks();
+        const res = await fetch('/api/newsletter/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            subject,
+            introText: '',
+            embedUrl: null,
+            imageData: null,
+            htmlContent,
+            recipients,
+            category
+          })
+        });
+        const data = await res.json();
+        results.push(res.ok ? `📧 ${data.message}` : `📧 Fel: ${data.error}`);
+      }
+
+      // Send SMS
+      if (willSendSms) {
+        const smsRes = await fetch('/api/newsletter/sms', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: smsMessage,
+            recipients: smsRecipients.map((c: any) => ({ name: c.name, phone: c.phone, email: c.email })),
+            includeOptOutLink
+          })
+        });
+        const smsData = await smsRes.json();
+        results.push(smsRes.ok ? `📱 ${smsData.message}` : `📱 Fel: ${smsData.error}`);
+      }
+
+      const allOk = results.every(r => !r.includes('Fel:'));
+      setSendResult({ success: allOk, message: results.join(' | ') });
+
+      if (allOk) {
         setSubject('');
+        setSmsMessage('');
         setBlocks([
           { id: generateId(), type: 'heading', content: '' },
           { id: generateId(), type: 'text', content: '' },
         ]);
         setRecipients([]);
         fetchHistory();
-      } else {
-        setSendResult({ success: false, message: data.error || 'Något gick fel.' });
       }
     } catch (err) {
       setSendResult({ success: false, message: 'Kunde inte nå servern.' });
@@ -522,7 +619,81 @@ export default function NewsletterView() {
 
   return (
     <div className="p-8 bg-brand-bg min-h-[calc(100vh-64px)] space-y-6">
+      {/* Channel Selector */}
+      <Card>
+        <CardContent className="flex items-center gap-3">
+          <span className="text-xs font-bold uppercase tracking-wider text-gray-400 mr-2">Kanal:</span>
+          {[
+            { value: 'email' as SendChannel, icon: Mail, label: 'E-post' },
+            { value: 'sms' as SendChannel, icon: Smartphone, label: 'SMS' },
+            { value: 'both' as SendChannel, icon: Send, label: 'Båda' },
+          ].map(ch => (
+            <button
+              key={ch.value}
+              onClick={() => setSendChannel(ch.value)}
+              className={cn(
+                "flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all",
+                sendChannel === ch.value
+                  ? "bg-brand-dark text-white shadow-sm"
+                  : "bg-gray-50 text-brand-muted border border-gray-200 hover:bg-gray-100"
+              )}
+            >
+              <ch.icon className="w-4 h-4" />
+              {ch.label}
+            </button>
+          ))}
+          {sendChannel !== 'email' && (
+            <div className="ml-auto text-xs text-brand-muted text-right leading-tight">
+              📱 {smsRecipients.length} / {recipients.length} har mobilnummer<br/>
+              <span className="text-[10px] opacity-70">(spärrade nummer är borträknade)</span>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* SMS Editor (shown when sms or both) */}
+      {(sendChannel === 'sms' || sendChannel === 'both') && (
+        <Card>
+          <CardHeader title="SMS-meddelande" icon={Smartphone} />
+          <CardContent className="space-y-3">
+            <p className="text-xs text-brand-muted">
+              Skriv ditt SMS nedan. Använd <code className="px-1 py-0.5 bg-gray-100 rounded text-[10px]">{'{{name}}'}</code> för att personalisera med kundens förnamn.
+            </p>
+            <textarea
+              value={smsMessage}
+              onChange={e => setSmsMessage(e.target.value)}
+              maxLength={918}
+              rows={4}
+              placeholder="Hej {{name}}! Vi vill berätta att..."
+              className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-accent/20 focus:border-brand-accent transition-all resize-none"
+            />
+            <div className="flex items-center justify-between">
+              <span className={cn(
+                "text-xs font-medium",
+                smsMessage.length > 160 ? "text-amber-600" : "text-gray-400"
+              )}>
+                {smsMessage.length}/160 tecken
+                {smsMessage.length > 160 && ` (${Math.ceil(smsMessage.length / 153)} SMS-delar)`}
+              </span>
+              <span className="text-xs text-gray-400">
+                {smsMessage.length <= 160 ? '1 SMS' : `${Math.ceil(smsMessage.length / 153)} SMS`} per mottagare
+              </span>
+            </div>
+            <label className="flex items-center gap-2 mt-2 pt-2 border-t border-gray-100 cursor-pointer w-fit">
+              <input 
+                type="checkbox" 
+                checked={includeOptOutLink} 
+                onChange={(e) => setIncludeOptOutLink(e.target.checked)} 
+                className="w-4 h-4 text-brand-dark rounded border-gray-300 focus:ring-brand-accent/30"
+              />
+              <span className="text-xs font-medium text-brand-dark">Skicka med avregistreringslänk (ca 45 tecken)</span>
+            </label>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Editor + Preview */}
+      {(sendChannel === 'email' || sendChannel === 'both') && (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Editor */}
         <Card>
@@ -623,14 +794,14 @@ export default function NewsletterView() {
             />
             <CardContent className="space-y-3">
               <button
-                onClick={importCustomers}
+                onClick={() => importCustomers(true)}
                 disabled={isLoadingCustomers}
                 className="w-full py-2.5 bg-brand-bg border border-brand-accent/20 text-brand-dark rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-brand-accent/10 transition-all flex items-center justify-center gap-2"
               >
                 {isLoadingCustomers ? (
-                  <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Hämtar kunder...</>
+                  <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Hämtar & Synkroniserar...</>
                 ) : (
-                  <><Plus className="w-3.5 h-3.5" /> Hämta alla kunder från Timewave</>
+                  <><RefreshCw className="w-3.5 h-3.5" /> Synkronisera mot Timewave</>
                 )}
               </button>
 
@@ -723,13 +894,13 @@ export default function NewsletterView() {
                   value={emailInput}
                   onChange={(e) => setEmailInput(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter') { e.preventDefault(); addEmail(emailInput); setEmailInput(''); }
+                    if (e.key === 'Enter') { e.preventDefault(); handleAddSingleEmail(); }
                   }}
                   placeholder="namn@exempel.se"
                   className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-accent/20 transition-all"
                 />
                 <button
-                  onClick={() => { addEmail(emailInput); setEmailInput(''); }}
+                  onClick={handleAddSingleEmail}
                   className="px-3 py-2 bg-brand-dark text-white rounded-xl hover:bg-brand-accent transition-colors"
                 >
                   <Plus className="w-4 h-4" />
@@ -779,6 +950,7 @@ export default function NewsletterView() {
           </Card>
         </div>
       </div>
+      )}
 
       {/* Send Section */}
       <Card>
@@ -794,7 +966,7 @@ export default function NewsletterView() {
             </span>
             <span className={cn("flex items-center gap-1.5", recipients.length > 0 ? "text-emerald-600" : "text-gray-400")}>
               {recipients.length > 0 ? <CheckCircle className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
-              {recipients.length} mottagare
+              {sendChannel === 'sms' ? smsRecipients.length : sendChannel === 'both' ? Math.max(emailRecipients.length, smsRecipients.length) : emailRecipients.length} mottagare
             </span>
           </div>
           <button

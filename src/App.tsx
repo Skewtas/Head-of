@@ -18,12 +18,13 @@ import {
   DollarSign,
   Briefcase,
   ThumbsDown,
-  AlertCircle,
-  ClipboardList,
   Mail,
   Search,
   Inbox,
   Send,
+  Zap,
+  AlertCircle,
+  ClipboardList,
   File,
   Archive,
   CalendarDays,
@@ -49,6 +50,7 @@ import { twMerge } from 'tailwind-merge';
 import { timewaveService } from './services/timewaveService';
 import DispatchBoard from './DispatchBoard';
 import NewsletterView from './NewsletterView';
+import AutomationsView from './AutomationsView';
 
 // Utility for Tailwind classes
 function cn(...inputs: ClassValue[]) {
@@ -1569,6 +1571,7 @@ export default function App() {
     { id: 'tickets', label: 'ÄRENDEHANTERING', icon: ClipboardList },
     { id: 'mail', label: 'MAIL', icon: Mail },
     { id: 'newsletter', label: 'NYHETSBREV', icon: Newspaper },
+    { id: 'automations', label: 'AUTOMATIONER', icon: Zap },
   ];
 
   return (
@@ -1633,6 +1636,7 @@ export default function App() {
               {activeTab === 'tickets' && <TicketsView />}
               {activeTab === 'mail' && <MailView />}
               {activeTab === 'newsletter' && <NewsletterView />}
+              {activeTab === 'automations' && <AutomationsView />}
             </div>
           </main>
         </div>

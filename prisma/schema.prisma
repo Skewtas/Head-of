@@ -1,0 +1,38 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Newsletter {
+  id              String   @id @default(cuid())
+  subject         String
+  category        String   @default("Allmänt")
+  sentAt          DateTime @default(now())
+  status          String   @default("sent")
+  successCount    Int      @default(0)
+  failedCount     Int      @default(0)
+  recipients      Json     @default("[]") // Array of emails
+  openedBy        Json     @default("[]") // Array of emails
+  clickedBy       Json     @default("[]") // Array of emails
+  introText       String?
+  imageData       String?  @db.Text
+  embedUrl        String?
+  htmlContent     String?  @db.Text
+}
+
+model AutomatedTemplate {
+  id      String @id // e.g. "föndsterputs_welcome", "birthday"
+  subject String
+  blocks  Json   @default("[]") // Array of builder blocks
+}
+
+model AutomationLog {
+  id            Int      @id @default(autoincrement())
+  customerId    String
+  customerEmail String
+  templateId    String
+  sentAt        DateTime @default(now())
+}

@@ -52,3 +52,9 @@ export async function getTimewaveToken(): Promise<string> {
 
   return tokenPromise;
 }
+
+export async function forceRefreshTimewaveToken(): Promise<string> {
+  timewaveAccessToken = null;
+  tokenExpiresAt = 0;
+  return getTimewaveToken();
+}

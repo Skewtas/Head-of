@@ -2,6 +2,12 @@
   "buildCommand": "vite build",
   "outputDirectory": "dist",
   "framework": "vite",
+  "crons": [
+    {
+      "path": "/api/automations/daily",
+      "schedule": "0 3 * * *"
+    }
+  ],
   "rewrites": [
     { "source": "/auth/callback", "destination": "/api/auth/callback" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
