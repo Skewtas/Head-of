@@ -150,8 +150,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     });
   } catch (err: any) {
-    console.error("Newsletter customers error:", err.message);
-    res.status(500).json({ error: err.message });
+    console.error("Newsletter customers error:", err.message, err.cause);
+    res.status(500).json({ error: err.message, cause: err.cause ? String(err.cause) : undefined, stack: err.stack });
   }
 }
 

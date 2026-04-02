@@ -31,20 +31,35 @@ export async function getTimewaveCustomers(): Promise<TimewaveCustomer[]> {
   
   // 1. Fetch Clients
   let allClients: any[] = [];
-  let page = 1;
-  let totalPages = 1;
-  while (page <= totalPages) {
-    const resp = await fetch(`${timewaveBaseUrl}/clients?page[size]=100&page[number]=${page}`, {
+  
+  // Hämta första sidan för att få reda på totalPages
+  let firstResp = await fetch(`${timewaveBaseUrl}/clients?page[size]=100&page[number]=1`, {
+    headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+  });
+  if (firstResp.status === 403) {
+    token = await forceRefreshTimewaveToken();
+    firstResp = await fetch(`${timewaveBaseUrl}/clients?page[size]=100&page[number]=1`, {
       headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
     });
-    if (resp.status === 403) {
-      token = await forceRefreshTimewaveToken();
-      page = 1; continue;
+  }
+  const firstData = await firstResp.json();
+  const totalPages = firstData.last_page || 1;
+  allClients = allClients.concat(firstData.data || []);
+
+  // Hämta resterande sidor Parallellt (mycket snabbare, undviker Vercel timeout!)
+  if (totalPages > 1) {
+    const fetchPromises = [];
+    for (let p = 2; p <= totalPages; p++) {
+      fetchPromises.push(
+        fetch(`${timewaveBaseUrl}/clients?page[size]=100&page[number]=${p}`, {
+          headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+        }).then(r => r.json())
+      );
     }
-    const data = await resp.json();
-    totalPages = data.last_page || 1;
-    allClients = allClients.concat(data.data || []);
-    page++;
+    const results = await Promise.all(fetchPromises);
+    results.forEach(res => {
+      allClients = allClients.concat(res.data || []);
+    });
   }
 
   const ordersResp = await fetch(`${timewaveBaseUrl}/orders?page[size]=1000`, {
