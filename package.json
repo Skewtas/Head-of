@@ -6,11 +6,12 @@
   "scripts": {
     "dev": "bun --bun server.ts",
     "build": "vite build",
-    "vercel-build": "vite build",
+    "vercel-build": "prisma generate && vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "start": "node server.ts",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@clerk/express": "^2.0.2",

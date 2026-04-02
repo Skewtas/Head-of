@@ -1,9 +1,7 @@
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 import * as fs from 'fs';
-import type { PrismaClient as PrismaClientType } from '@prisma/client';
-import pkg from '@prisma/client';
-const { PrismaClient } = pkg;
+import { PrismaClient } from '@prisma/client';
 
 // Read the prisma+postgres:// URL directly from .env file
 // (.env.local overrides DATABASE_URL with a plain postgres:// URL, 
@@ -27,7 +25,7 @@ function getAccelerateUrl(): string | undefined {
   return undefined;
 }
 
-const globalForPrisma = global as unknown as { prisma: PrismaClientType };
+const globalForPrisma = global as unknown as { prisma: PrismaClient };
 
 export const prisma =
   globalForPrisma.prisma ||
