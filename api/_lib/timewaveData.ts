@@ -1,4 +1,4 @@
-import { getTimewaveToken, forceRefreshTimewaveToken } from './timewaveAuth';
+import { getTimewaveToken, forceRefreshTimewaveToken } from './timewaveAuth.js';
 
 export interface TimewaveCustomer {
   id: string;
