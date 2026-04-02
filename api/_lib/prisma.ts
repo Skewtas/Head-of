@@ -32,14 +32,19 @@ export function getPrisma() {
     
     // If the URL has prisma+postgres or prisma layer, OR points to Prisma Data Proxy, we use accelerateUrl instead of neon adapter
     let useAccelerate = false;
+    let finalConnectionString = connectionString;
+    
     if ((connectionString || '').startsWith('prisma://') || (connectionString || '').startsWith('prisma+postgres://') || (connectionString || '').includes('db.prisma.io')) {
       useAccelerate = true;
+      if (finalConnectionString.startsWith('postgres://') && finalConnectionString.includes('db.prisma.io')) {
+        finalConnectionString = finalConnectionString.replace('postgres://', 'prisma+postgres://');
+      }
     }
     
     if (useAccelerate) {
-      globalForPrisma.prisma = new PrismaClient({ accelerateUrl: connectionString });
+      globalForPrisma.prisma = new PrismaClient({ accelerateUrl: finalConnectionString });
     } else {
-      const pool = new Pool({ connectionString: connectionString || '' });
+      const pool = new Pool({ connectionString: finalConnectionString || '' });
       const adapter = new PrismaNeon(pool as any);
       globalForPrisma.prisma = new PrismaClient({ adapter });
     }
