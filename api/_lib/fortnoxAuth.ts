@@ -21,9 +21,9 @@ export async function getFortnoxTokens(): Promise<FortnoxTokens | null> {
       where: { id: 'system_fortnox_tokens' }
     });
     
-    if (record && record.content) {
+    if (record && record.blocks) {
       // @ts-ignore
-      return record.content as FortnoxTokens;
+      return record.blocks as FortnoxTokens;
     }
   } catch (error) {
     console.error("Failed to read Fortnox tokens from database:", error);
@@ -39,21 +39,13 @@ export async function saveFortnoxTokens(tokens: FortnoxTokens): Promise<void> {
     await prisma.automatedTemplate.upsert({
       where: { id: 'system_fortnox_tokens' },
       update: {
-        name: 'System Fortnox Tokens',
         subject: 'Internal System Data',
-        type: 'SYSTEM',
-        // @ts-ignore
-        content: tokens,
-        isActive: true
+        blocks: tokens as any
       },
       create: {
         id: 'system_fortnox_tokens',
-        name: 'System Fortnox Tokens',
         subject: 'Internal System Data',
-        type: 'SYSTEM',
-        // @ts-ignore
-        content: tokens,
-        isActive: true
+        blocks: tokens as any
       }
     });
   } catch (error) {
