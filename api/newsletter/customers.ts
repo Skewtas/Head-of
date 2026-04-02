@@ -59,6 +59,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // ---------------------------------------------------------------------------
     const sync = req.query.sync === 'true';
 
+    // Logga environment variables för att se vilka som Vercel skickar med
+    console.log("ENV VARS AVAILABLE ON VERCEL:", Object.keys(process.env).join(', '));
+    if (process.env.DATABASE_URL) console.log("DATABASE_URL EXISTS.");
+    if (process.env.POSTGRES_URL) console.log("POSTGRES_URL EXISTS.");
+
     // Ladda den befintliga databasen
     const doc = await prisma.automatedTemplate.findUnique({ where: { id: 'system_contacts' } });
     let dbContacts: any[] = (doc?.blocks as any)?.customers || [];
