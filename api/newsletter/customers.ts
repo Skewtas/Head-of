@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { getTimewaveCustomers } from '../_lib/timewaveData';
-import { prisma } from '../_lib/prisma';
+import { getTimewaveCustomers } from '../_lib/timewaveData.js';
+import { prisma } from '../_lib/prisma.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'GET' && req.method !== 'POST') {

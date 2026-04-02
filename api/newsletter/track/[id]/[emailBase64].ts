@@ -1,4 +1,4 @@
-import { prisma } from '../../../_lib/prisma';
+import { prisma } from '../../../_lib/prisma.js';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 const TRACKING_PIXEL = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');

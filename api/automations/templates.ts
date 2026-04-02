@@ -1,4 +1,4 @@
-import { prisma } from '../_lib/prisma';
+import { prisma } from '../_lib/prisma.js';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 // In-memory fallback for local development when Prisma Postgres isn't running

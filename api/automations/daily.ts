@@ -1,6 +1,6 @@
-import { prisma } from '../_lib/prisma';
+import { prisma } from '../_lib/prisma.js';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { getTimewaveCustomers } from '../_lib/timewaveData';
+import { getTimewaveCustomers } from '../_lib/timewaveData.js';
 import nodemailer from 'nodemailer';
 
 const createSmtpTransport = () => {
