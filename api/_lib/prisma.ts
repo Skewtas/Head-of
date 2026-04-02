@@ -32,18 +32,30 @@ export function getPrisma() {
     
     // If the URL has prisma+postgres or prisma layer, OR points to Prisma Data Proxy, we use accelerateUrl instead of neon adapter
     let useAccelerate = false;
+    let usePgAdapter = false;
     let finalConnectionString = connectionString;
     
-    if ((connectionString || '').startsWith('prisma://') || (connectionString || '').startsWith('prisma+postgres://') || (connectionString || '').includes('db.prisma.io')) {
+    if ((connectionString || '').startsWith('prisma://') || (connectionString || '').startsWith('prisma+postgres://')) {
       useAccelerate = true;
-      if (finalConnectionString.startsWith('postgres://') && finalConnectionString.includes('db.prisma.io')) {
-        finalConnectionString = finalConnectionString.replace('postgres://', 'prisma+postgres://');
+    } else if ((connectionString || '').includes('db.prisma.io')) {
+      usePgAdapter = true;
+      if (finalConnectionString.startsWith('prisma+postgres://')) {
+          finalConnectionString = finalConnectionString.replace('prisma+postgres://', 'postgres://');
       }
     }
     
     if (useAccelerate) {
       globalForPrisma.prisma = new PrismaClient({ accelerateUrl: finalConnectionString });
+    } else if (usePgAdapter) {
+      // Prisma Data Proxy V1 uses TCP, so we must use standard pg adapter
+      const { Pool: PgPool } = require('pg');
+      const { PrismaPg } = require('@prisma/adapter-pg');
+      const pool = new PgPool({ connectionString: finalConnectionString || '' });
+      const adapter = new PrismaPg(pool);
+      globalForPrisma.prisma = new PrismaClient({ adapter });
     } else {
+      // Standard Neon serverless WebSockets
+      neonConfig.webSocketConstructor = ws;
       const pool = new Pool({ connectionString: finalConnectionString || '' });
       const adapter = new PrismaNeon(pool as any);
       globalForPrisma.prisma = new PrismaClient({ adapter });
