@@ -14,7 +14,8 @@ const globalForPrisma = global as unknown as { prisma: InstanceType<typeof Prism
 
 if (!globalForPrisma.prisma) {
   // Always use standard postgres URL, let the Neon adapter handle the WebSocket/HTTP connection
-  let connectionString = process.env.DATABASE_URL;
+  let envUrl = global.process.env['DATABASE_URL'] || global.process.env['POSTGRES_URL'] || global.process.env['PRISMA_DATABASE_URL'];
+  let connectionString = envUrl || '';
   if (process.env.NODE_ENV !== 'production') {
     try {
       const envPath = path.resolve(process.cwd(), '.env');
