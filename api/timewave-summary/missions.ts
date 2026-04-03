@@ -32,30 +32,42 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     } catch { /* ignore */ }
 
-    // Fetch all pages
-    while (page <= lastPage) {
-      const url = `${timewaveBaseUrl}/missions?filter[startdate]=${startDate}&filter[enddate]=${endDate}&page[number]=${page}`;
-      let response = await fetch(url, {
+    // Fetch first page to get lastPage
+    const urlBase = `${timewaveBaseUrl}/missions?filter[startdate]=${startDate}&filter[enddate]=${endDate}`;
+    let response = await fetch(`${urlBase}&page[number]=1`, {
+      headers: { "Authorization": `Bearer ${token}`, "Accept": "application/json" }
+    });
+
+    // Retry on 403
+    if (response.status === 403) {
+      token = await forceRefreshTimewaveToken();
+      response = await fetch(`${urlBase}&page[number]=1`, {
         headers: { "Authorization": `Bearer ${token}`, "Accept": "application/json" }
       });
+    }
 
-      // Retry on 403
-      if (response.status === 403) {
-        token = await forceRefreshTimewaveToken();
-        response = await fetch(url, {
-          headers: { "Authorization": `Bearer ${token}`, "Accept": "application/json" }
-        });
+    if (!response.ok) {
+      throw new Error(`Timewave API error ${response.status}: ${await response.text()}`);
+    }
+
+    const firstData = await response.json();
+    lastPage = firstData.last_page || 1;
+    allMissions = allMissions.concat(firstData.data || []);
+
+    // Fetch remaining pages in parallel
+    if (lastPage > 1) {
+      const fetchPromises = [];
+      for (let p = 2; p <= lastPage; p++) {
+        fetchPromises.push(
+          fetch(`${urlBase}&page[number]=${p}`, {
+            headers: { "Authorization": `Bearer ${token}`, "Accept": "application/json" }
+          }).then(r => r.json())
+        );
       }
-
-      if (!response.ok) {
-        throw new Error(`Timewave API error ${response.status}: ${await response.text()}`);
-      }
-
-      const data = await response.json();
-      lastPage = data.last_page || 1;
-      allMissions = allMissions.concat(data.data || []);
-      console.log(`Timewave missions: fetched page ${page}/${lastPage} (${data.data?.length || 0} items)`);
-      page++;
+      const results = await Promise.all(fetchPromises);
+      results.forEach(data => {
+        allMissions = allMissions.concat(data.data || []);
+      });
     }
 
     // Compute summary
@@ -244,28 +256,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       let foundMonth = false;
 
       while (invPage > 0) {
-        const invUrl = `${timewaveBaseUrl}/invoices?page[number]=${invPage}`;
-        const invResp = await fetch(invUrl, {
-          headers: { "Authorization": `Bearer ${token}`, "Accept": "application/json" }
-        });
-        const invData = await invResp.json();
-        const invoices = invData.data || [];
-
-        let pageHasTargetMonth = false;
-        for (const inv of invoices) {
-          const invDate = inv.invoice_date || '';
-          if (invDate >= startDate && invDate <= endDate && !inv.deleted && !inv.credited) {
-            totalInvoicedNet += Number(inv.net_amount || 0);
-            pageHasTargetMonth = true;
-            foundMonth = true;
+        // Fetch up to 5 pages at a time backwards
+        const fetchPromises = [];
+        for (let i = 0; i < 5 && invPage > 0; i++) {
+          const invUrl = `${timewaveBaseUrl}/invoices?page[number]=${invPage}`;
+          fetchPromises.push(
+            fetch(invUrl, { headers: { "Authorization": `Bearer ${token}`, "Accept": "application/json" } })
+              .then(r => r.json())
+          );
+          invPage--;
+        }
+        
+        const results = await Promise.all(fetchPromises);
+        let shouldBreak = false;
+        
+        for (const invData of results) {
+          const invoices = invData.data || [];
+          let pageHasTargetMonth = false;
+          for (const inv of invoices) {
+            const invDate = inv.invoice_date || '';
+            if (invDate >= startDate && invDate <= endDate && !inv.deleted && !inv.credited) {
+              totalInvoicedNet += Number(inv.net_amount || 0);
+              pageHasTargetMonth = true;
+              foundMonth = true;
+            }
           }
+          if (foundMonth && !pageHasTargetMonth) shouldBreak = true;
+          if (invoices.length > 0 && invoices[0].invoice_date < startDate && !pageHasTargetMonth) shouldBreak = true;
         }
 
-        if (foundMonth && !pageHasTargetMonth) break;
-        if (invoices.length > 0 && invoices[0].invoice_date < startDate && !pageHasTargetMonth) break;
-
-        invPage--;
-        if (invPage <= 0) break;
+        if (shouldBreak) break;
       }
     } catch (err: any) {
       console.error("Error fetching invoices:", err.message);
@@ -274,7 +294,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let newWorkOrdersThisMonth = 0;
     try {
       const woIds = Array.from(uniqueWorkorderIds);
-      const batchSize = 10;
+      const batchSize = 50; // Increased to 50 for faster parallel fetching
       for (let i = 0; i < woIds.length; i += batchSize) {
         const batch = woIds.slice(i, i + batchSize);
         const results = await Promise.all(
@@ -345,18 +365,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const sickLeave3m = new Map<number, { name: string; count: number }>();
         sickLeaveByEmployee.forEach((v, k) => sickLeave3m.set(k, { ...v }));
 
-        let page3m = 1;
-        let lastPage3m = 1;
-        while (page3m <= lastPage3m) {
-          const url3m = `${timewaveBaseUrl}/missions?filter[startdate]=${threeMonthStart}&filter[enddate]=${startDate}&page[number]=${page3m}`;
-          const resp3m = await fetch(url3m, {
-            headers: { "Authorization": `Bearer ${token}`, "Accept": "application/json" }
-          });
-          if (!resp3m.ok) break;
+        // Fetch first page to get last_page
+        const url3mBase = `${timewaveBaseUrl}/missions?filter[startdate]=${threeMonthStart}&filter[enddate]=${startDate}`;
+        const resp3m = await fetch(`${url3mBase}&page[number]=1`, {
+          headers: { "Authorization": `Bearer ${token}`, "Accept": "application/json" }
+        });
+        if (resp3m.ok) {
           const data3m = await resp3m.json();
-          lastPage3m = data3m.last_page || 1;
+          let lastPage3m = data3m.last_page || 1;
+          
+          let all3mMissions = data3m.data || [];
+          
+          if (lastPage3m > 1) {
+            const fetchPromises = [];
+            for (let p = 2; p <= lastPage3m; p++) {
+              fetchPromises.push(
+                fetch(`${url3mBase}&page[number]=${p}`, { headers: { "Authorization": `Bearer ${token}`, "Accept": "application/json" } })
+                  .then(r => r.json())
+              );
+            }
+            const results = await Promise.all(fetchPromises);
+            results.forEach(d => {
+              all3mMissions = all3mMissions.concat(d.data || []);
+            });
+          }
 
-          for (const m of (data3m.data || [])) {
+          for (const m of all3mMissions) {
             const svcs = m.services || [];
             if (svcs.some((s: any) => s.id === 3)) {
               for (const emp of (m.employees || [])) {
@@ -372,7 +406,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               }
             }
           }
-          page3m++;
         }
         responseData.sickLeave3Months = Array.from(sickLeave3m.values())
           .sort((a, b) => b.count - a.count)
