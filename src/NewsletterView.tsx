@@ -227,7 +227,6 @@ export default function NewsletterView() {
       setRecipients(prev => [...new Set([...prev, ...emails])]);
       setBulkInput('');
       setShowBulkInput(false);
-      importCustomers(false); // Ladda om listan med de nyligen sparade
     } catch (err) {
       console.error(err);
     } finally {
@@ -247,7 +246,6 @@ export default function NewsletterView() {
       });
       addEmail(trimmed);
       setEmailInput('');
-      importCustomers(false);
     } catch (err) {
       console.error(err);
     } finally {
@@ -263,11 +261,7 @@ export default function NewsletterView() {
         const data = await res.json();
         setAllCustomers(data.customers);
         setSegments(data.segments || { areas: [], clientTypes: [] });
-        // If no segments selected, add all
-        if (selectedAreas.length === 0 && selectedTypes.length === 0) {
-          const emails = data.customers.map((c: any) => c.email);
-          setRecipients(prev => [...new Set([...prev, ...emails])]);
-        }
+
         if (sync) {
           setSendResult({ success: true, message: `Synkroniserade ${data.total} kunder från Timewave!` });
         }
