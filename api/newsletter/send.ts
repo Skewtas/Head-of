@@ -1,20 +1,5 @@
 import { prisma } from '../_lib/prisma.js';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import nodemailer from 'nodemailer';
-
-const createSmtpTransport = () => {
-  const host = process.env.SMTP_HOST || 'smtp.office365.com';
-  const port = parseInt(process.env.SMTP_PORT || '587');
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
-  if (!user || !pass) return null;
-  return nodemailer.createTransport({
-    host,
-    port,
-    secure: port === 465,
-    auth: { user, pass },
-  });
-};
 
 const buildNewsletterHtml = (opts: {
   introText: string;
@@ -58,10 +43,7 @@ const buildNewsletterHtml = (opts: {
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
+  if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
   const { subject, introText, imageData, embedUrl, htmlContent, recipients, category } = req.body;
   
   if (!subject || !recipients || recipients.length === 0) {
@@ -99,7 +81,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   });
 
   const baseUrl = process.env.APP_URL || `https://${req.headers.host}`;
-  const transporter = createSmtpTransport();
   const fromAddress = process.env.SMTP_FROM || process.env.SMTP_USER || 'info@stodona.se';
 
   let successCount = 0;
@@ -144,14 +125,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       html = buildNewsletterHtml({ introText: introText || '', imageData, embedUrl, trackingPixelUrl, b64Email: b64, appUrl: baseUrl });
     }
 
-    if (transporter) {
+    if (process.env.RESEND_API_KEY) {
       try {
-        await transporter.sendMail({
-          from: `"Stodona" <${fromAddress}>`,
-          to: email,
-          subject,
-          html,
+        const response = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            from: `"Stodona" <${fromAddress}>`,
+            to: email,
+            subject: subject,
+            html: html
+          })
         });
+
+        if (!response.ok) {
+           const errData = await response.json().catch(()=>({}));
+           throw new Error(errData.message || response.statusText);
+        }
+
         successCount++;
         console.log(`  ✓ Sent to ${email}`);
       } catch (err: any) {
@@ -176,9 +170,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   });
 
-  const msg = transporter
+  const msg = process.env.RESEND_API_KEY
     ? `Skickat till ${successCount}/${recipients.length} mottagare${failedRecipients.length > 0 ? ` (${failedRecipients.length} misslyckades)` : ''}.`
-    : `Nyhetsbrev sparat i databas (SMTP ej konfigurerat — inga mail skickades). Ange SMTP under .env om test.`;
+    : `Nyhetsbrev sparat i databas (Resend ej konfigurerat — inga mail skickades). Ange RESEND_API_KEY under .env om test.`;
 
   res.json({ success: true, message: msg, sent: successCount, failed: failedRecipients.length });
 }
