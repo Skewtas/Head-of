@@ -6,8 +6,9 @@ const buildNewsletterHtml = (opts: {
   imageData: string | null;
   embedUrl: string | null;
   trackingPixelUrl: string;
+  appUrl: string;
 }) => {
-  const { introText, imageData, embedUrl, trackingPixelUrl } = opts;
+  const { introText, imageData, embedUrl, trackingPixelUrl, appUrl } = opts;
   const intro = introText ? `<p style="font-size:16px;line-height:1.6;color:#333;margin:0 0 24px;">${introText.replace(/\n/g, '<br/>')}</p>` : '';
   let content = '';
   if (imageData) {
@@ -21,8 +22,7 @@ const buildNewsletterHtml = (opts: {
   <tr><td align="center">
     <table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.06);">
       <tr><td style="padding:40px 32px 0;">
-        <h1 style="margin:0 0 8px;font-size:28px;color:#1a1a2e;font-weight:300;">Stodona</h1>
-        <div style="height:3px;width:40px;background:#c9a96e;margin-bottom:24px;"></div>
+        <img src="${appUrl}/logotyp1.png" alt="Stodona" style="height:45px;width:auto;margin-bottom:24px;display:block;" />
         ${intro}
       </td></tr>
       <tr><td style="padding:0 32px 32px;" align="center">
@@ -113,8 +113,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   <tr><td align="center">
     <table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.06);">
       <tr><td style="padding:40px 32px 0;">
-        <h1 style="margin:0 0 8px;font-size:28px;color:#1a1a2e;font-weight:300;">Stodona</h1>
-        <div style="height:3px;width:40px;background:#c9a96e;margin-bottom:24px;"></div>
+        <img src="${baseUrl}/logotyp1.png" alt="Stodona" style="height:45px;width:auto;margin-bottom:24px;display:block;" />
       </td></tr>
       <tr><td style="padding:0; padding-bottom:32px;">${processedContent}</td></tr>
       <tr><td style="padding:24px 32px;background:#faf8f5;border-top:1px solid #eae4d9;text-align:center;">
@@ -131,7 +130,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         introText: original.introText || '', 
         imageData: original.imageData, 
         embedUrl: original.embedUrl, 
-        trackingPixelUrl 
+        trackingPixelUrl,
+        appUrl: baseUrl
       });
     }
 

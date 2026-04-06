@@ -80,13 +80,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             // Not sent this year! Let's send it.
             const subject = birthdayTemplate.subject;
             
-            // Reconstruct HTML from blocks...
-            // Note: Since Automations UI isn't built yet, we fallback to a simple render
-            // In the future this will use the same html render engine as campaigns
-            const html = `<!DOCTYPE html><html><body>
-              <h1>Hej ${c.name.split(' ')[0]}!</h1>
-              <p>Vi på Stodona ser att du snart fyller år! 🎉</p>
-              <p>Här är en liten present från oss.</p>
+            const html = `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#f5f3ef;font-family:'Segoe UI',sans-serif;">
+            <table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f3ef;padding:32px 0;"><tr><td align="center">
+            <table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.06);">
+              <tr><td style="padding:40px 32px 0;">
+                <img src="${baseUrl}/logotyp1.png" alt="Stodona" style="height:45px;width:auto;margin-bottom:24px;display:block;" />
+                <h1>Hej ${c.name.split(' ')[0]}!</h1>
+                <p>Vi på Stodona ser att du snart fyller år! 🎉</p>
+                <p>Här är en liten present från oss.</p>
+              </td></tr>
+              <tr><td style="padding:24px 32px;background:#faf8f5;border-top:1px solid #eae4d9;text-align:center;">
+                <p style="margin:0;font-size:12px;color:#999;">© ${new Date().getFullYear()} Stodona AB</p>
+              </td></tr>
+            </table></td></tr></table>
             </body></html>`;
 
             if (process.env.RESEND_API_KEY) {
@@ -121,9 +127,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
           if (!existingWelcome) {
             const subject = welcomeTemplate.subject;
-            const html = `<!DOCTYPE html><html><body>
-              <h1>Välkommen ${c.name.split(' ')[0]}!</h1>
-              <p>Vi är glada över att ha dig som kund hos Stodona.</p>
+            const html = `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#f5f3ef;font-family:'Segoe UI',sans-serif;">
+            <table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f3ef;padding:32px 0;"><tr><td align="center">
+            <table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.06);">
+              <tr><td style="padding:40px 32px 0;">
+                <img src="${baseUrl}/logotyp1.png" alt="Stodona" style="height:45px;width:auto;margin-bottom:24px;display:block;" />
+                <h1>Välkommen ${c.name.split(' ')[0]}!</h1>
+                <p>Vi är glada över att ha dig som kund hos Stodona.</p>
+              </td></tr>
+              <tr><td style="padding:24px 32px;background:#faf8f5;border-top:1px solid #eae4d9;text-align:center;">
+                <p style="margin:0;font-size:12px;color:#999;">© ${new Date().getFullYear()} Stodona AB</p>
+              </td></tr>
+            </table></td></tr></table>
             </body></html>`;
 
             if (process.env.RESEND_API_KEY) {
