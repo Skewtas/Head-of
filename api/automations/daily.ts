@@ -1,21 +1,6 @@
 import { prisma } from '../_lib/prisma.js';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getTimewaveCustomers } from '../_lib/timewaveData.js';
-import nodemailer from 'nodemailer';
-
-const createSmtpTransport = () => {
-  const host = process.env.SMTP_HOST || 'smtp.office365.com';
-  const port = parseInt(process.env.SMTP_PORT || '587');
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
-  if (!user || !pass) return null;
-  return nodemailer.createTransport({
-    host,
-    port,
-    secure: port === 465,
-    auth: { user, pass },
-  });
-};
 
 function getDaysUntilBirthday(personalNumber: string | null): number | null {
   if (!personalNumber) return null;
@@ -58,7 +43,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const customers = await getTimewaveCustomers();
-    const transporter = createSmtpTransport();
     const fromAddress = process.env.SMTP_FROM || process.env.SMTP_USER || 'info@stodona.se';
     const baseUrl = process.env.APP_URL || `https://${req.headers.host}`;
 
@@ -105,8 +89,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               <p>Här är en liten present från oss.</p>
             </body></html>`;
 
-            if (transporter) {
-              await transporter.sendMail({ from: `"Stodona" <${fromAddress}>`, to: c.email, subject, html });
+            if (process.env.RESEND_API_KEY) {
+              await fetch('https://api.resend.com/emails', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ from: `"Stodona" <${fromAddress}>`, to: c.email, subject, html })
+              });
             }
 
             // Log it
@@ -138,8 +126,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               <p>Vi är glada över att ha dig som kund hos Stodona.</p>
             </body></html>`;
 
-            if (transporter) {
-              await transporter.sendMail({ from: `"Stodona" <${fromAddress}>`, to: c.email, subject, html });
+            if (process.env.RESEND_API_KEY) {
+              await fetch('https://api.resend.com/emails', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ from: `"Stodona" <${fromAddress}>`, to: c.email, subject, html })
+              });
             }
 
             await prisma.automationLog.create({

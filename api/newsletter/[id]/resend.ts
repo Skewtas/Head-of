@@ -1,20 +1,5 @@
 import { prisma } from '../../_lib/prisma.js';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import nodemailer from 'nodemailer';
-
-const createSmtpTransport = () => {
-  const host = process.env.SMTP_HOST || 'smtp.office365.com';
-  const port = parseInt(process.env.SMTP_PORT || '587');
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
-  if (!user || !pass) return null;
-  return nodemailer.createTransport({
-    host,
-    port,
-    secure: port === 465,
-    auth: { user, pass },
-  });
-};
 
 const buildNewsletterHtml = (opts: {
   introText: string;
@@ -85,7 +70,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const subject = newSubject || `Påminnelse: ${original.subject}`;
   const baseUrl = process.env.APP_URL || `https://${req.headers.host}`;
-  const transporter = createSmtpTransport();
   const fromAddress = process.env.SMTP_FROM || process.env.SMTP_USER || 'info@stodona.se';
 
   // Create new newsletter record for this resend
@@ -151,9 +135,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    if (transporter) {
+    if (process.env.RESEND_API_KEY) {
       try {
-        await transporter.sendMail({ from: `"Stodona" <${fromAddress}>`, to: email, subject, html });
+        const response = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            from: `"Stodona" <${fromAddress}>`,
+            to: email,
+            subject: subject,
+            html: html
+          })
+        });
+
+        if (!response.ok) {
+           const errData = await response.json().catch(()=>({}));
+           throw new Error(errData.message || response.statusText);
+        }
+
         successCount++;
       } catch (err: any) {
         failedRecipients.push(email);
