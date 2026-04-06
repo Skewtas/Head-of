@@ -135,6 +135,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
+    let imageIndex = 0;
+    const finalHtml = html.replace(/src="(data:image\/[^;]+;base64,[^"]+)"/g, () => {
+      const url = `${baseUrl}/api/newsletter/image/${newNewsletter.id}/${imageIndex++}`;
+      return `src="${url}"`;
+    });
+
     if (process.env.RESEND_API_KEY) {
       try {
         const response = await fetch('https://api.resend.com/emails', {
@@ -147,7 +153,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             from: `"Stodona" <${fromAddress}>`,
             to: email,
             subject: subject,
-            html: html
+            html: finalHtml
           })
         });
 
