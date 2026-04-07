@@ -1,6 +1,15 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { prisma } from '../_lib/prisma.js';
 
+function normalizePhone(raw: string | undefined | null): string | null {
+  if (!raw) return null;
+  const cleaned = raw.replace(/[\s\-()]/g, '');
+  if (/^07\d{8}$/.test(cleaned)) return '+46' + cleaned.substring(1);
+  if (/^467\d{8}$/.test(cleaned)) return '+' + cleaned;
+  if (/^\+467\d{8}$/.test(cleaned)) return cleaned;
+  return cleaned; // Fallback for other valid formats
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -35,11 +44,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const optOutSet = new Set(optOutData.phones || []);
 
   const fromName = sender || 'Stodona.se';
+
+  // Create database record first
+  const newsletter = await prisma.newsletter.create({
+    data: {
+      subject: `[SMS] ${message.substring(0, 40)}${message.length > 40 ? '...' : ''}`,
+      category: 'SMS',
+      introText: message,
+      htmlContent: message,
+      recipients: recipients.map(r => r.phone), // we display tracking numbers natively
+      status: 'sending'
+    }
+  });
+
   let successCount = 0;
   const failed: { phone: string; error: string }[] = [];
 
   for (const recipient of recipients) {
-    const { phone, email } = recipient;
+    const rawPhone = recipient.phone;
+    const email = recipient.email;
+    const phone = normalizePhone(rawPhone);
+
     if (!phone) {
       failed.push({ phone: '(saknas)', error: 'Inget telefonnummer' });
       continue;
@@ -83,6 +108,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       failed.push({ phone, error: err.message });
     }
   }
+
+  // Update DB status
+  await prisma.newsletter.update({
+    where: { id: newsletter.id },
+    data: {
+      status: failed.length === 0 ? 'sent' : 'partial',
+      successCount,
+      failedCount: failed.length
+    }
+  });
 
   const total = recipients.length;
   const msg = `SMS skickat till ${successCount}/${total} mottagare${failed.length > 0 ? ` (${failed.length} misslyckades)` : ''}.`;
