@@ -100,8 +100,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return `<a${before}href="${trackingClickUrl}"${after}>`;
       });
 
-      html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width"/></head>
-<body style="margin:0;padding:0;background:#f5f3ef;font-family:'Segoe UI',sans-serif;">
+      html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width"/>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Outfit:wght@300;400;500;600&display=swap');
+body, p, a, span, td { font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important; }
+h1, h2, h3, h4, h5, h6 { font-family: 'Outfit', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important; }
+</style></head>
+<body style="margin:0;padding:0;background:#f5f3ef;font-family:'Inter', 'Segoe UI', sans-serif;">
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f3ef;padding:32px 0;">
   <tr><td align="center">
     <table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.06);">

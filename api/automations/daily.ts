@@ -80,17 +80,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             // Not sent this year! Let's send it.
             const subject = birthdayTemplate.subject;
             
-            const html = `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#f5f3ef;font-family:'Segoe UI',sans-serif;">
+            const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width"/>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Outfit:wght@300;400;500;600&display=swap');
+body, p, a, span, td { font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important; }
+h1, h2, h3, h4, h5, h6 { font-family: 'Outfit', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important; }
+</style></head>
+            <body style="margin:0;padding:0;background:#f5f3ef;font-family:'Inter', 'Segoe UI', sans-serif;">
             <table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f3ef;padding:32px 0;"><tr><td align="center">
             <table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.06);">
               <tr><td style="padding:40px 32px 0;">
                 <img src="${baseUrl}/logotyp1.png" alt="Stodona" style="height:45px;width:auto;margin-bottom:24px;display:block;" />
-                <h1>Hej ${c.name.split(' ')[0]}!</h1>
-                <p>Vi på Stodona ser att du snart fyller år! 🎉</p>
-                <p>Här är en liten present från oss.</p>
+                <h1 style="font-family:'Outfit','Segoe UI',sans-serif;font-weight:300;margin-bottom:16px;">Hej ${c.name.split(' ')[0]}!</h1>
+                <p style="font-family:'Inter','Segoe UI',sans-serif;font-size:15px;line-height:1.7;color:#444;">Vi på Stodona ser att du snart fyller år! 🎉</p>
+                <p style="font-family:'Inter','Segoe UI',sans-serif;font-size:15px;line-height:1.7;color:#444;">Här är en liten present från oss.</p>
               </td></tr>
               <tr><td style="padding:24px 32px;background:#faf8f5;border-top:1px solid #eae4d9;text-align:center;">
-                <p style="margin:0;font-size:12px;color:#999;">© ${new Date().getFullYear()} Stodona AB</p>
+                <p style="margin:0;font-size:12px;color:#999;font-family:'Inter','Segoe UI',sans-serif;">© ${new Date().getFullYear()} Stodona AB</p>
               </td></tr>
             </table></td></tr></table>
             </body></html>`;
@@ -127,16 +133,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
           if (!existingWelcome) {
             const subject = welcomeTemplate.subject;
-            const html = `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#f5f3ef;font-family:'Segoe UI',sans-serif;">
+            const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width"/>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Outfit:wght@300;400;500;600&display=swap');
+body, p, a, span, td { font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important; }
+h1, h2, h3, h4, h5, h6 { font-family: 'Outfit', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important; }
+</style></head>
+            <body style="margin:0;padding:0;background:#f5f3ef;font-family:'Inter', 'Segoe UI', sans-serif;">
             <table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f3ef;padding:32px 0;"><tr><td align="center">
             <table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.06);">
               <tr><td style="padding:40px 32px 0;">
                 <img src="${baseUrl}/logotyp1.png" alt="Stodona" style="height:45px;width:auto;margin-bottom:24px;display:block;" />
-                <h1>Välkommen ${c.name.split(' ')[0]}!</h1>
-                <p>Vi är glada över att ha dig som kund hos Stodona.</p>
+                <h1 style="font-family:'Outfit','Segoe UI',sans-serif;font-weight:300;margin-bottom:16px;">Välkommen ${c.name.split(' ')[0]}!</h1>
+                <p style="font-family:'Inter','Segoe UI',sans-serif;font-size:15px;line-height:1.7;color:#444;">Vi är glada över att ha dig som kund hos Stodona.</p>
               </td></tr>
               <tr><td style="padding:24px 32px;background:#faf8f5;border-top:1px solid #eae4d9;text-align:center;">
-                <p style="margin:0;font-size:12px;color:#999;">© ${new Date().getFullYear()} Stodona AB</p>
+                <p style="margin:0;font-size:12px;color:#999;font-family:'Inter','Segoe UI',sans-serif;">© ${new Date().getFullYear()} Stodona AB</p>
               </td></tr>
             </table></td></tr></table>
             </body></html>`;

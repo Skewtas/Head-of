@@ -340,12 +340,12 @@ export default function NewsletterView() {
       switch (block.type) {
         case 'heading':
           if (block.content) {
-            bodyContent += `<div style="padding:0 32px;"><h2 style="margin:0 0 16px;font-size:24px;font-weight:300;color:#1a1a2e;letter-spacing:-0.3px;">${block.content}</h2></div>`;
+            bodyContent += `<div style="padding:0 32px;"><h2 style="margin:0 0 16px;font-size:24px;font-weight:300;color:#1a1a2e;letter-spacing:-0.3px;font-family:'Outfit','Segoe UI',sans-serif;">${block.content}</h2></div>`;
           }
           break;
         case 'text':
           if (block.content) {
-            bodyContent += `<div style="padding:0 32px;"><p style="margin:0 0 20px;font-size:15px;line-height:1.7;color:#444;">${block.content.replace(/\n/g, '<br/>')}</p></div>`;
+            bodyContent += `<div style="padding:0 32px;"><p style="margin:0 0 20px;font-size:15px;line-height:1.7;color:#444;font-family:'Inter','Segoe UI',sans-serif;">${block.content.replace(/\n/g, '<br/>')}</p></div>`;
           }
           break;
         case 'image':
@@ -368,7 +368,7 @@ export default function NewsletterView() {
           break;
         case 'button':
           if (block.content && block.buttonUrl) {
-            bodyContent += `<div style="padding:0 32px;text-align:center;margin:24px 0;"><a href="${block.buttonUrl}" target="_blank" style="display:inline-block;padding:14px 36px;background:${block.buttonColor || '#1a1a2e'};color:#fff;border-radius:10px;text-decoration:none;font-weight:600;font-size:14px;letter-spacing:0.5px;">${block.content}</a></div>`;
+            bodyContent += `<div style="padding:0 32px;text-align:center;margin:24px 0;"><a href="${block.buttonUrl}" target="_blank" style="display:inline-block;padding:14px 36px;background:${block.buttonColor || '#1a1a2e'};color:#fff;border-radius:10px;text-decoration:none;font-weight:600;font-size:14px;letter-spacing:0.5px;font-family:'Inter','Segoe UI',sans-serif;">${block.content}</a></div>`;
           }
           break;
         case 'divider':
@@ -633,13 +633,13 @@ export default function NewsletterView() {
 
   // --- Preview HTML ---
   const previewHtml = `
-    <div style="max-width:600px;margin:0 auto;font-family:'Segoe UI',sans-serif;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.06);">
+    <div style="max-width:600px;margin:0 auto;font-family:'Inter','Segoe UI',sans-serif;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.06);">
       <div style="padding:40px 32px 0;">
-        <h1 style="margin:0 0 8px;font-size:28px;color:#1a1a2e;font-weight:300;">Stodona</h1>
+        <h1 style="margin:0 0 8px;font-size:28px;color:#1a1a2e;font-weight:300;font-family:'Outfit','Segoe UI',sans-serif;">Stodona</h1>
         <div style="height:3px;width:40px;background:#c9a96e;margin-bottom:24px;"></div>
       </div>
       <div style="padding:0 32px 32px;">${buildHtmlFromBlocks()}</div>
-      <div style="padding:24px 32px;background:#faf8f5;border-top:1px solid #eae4d9;text-align:center;">
+      <div style="padding:24px 32px;background:#faf8f5;border-top:1px solid #eae4d9;text-align:center;font-family:'Inter','Segoe UI',sans-serif;">
         <p style="margin:0;font-size:12px;color:#999;">© ${new Date().getFullYear()} Stodona AB</p>
       </div>
     </div>`;
