@@ -115,7 +115,10 @@ export async function getTimewaveCustomers(): Promise<TimewaveCustomer[]> {
   };
 
   const customers = allClients
-    .filter((c: any) => c.email && c.email.includes('@') && !c.deleted)
+    .filter((c: any) => !c.deleted && (
+       (c.email && c.email.includes('@')) || 
+       normalizePhone(c.phone || c.mobile || c.cellphone)
+    ))
     .map((c: any) => {
       const addresses = c.addresses || [];
       const activeAddr = addresses.find((a: any) => !a.deleted && (a.city || a.postal_code));
@@ -151,11 +154,16 @@ export async function getTimewaveCustomers(): Promise<TimewaveCustomer[]> {
       const clientType = c.clienttype?.name || (c.type === 'company' ? 'Företag' : 'Privat');
       const sTypes = clientServices[String(c.id)] ? Array.from(clientServices[String(c.id)]) : ['Okänd Tjänst'];
 
+      const normPhone = normalizePhone(c.phone || c.mobile || c.cellphone);
+      const parsedEmail = (c.email && c.email.includes('@')) 
+         ? c.email.toLowerCase().trim() 
+         : `${normPhone}@no-email.stodona.se`;
+
       return {
         id: c.id,
         name: (c.first_name && c.last_name) ? `${c.first_name} ${c.last_name}` : c.company_name || c.first_name || '',
-        email: c.email.toLowerCase().trim(),
-        phone: normalizePhone(c.phone || c.mobile || c.cellphone),
+        email: parsedEmail,
+        phone: normPhone,
         city: reqCity,
         area,
         clientType,

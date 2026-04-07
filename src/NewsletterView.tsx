@@ -139,7 +139,7 @@ export default function NewsletterView() {
   const emailRecipients = React.useMemo(() => {
     const list: any[] = [];
     recipients.forEach(r => {
-      if (r.includes('@')) {
+      if (r.includes('@') && !r.includes('@no-email.stodona.se') && !r.includes('@manuell.se')) {
         const c = allCustomers.find((cu: any) => cu.email === r);
         if (!c || !c.optedOutEmail) {
           list.push(r);
