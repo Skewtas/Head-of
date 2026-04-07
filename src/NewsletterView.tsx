@@ -121,8 +121,33 @@ export default function NewsletterView() {
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
 
   // Computed: customers with phone numbers for SMS sending who haven't opted out
-  const smsRecipients = allCustomers.filter((c: any) => c.phone && !c.optedOutSms && recipients.includes(c.email));
-  const emailRecipients = allCustomers.filter((c: any) => !c.optedOutEmail && recipients.includes(c.email));
+  const smsRecipients = React.useMemo(() => {
+    const list: any[] = [];
+    recipients.forEach(r => {
+      if (!r.includes('@') && r.match(/\d+/)) {
+        list.push({ name: 'Manuell', phone: r, email: `${r.replace(/\s+/g, '')}@manuell.se` });
+      } else {
+        const c = allCustomers.find((cu: any) => cu.email === r);
+        if (c && c.phone && !c.optedOutSms) list.push(c);
+      }
+    });
+    const unique = new Map();
+    list.forEach(c => unique.set(c.phone.replace(/[^0-9+]/g, ''), c));
+    return Array.from(unique.values());
+  }, [recipients, allCustomers]);
+
+  const emailRecipients = React.useMemo(() => {
+    const list: any[] = [];
+    recipients.forEach(r => {
+      if (r.includes('@')) {
+        const c = allCustomers.find((cu: any) => cu.email === r);
+        if (!c || !c.optedOutEmail) {
+          list.push(r);
+        }
+      }
+    });
+    return list;
+  }, [recipients, allCustomers]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const activeImageBlockRef = useRef<string | null>(null);
@@ -205,26 +230,29 @@ export default function NewsletterView() {
   };
 
   // --- Recipients ---
-  const addEmail = (email: string) => {
-    const trimmed = email.trim().toLowerCase();
-    if (trimmed && trimmed.includes('@') && !recipients.includes(trimmed)) {
+  const addRecipient = (value: string) => {
+    const trimmed = value.trim().toLowerCase();
+    if (trimmed && !recipients.includes(trimmed)) {
       setRecipients(prev => [...prev, trimmed]);
     }
   };
 
   const handleBulkAdd = async () => {
-    const emails = bulkInput.split(/[,;\n]+/).map(e => e.trim().toLowerCase()).filter(e => e && e.includes('@'));
-    if (emails.length === 0) return;
+    const items = bulkInput.split(/[,;\n]+/).map(e => e.trim().toLowerCase()).filter(e => e);
+    if (items.length === 0) return;
     
     setIsLoadingCustomers(true);
     try {
-      const newContacts = emails.map(e => ({ email: e, name: 'Manuell', phone: '' }));
+      const newContacts = items.map(v => {
+        if (v.includes('@')) return { email: v, name: 'Manuell', phone: '' };
+        return { email: `${v.replace(/\s+/g,'')}@manuell.se`, name: 'Manuell', phone: v };
+      });
       await fetch('/api/newsletter/customers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ contacts: newContacts })
       });
-      setRecipients(prev => [...new Set([...prev, ...emails])]);
+      setRecipients(prev => [...new Set([...prev, ...items])]);
       setBulkInput('');
       setShowBulkInput(false);
     } catch (err) {
@@ -234,17 +262,20 @@ export default function NewsletterView() {
     }
   };
 
-  const handleAddSingleEmail = async () => {
+  const handleAddSingleRecipient = async () => {
     const trimmed = emailInput.trim().toLowerCase();
-    if (!trimmed.includes('@')) return;
+    if (!trimmed) return;
     setIsLoadingCustomers(true);
     try {
+      const contactData = trimmed.includes('@') 
+        ? { email: trimmed, name: 'Manuell', phone: '' }
+        : { email: `${trimmed.replace(/\s+/g,'')}@manuell.se`, name: 'Manuell', phone: trimmed };
       await fetch('/api/newsletter/customers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contacts: [{ email: trimmed, name: 'Manuell', phone: '' }] })
+        body: JSON.stringify({ contacts: [contactData] })
       });
-      addEmail(trimmed);
+      addRecipient(trimmed);
       setEmailInput('');
     } catch (err) {
       console.error(err);
@@ -367,6 +398,10 @@ export default function NewsletterView() {
         setSendResult({ success: false, message: 'Nyhetsbrevet har inget innehåll.' });
         return;
       }
+      if (emailRecipients.length === 0) {
+        setSendResult({ success: false, message: 'Inga valda mottagare har e-postadress.' });
+        return;
+      }
     }
 
     if (willSendSms && !smsMessage.trim()) {
@@ -396,7 +431,7 @@ export default function NewsletterView() {
             embedUrl: null,
             imageData: null,
             htmlContent,
-            recipients,
+            recipients: emailRecipients,
             category
           })
         });
@@ -884,17 +919,17 @@ export default function NewsletterView() {
 
               <div className="flex gap-2">
                 <input
-                  type="email"
+                  type="text"
                   value={emailInput}
                   onChange={(e) => setEmailInput(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter') { e.preventDefault(); handleAddSingleEmail(); }
+                    if (e.key === 'Enter') { e.preventDefault(); handleAddSingleRecipient(); }
                   }}
-                  placeholder="namn@exempel.se"
+                  placeholder="namn@exempel.se eller 070..."
                   className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-accent/20 transition-all"
                 />
                 <button
-                  onClick={handleAddSingleEmail}
+                  onClick={handleAddSingleRecipient}
                   className="px-3 py-2 bg-brand-dark text-white rounded-xl hover:bg-brand-accent transition-colors"
                 >
                   <Plus className="w-4 h-4" />
@@ -905,7 +940,7 @@ export default function NewsletterView() {
                 onClick={() => setShowBulkInput(!showBulkInput)}
                 className="text-xs text-brand-dark hover:text-brand-accent font-medium"
               >
-                {showBulkInput ? 'Dölj' : 'Klistra in flera adresser'}
+                {showBulkInput ? 'Dölj' : 'Klistra in flera mottagare'}
               </button>
 
               {showBulkInput && (
@@ -913,7 +948,7 @@ export default function NewsletterView() {
                   <textarea
                     value={bulkInput}
                     onChange={(e) => setBulkInput(e.target.value)}
-                    placeholder="e-postadresser separerade med komma, semikolon eller ny rad..."
+                    placeholder="e-postadresser eller telefonnummer separerade med komma, ny rad..."
                     rows={3}
                     className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-accent/20 resize-none"
                   />
