@@ -255,18 +255,61 @@ export default function NewsletterView() {
     });
   };
 
-  // --- Image upload ---
-  const handleFileSelect = (file: File, blockId: string) => {
+  // --- Image upload (with client-side resize + compress) ---
+  const handleFileSelect = async (file: File, blockId: string) => {
     if (!file.type.startsWith("image/")) return;
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      updateBlock(blockId, {
-        imageData: e.target?.result as string,
-        content: file.name,
-      });
-    };
-    reader.readAsDataURL(file);
+    try {
+      const compressed = await compressImage(file, { maxWidth: 1200, quality: 0.82 });
+      updateBlock(blockId, { imageData: compressed, content: file.name });
+    } catch (err) {
+      console.error("Image compression failed, falling back to original", err);
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        updateBlock(blockId, {
+          imageData: e.target?.result as string,
+          content: file.name,
+        });
+      };
+      reader.readAsDataURL(file);
+    }
   };
+
+  // Resize + JPEG-compress an image entirely in the browser. Returns a data URL.
+  // Average newsletter-suitable photo (1200px wide, q=0.82) ends up around
+  // 150-300 KB instead of 3-8 MB — dramatically faster upload and email send.
+  function compressImage(
+    file: File,
+    opts: { maxWidth: number; quality: number }
+  ): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(reader.error);
+      reader.onload = () => {
+        const img = new Image();
+        img.onerror = () => reject(new Error("image load failed"));
+        img.onload = () => {
+          const ratio = Math.min(1, opts.maxWidth / img.width);
+          const w = Math.round(img.width * ratio);
+          const h = Math.round(img.height * ratio);
+          const canvas = document.createElement("canvas");
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) return reject(new Error("no 2d context"));
+          ctx.drawImage(img, 0, 0, w, h);
+          // PNG with transparency stays PNG; otherwise JPEG for size.
+          const isPng = file.type === "image/png";
+          const dataUrl = canvas.toDataURL(
+            isPng ? "image/png" : "image/jpeg",
+            opts.quality
+          );
+          resolve(dataUrl);
+        };
+        img.src = reader.result as string;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
 
   // --- Recipients ---
   const addRecipient = (value: string) => {
@@ -789,7 +832,10 @@ export default function NewsletterView() {
       </div>
       <div style="padding:0 32px 32px;">${buildHtmlFromBlocks()}</div>
       <div style="padding:24px 32px;background:#faf8f5;border-top:1px solid #eae4d9;text-align:center;font-family:'Inter','Segoe UI',sans-serif;">
-        <p style="margin:0;font-size:12px;color:#999;">© ${new Date().getFullYear()} Stodona AB</p>
+        <p style="margin:0;font-size:13px;color:#666;">
+          <a href="https://stodona.se" style="color:#c9a96e;text-decoration:none;font-weight:500;">stodona.se</a>
+        </p>
+        <p style="margin:6px 0 0;font-size:11px;color:#999;">© ${new Date().getFullYear()} Stodona AB</p>
       </div>
     </div>`;
 

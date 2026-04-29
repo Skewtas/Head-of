@@ -30,7 +30,8 @@ const buildNewsletterHtml = (opts: {
         ${content}
       </td></tr>
       <tr><td style="padding:24px 32px;background:#faf8f5;border-top:1px solid #eae4d9;text-align:center;">
-        <p style="margin:0;font-size:12px;color:#999;">© ${new Date().getFullYear()} Stodona AB</p>
+        <p style="margin:0;font-size:13px;color:#666;"><a href="https://stodona.se" style="color:#c9a96e;text-decoration:none;font-weight:500;">stodona.se</a></p>
+        <p style="margin:6px 0 0;font-size:12px;color:#999;">© ${new Date().getFullYear()} Stodona AB</p>
         <p style="margin:4px 0 0;font-size:11px;color:#bbb;">Du får detta mail som kund hos Stodona.</p>
         <p style="margin:16px 0 0;font-size:11px;"><a href="${appUrl}/api/newsletter/optout?id=${opts.b64Email}&type=EMAIL" style="color:#999;text-decoration:underline;">Klicka här för att avregistrera dig</a></p>
       </td></tr>
@@ -115,7 +116,8 @@ h1, h2, h3, h4, h5, h6 { font-family: 'Outfit', 'Segoe UI', Tahoma, Geneva, Verd
       </td></tr>
       <tr><td style="padding:0; padding-bottom:32px;">${processedContent}</td></tr>
       <tr><td style="padding:24px 32px;background:#faf8f5;border-top:1px solid #eae4d9;text-align:center;">
-        <p style="margin:0;font-size:12px;color:#999;">© ${new Date().getFullYear()} Stodona AB</p>
+        <p style="margin:0;font-size:13px;color:#666;"><a href="https://stodona.se" style="color:#c9a96e;text-decoration:none;font-weight:500;">stodona.se</a></p>
+        <p style="margin:6px 0 0;font-size:12px;color:#999;">© ${new Date().getFullYear()} Stodona AB</p>
         <p style="margin:4px 0 0;font-size:11px;color:#bbb;">Du får detta mail som kund hos Stodona.</p>
         <p style="margin:16px 0 0;font-size:11px;"><a href="${baseUrl}/api/newsletter/optout?id=${b64}&type=EMAIL" style="color:#999;text-decoration:underline;">Klicka här för att avregistrera dig</a></p>
       </td></tr>
