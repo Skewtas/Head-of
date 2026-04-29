@@ -6,6 +6,744 @@ datasource db {
   provider = "postgresql"
 }
 
+// ============================================================================
+// ENUMS
+// ============================================================================
+
+enum ClientType {
+  PRIVATE
+  COMPANY
+}
+
+enum ClientStatus {
+  PROSPECT
+  ACTIVE
+  PAUSED
+  TERMINATED
+}
+
+enum PriceModel {
+  HOURLY
+  FIXED
+  SUBSCRIPTION
+}
+
+enum InvoiceMethod {
+  EMAIL
+  POST
+  E_INVOICE
+}
+
+enum AddressType {
+  INVOICE
+  SERVICE
+}
+
+enum AlertSeverity {
+  INFO
+  WARNING
+  BLOCKER
+}
+
+enum AlertCategory {
+  ECONOMY
+  CREDIT
+  PAYMENT
+  BEHAVIOR
+  SAFETY
+  OTHER
+}
+
+enum EmploymentType {
+  PERMANENT
+  HOURLY
+  SUBCONTRACTOR
+}
+
+enum EmployeeStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum RutCategory {
+  NONE
+  HOUSEHOLD
+  WINDOW
+  MOVING
+  GARDENING
+}
+
+enum AgreementStatus {
+  DRAFT
+  QUOTED
+  ACTIVE
+  PAUSED
+  TERMINATED
+  ARCHIVED
+}
+
+enum AgreementLineStatus {
+  ACTIVE
+  PAUSED
+  ENDED
+}
+
+enum PriceRule {
+  HOURLY
+  FIXED_PER_VISIT
+  INCLUDED_IN_MONTHLY
+}
+
+enum MissionStatus {
+  PLANNED
+  ASSIGNED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum AssignmentRole {
+  LEAD
+  MEMBER
+}
+
+enum DeviationType {
+  NONE
+  LATE
+  EARLY_END
+  EXTRA_WORK
+  CUSTOMER_ABSENT
+  CANCELLED_ONSITE
+  SICK_DURING
+  EQUIPMENT_FAILURE
+}
+
+enum ExtraType {
+  SERVICE
+  MATERIAL
+  OUTLAY
+}
+
+enum AbsenceType {
+  SICK
+  VACATION
+  PARENTAL
+  VAB
+  COMP_TIME
+  OTHER
+}
+
+enum InvoiceStatus {
+  DRAFT
+  READY_FOR_REVIEW
+  APPROVED
+  SENT_TO_FORTNOX
+  PAID
+  FAILED
+}
+
+enum InvoiceLineSource {
+  MISSION
+  EXTRA
+  MANUAL
+  SUBSCRIPTION_FEE
+  CANCELLATION_FEE
+}
+
+enum PayrollLineType {
+  REGULAR
+  OB_EVENING
+  OB_NIGHT
+  OB_WEEKEND
+  OB_HOLIDAY
+  OVERTIME
+  TRAVEL
+  OUTLAY
+  ABSENCE_SICK
+  ABSENCE_VACATION
+}
+
+enum TicketType {
+  COMPLAINT
+  QUESTION
+  FOLLOWUP
+  INTERNAL
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING
+  RESOLVED
+  CLOSED
+}
+
+enum NoteResourceType {
+  CLIENT
+  AGREEMENT
+  AGREEMENT_LINE
+  MISSION
+  EMPLOYEE
+  INVOICE
+  TICKET
+}
+
+enum SyncDirection {
+  OUT
+  IN
+}
+
+// ============================================================================
+// PEOPLE & PLACES
+// ============================================================================
+
+model Team {
+  id          Int      @id @default(autoincrement())
+  name        String
+  regionCode  String?  @map("region_code")
+  status      String   @default("ACTIVE")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  employees       EmployeeTeam[]
+  agreements      Agreement[]
+  missions        Mission[]
+
+  @@map("teams")
+}
+
+model Employee {
+  id                Int             @id @default(autoincrement())
+  clerkUserId       String?         @unique @map("clerk_user_id")
+  firstName         String          @map("first_name")
+  lastName          String          @map("last_name")
+  email             String?         @unique
+  phone             String?
+  personalNumber    String?         @map("personal_number") // encrypted at app layer
+  employmentType    EmploymentType  @default(HOURLY) @map("employment_type")
+  baseHourlyRateCents Int           @default(0) @map("base_hourly_rate_cents")
+  obMultiplier      Float           @default(1.0) @map("ob_multiplier")
+  primaryTeamId     Int?            @map("primary_team_id")
+  homeLat           Float?          @map("home_lat")
+  homeLng           Float?          @map("home_lng")
+  tags              String[]        @default([])
+  fortnoxEmployeeId String?         @map("fortnox_employee_id")
+  status            EmployeeStatus  @default(ACTIVE)
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+  deletedAt         DateTime?       @map("deleted_at")
+
+  teams             EmployeeTeam[]
+  assignments       MissionAssignment[]
+  timeEntries       TimeEntry[]
+  absences          Absence[]
+  payrollLines      PayrollLine[]
+  ticketsAssigned   Ticket[]         @relation("TicketAssignee")
+
+  @@index([status])
+  @@map("employees")
+}
+
+model EmployeeTeam {
+  employeeId Int  @map("employee_id")
+  teamId     Int  @map("team_id")
+  isPrimary  Boolean @default(false) @map("is_primary")
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  team     Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@id([employeeId, teamId])
+  @@map("employee_teams")
+}
+
+model Client {
+  id                   Int           @id @default(autoincrement())
+  clientNumber         String        @unique @map("client_number")
+  type                 ClientType    @default(PRIVATE)
+  name                 String
+  orgNumber            String?       @map("org_number")
+  personalNumber       String?       @map("personal_number") // encrypted
+  phone                String?
+  email                String?
+  preferredCommunication String?     @map("preferred_communication")
+  rutEligible          Boolean       @default(false) @map("rut_eligible")
+  rutShare             Float?        @map("rut_share")
+  rutPersonalNumber    String?       @map("rut_personal_number")
+  priceModel           PriceModel    @default(HOURLY) @map("price_model")
+  fortnoxCustomerId    String?       @map("fortnox_customer_id")
+  invoiceMethod        InvoiceMethod @default(EMAIL) @map("invoice_method")
+  paymentTermsDays     Int           @default(30) @map("payment_terms_days")
+  status               ClientStatus  @default(ACTIVE)
+  source               String?
+  createdAt            DateTime      @default(now()) @map("created_at")
+  updatedAt            DateTime      @updatedAt @map("updated_at")
+  deletedAt            DateTime?     @map("deleted_at")
+
+  addresses   ClientAddress[]
+  alerts      ClientAlert[]
+  agreements  Agreement[]
+  missions    Mission[]
+  invoices    Invoice[]
+  tickets     Ticket[]
+
+  @@index([status])
+  @@index([name])
+  @@map("clients")
+}
+
+model ClientAddress {
+  id          Int         @id @default(autoincrement())
+  clientId    Int         @map("client_id")
+  type        AddressType
+  street      String
+  zip         String
+  city        String
+  doorCode    String?     @map("door_code")
+  parkingInfo String?     @map("parking_info")
+  lat         Float?
+  lng         Float?
+  isDefault   Boolean     @default(false) @map("is_default")
+
+  client                      Client     @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  agreementsInvoice           Agreement[] @relation("InvoiceAddress")
+  agreementsService           Agreement[] @relation("ServiceAddress")
+
+  @@index([clientId])
+  @@map("client_addresses")
+}
+
+// Blocker/warning notes that require acknowledgement when opening the client.
+model ClientAlert {
+  id          Int           @id @default(autoincrement())
+  clientId    Int           @map("client_id")
+  severity    AlertSeverity @default(WARNING)
+  category    AlertCategory
+  title       String
+  body        String
+  active      Boolean       @default(true)
+  createdBy   String        @map("created_by") // clerk user id
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  client           Client                         @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  acknowledgements ClientAlertAcknowledgement[]
+
+  @@index([clientId, active])
+  @@map("client_alerts")
+}
+
+model ClientAlertAcknowledgement {
+  id             Int      @id @default(autoincrement())
+  alertId        Int      @map("alert_id")
+  userClerkId    String   @map("user_clerk_id")
+  acknowledgedAt DateTime @default(now()) @map("acknowledged_at")
+
+  alert ClientAlert @relation(fields: [alertId], references: [id], onDelete: Cascade)
+
+  @@unique([alertId, userClerkId])
+  @@map("client_alert_acknowledgements")
+}
+
+// ============================================================================
+// SERVICES
+// ============================================================================
+
+model Service {
+  id                     Int         @id @default(autoincrement())
+  name                   String      @unique
+  description            String?
+  defaultMinutes         Int         @default(60) @map("default_minutes")
+  defaultHourlyRateCents Int         @default(0) @map("default_hourly_rate_cents")
+  category               String?
+  rutCategory            RutCategory @default(NONE) @map("rut_category")
+  fortnoxArticleId       String?     @map("fortnox_article_id")
+  isBillable             Boolean     @default(true) @map("is_billable")
+  isPayable              Boolean     @default(true) @map("is_payable")
+  active                 Boolean     @default(true)
+
+  agreementLines AgreementLine[]
+  missions       Mission[]
+  missionExtras  MissionExtra[]
+
+  @@map("services")
+}
+
+// ============================================================================
+// AGREEMENTS
+// ============================================================================
+
+model Agreement {
+  id                  Int             @id @default(autoincrement())
+  agreementNumber     String          @unique @map("agreement_number")
+  clientId            Int             @map("client_id")
+  teamId              Int?            @map("team_id")
+  status              AgreementStatus @default(DRAFT)
+  validFrom           DateTime?       @map("valid_from") @db.Date
+  validTo             DateTime?       @map("valid_to") @db.Date
+  invoiceAddressId    Int?            @map("invoice_address_id")
+  serviceAddressId    Int?            @map("service_address_id")
+  paymentTermsDays    Int?            @map("payment_terms_days")
+  cancellationPolicyHours Int         @default(24) @map("cancellation_policy_hours")
+  cancellationFeePercent Int          @default(50) @map("cancellation_fee_percent")
+  internalNotes       String?         @map("internal_notes")
+  createdAt           DateTime        @default(now()) @map("created_at")
+  updatedAt           DateTime        @updatedAt @map("updated_at")
+  closedAt            DateTime?       @map("closed_at")
+
+  client          Client          @relation(fields: [clientId], references: [id])
+  team            Team?           @relation(fields: [teamId], references: [id])
+  invoiceAddress  ClientAddress?  @relation("InvoiceAddress", fields: [invoiceAddressId], references: [id])
+  serviceAddress  ClientAddress?  @relation("ServiceAddress", fields: [serviceAddressId], references: [id])
+  lines           AgreementLine[]
+  invoices        Invoice[]
+  tickets         Ticket[]
+
+  @@index([clientId])
+  @@index([status])
+  @@map("agreements")
+}
+
+model AgreementLine {
+  id                      Int                 @id @default(autoincrement())
+  agreementId             Int                 @map("agreement_id")
+  serviceId               Int                 @map("service_id")
+  rrule                   String              // iCal RRULE string
+  defaultStartTime        String              @map("default_start_time") // "HH:MM"
+  defaultDurationMinutes  Int                 @map("default_duration_minutes")
+  plannedCrewSize         Int                 @default(1) @map("planned_crew_size")
+  preferredEmployeeIds    Int[]               @default([]) @map("preferred_employee_ids")
+  priceRule               PriceRule           @default(HOURLY) @map("price_rule")
+  hourlyRateCents         Int?                @map("hourly_rate_cents")
+  fixedPriceCents         Int?                @map("fixed_price_cents")
+  status                  AgreementLineStatus @default(ACTIVE)
+  validFrom               DateTime?           @map("valid_from") @db.Date
+  validTo                 DateTime?           @map("valid_to") @db.Date
+  customerInstructions    String?             @map("customer_instructions")
+  createdAt               DateTime            @default(now()) @map("created_at")
+  updatedAt               DateTime            @updatedAt @map("updated_at")
+
+  agreement Agreement @relation(fields: [agreementId], references: [id], onDelete: Cascade)
+  service   Service   @relation(fields: [serviceId], references: [id])
+  missions  Mission[]
+
+  @@index([agreementId])
+  @@index([status])
+  @@map("agreement_lines")
+}
+
+// ============================================================================
+// EXECUTION (SCHEDULING)
+// ============================================================================
+
+model Mission {
+  id                       Int           @id @default(autoincrement())
+  agreementLineId          Int?          @map("agreement_line_id")
+  clientId                 Int           @map("client_id")
+  serviceId                Int           @map("service_id")
+  teamId                   Int?          @map("team_id")
+  date                     DateTime      @db.Date
+  plannedStart             DateTime      @map("planned_start")
+  plannedEnd               DateTime      @map("planned_end")
+  plannedCrewSize          Int           @default(1) @map("planned_crew_size")
+  plannedDurationMinutes   Int           @map("planned_duration_minutes")
+  status                   MissionStatus @default(PLANNED)
+  cancellationReason       String?       @map("cancellation_reason")
+  cancelledAt              DateTime?     @map("cancelled_at")
+  cancelledBy              String?       @map("cancelled_by")
+  billableCancellation     Boolean       @default(false) @map("billable_cancellation")
+  customerInstructions     String?       @map("customer_instructions")
+  internalNotes            String?       @map("internal_notes")
+  rruleInstanceDate        DateTime?     @map("rrule_instance_date") @db.Date
+  version                  Int           @default(1)
+  createdAt                DateTime      @default(now()) @map("created_at")
+  updatedAt                DateTime      @updatedAt @map("updated_at")
+
+  agreementLine AgreementLine?      @relation(fields: [agreementLineId], references: [id])
+  client        Client              @relation(fields: [clientId], references: [id])
+  service       Service             @relation(fields: [serviceId], references: [id])
+  team          Team?               @relation(fields: [teamId], references: [id])
+  assignments   MissionAssignment[]
+  timeEntries   TimeEntry[]
+  extras        MissionExtra[]
+  tickets       Ticket[]
+  invoiceLines  InvoiceLine[]
+
+  @@unique([agreementLineId, rruleInstanceDate], name: "uniq_agreementline_instance")
+  @@index([date, status])
+  @@index([teamId, date])
+  @@index([clientId, date])
+  @@map("missions")
+}
+
+model MissionAssignment {
+  id            Int            @id @default(autoincrement())
+  missionId     Int            @map("mission_id")
+  employeeId    Int            @map("employee_id")
+  role          AssignmentRole @default(MEMBER)
+  plannedStart  DateTime       @map("planned_start")
+  plannedEnd    DateTime       @map("planned_end")
+  createdAt     DateTime       @default(now()) @map("created_at")
+
+  mission  Mission  @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@unique([missionId, employeeId])
+  @@index([employeeId, plannedStart])
+  @@map("mission_assignments")
+}
+
+model TimeEntry {
+  id                   Int           @id @default(autoincrement())
+  missionId            Int           @map("mission_id")
+  employeeId           Int           @map("employee_id")
+  checkInAt            DateTime?     @map("check_in_at")
+  checkOutAt           DateTime?     @map("check_out_at")
+  checkInLat           Float?        @map("check_in_lat")
+  checkInLng           Float?        @map("check_in_lng")
+  checkOutLat          Float?        @map("check_out_lat")
+  checkOutLng          Float?        @map("check_out_lng")
+  breakMinutes         Int           @default(0) @map("break_minutes")
+  actualMinutes        Int?          @map("actual_minutes")
+  deviationType        DeviationType @default(NONE) @map("deviation_type")
+  deviationNote        String?       @map("deviation_note")
+  employeeApprovedAt   DateTime?     @map("employee_approved_at")
+  adminApprovedAt      DateTime?     @map("admin_approved_at")
+  adminApprovedBy      String?       @map("admin_approved_by")
+  createdAt            DateTime      @default(now()) @map("created_at")
+  updatedAt            DateTime      @updatedAt @map("updated_at")
+
+  mission  Mission        @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  employee Employee       @relation(fields: [employeeId], references: [id])
+  extras   MissionExtra[]
+
+  @@unique([missionId, employeeId])
+  @@index([employeeId, checkInAt])
+  @@index([adminApprovedAt])
+  @@map("time_entries")
+}
+
+model MissionExtra {
+  id                  Int       @id @default(autoincrement())
+  missionId           Int       @map("mission_id")
+  timeEntryId         Int?      @map("time_entry_id")
+  type                ExtraType
+  serviceId           Int?      @map("service_id")
+  description         String
+  quantity            Float     @default(1)
+  unitPriceCents      Int       @map("unit_price_cents")
+  totalCents          Int       @map("total_cents")
+  billable            Boolean   @default(true)
+  payableToEmployeeId Int?      @map("payable_to_employee_id")
+  note                String?
+  createdAt           DateTime  @default(now()) @map("created_at")
+
+  mission      Mission       @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  timeEntry    TimeEntry?    @relation(fields: [timeEntryId], references: [id])
+  service      Service?      @relation(fields: [serviceId], references: [id])
+  invoiceLines InvoiceLine[]
+
+  @@index([missionId])
+  @@map("mission_extras")
+}
+
+model Absence {
+  id               Int         @id @default(autoincrement())
+  employeeId       Int         @map("employee_id")
+  fromDate         DateTime    @map("from_date") @db.Date
+  toDate           DateTime    @map("to_date") @db.Date
+  type             AbsenceType
+  affectsMissions  Boolean     @default(true) @map("affects_missions")
+  note             String?
+  approved         Boolean     @default(false)
+  approvedBy       String?     @map("approved_by")
+  approvedAt       DateTime?   @map("approved_at")
+  createdAt        DateTime    @default(now()) @map("created_at")
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@index([employeeId, fromDate, toDate])
+  @@map("absences")
+}
+
+// ============================================================================
+// INVOICING
+// ============================================================================
+
+model Invoice {
+  id                   Int           @id @default(autoincrement())
+  clientId             Int           @map("client_id")
+  agreementId          Int?          @map("agreement_id")
+  periodStart          DateTime      @map("period_start") @db.Date
+  periodEnd            DateTime      @map("period_end") @db.Date
+  status               InvoiceStatus @default(DRAFT)
+  subtotalCents        Int           @default(0) @map("subtotal_cents")
+  rutCents             Int           @default(0) @map("rut_cents")
+  vatCents             Int           @default(0) @map("vat_cents")
+  totalCents           Int           @default(0) @map("total_cents")
+  invoiceMethod        InvoiceMethod @default(EMAIL) @map("invoice_method")
+  fortnoxInvoiceId     String?       @map("fortnox_invoice_id")
+  fortnoxInvoiceNumber String?       @map("fortnox_invoice_number")
+  sentAt               DateTime?     @map("sent_at")
+  paidAt               DateTime?     @map("paid_at")
+  lastSyncError        String?       @map("last_sync_error")
+  reviewedBy           String?       @map("reviewed_by")
+  approvedBy           String?       @map("approved_by")
+  createdAt            DateTime      @default(now()) @map("created_at")
+  updatedAt            DateTime      @updatedAt @map("updated_at")
+
+  client    Client        @relation(fields: [clientId], references: [id])
+  agreement Agreement?    @relation(fields: [agreementId], references: [id])
+  lines     InvoiceLine[]
+
+  @@index([clientId, periodStart])
+  @@index([status])
+  @@map("invoices")
+}
+
+model InvoiceLine {
+  id                 Int               @id @default(autoincrement())
+  invoiceId          Int               @map("invoice_id")
+  sourceType         InvoiceLineSource @map("source_type")
+  missionId          Int?              @map("mission_id")
+  missionExtraId     Int?              @map("mission_extra_id")
+  description        String
+  quantity           Float
+  unit               String            // "HOUR" | "PIECE" | "MONTH"
+  unitPriceCents     Int               @map("unit_price_cents")
+  lineTotalCents     Int               @map("line_total_cents")
+  rutEligible        Boolean           @default(false) @map("rut_eligible")
+  rutAmountCents     Int               @default(0) @map("rut_amount_cents")
+  vatRate            Float             @default(25) @map("vat_rate")
+  fortnoxArticleId   String?           @map("fortnox_article_id")
+
+  invoice      Invoice       @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  mission      Mission?      @relation(fields: [missionId], references: [id])
+  missionExtra MissionExtra? @relation(fields: [missionExtraId], references: [id])
+
+  @@index([invoiceId])
+  @@map("invoice_lines")
+}
+
+// ============================================================================
+// PAYROLL
+// ============================================================================
+
+model PayrollLine {
+  id             Int             @id @default(autoincrement())
+  employeeId     Int             @map("employee_id")
+  periodStart    DateTime        @map("period_start") @db.Date
+  periodEnd      DateTime        @map("period_end") @db.Date
+  type           PayrollLineType
+  minutes        Int             @default(0)
+  rateCents      Int             @default(0) @map("rate_cents")
+  amountCents    Int             @default(0) @map("amount_cents")
+  sourceTimeEntryId Int?         @map("source_time_entry_id")
+  description    String?
+  sentToFortnoxAt DateTime?      @map("sent_to_fortnox_at")
+  fortnoxPayrollId String?       @map("fortnox_payroll_id")
+  createdAt      DateTime        @default(now()) @map("created_at")
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@index([employeeId, periodStart])
+  @@map("payroll_lines")
+}
+
+// ============================================================================
+// TICKETS + NOTES
+// ============================================================================
+
+model Ticket {
+  id          Int          @id @default(autoincrement())
+  clientId    Int?         @map("client_id")
+  agreementId Int?         @map("agreement_id")
+  missionId   Int?         @map("mission_id")
+  type        TicketType   @default(COMPLAINT)
+  subject     String
+  content     String
+  status      TicketStatus @default(OPEN)
+  priority    Int          @default(3)
+  assigneeEmployeeId Int?  @map("assignee_employee_id")
+  reporter    String?
+  createdAt   DateTime     @default(now()) @map("created_at")
+  resolvedAt  DateTime?    @map("resolved_at")
+
+  client    Client?          @relation(fields: [clientId], references: [id])
+  agreement Agreement?       @relation(fields: [agreementId], references: [id])
+  mission   Mission?         @relation(fields: [missionId], references: [id])
+  assignee  Employee?        @relation("TicketAssignee", fields: [assigneeEmployeeId], references: [id])
+  comments  TicketComment[]
+
+  @@index([status])
+  @@index([clientId])
+  @@map("tickets")
+}
+
+model TicketComment {
+  id        Int      @id @default(autoincrement())
+  ticketId  Int      @map("ticket_id")
+  author    String
+  body      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId])
+  @@map("ticket_comments")
+}
+
+model Note {
+  id           Int              @id @default(autoincrement())
+  resourceType NoteResourceType @map("resource_type")
+  resourceId   Int              @map("resource_id")
+  author       String
+  body         String
+  visibility   String           @default("INTERNAL") // INTERNAL | MISSION | CLIENT_VISIBLE
+  createdAt    DateTime         @default(now()) @map("created_at")
+
+  @@index([resourceType, resourceId])
+  @@map("notes")
+}
+
+// ============================================================================
+// FORTNOX SYNC + AUDIT
+// ============================================================================
+
+model FortnoxSyncLog {
+  id          Int           @id @default(autoincrement())
+  entityType  String        @map("entity_type")
+  entityId    String        @map("entity_id")
+  direction   SyncDirection
+  attempt     Int           @default(1)
+  httpStatus  Int?          @map("http_status")
+  payload     Json?
+  response    Json?
+  error       String?
+  createdAt   DateTime      @default(now()) @map("created_at")
+
+  @@index([entityType, entityId, createdAt(sort: Desc)])
+  @@map("fortnox_sync_log")
+}
+
+model AuditLog {
+  id          Int      @id @default(autoincrement())
+  actorClerkId String? @map("actor_clerk_id")
+  action      String
+  entityType  String   @map("entity_type")
+  entityId    String   @map("entity_id")
+  before      Json?
+  after       Json?
+  at          DateTime @default(now())
+
+  @@index([entityType, entityId, at(sort: Desc)])
+  @@map("audit_log")
+}
+
+// ============================================================================
+// LEGACY (existing tables, keep for now)
+// ============================================================================
+
 model Newsletter {
   id              String   @id @default(cuid())
   subject         String
@@ -14,9 +752,9 @@ model Newsletter {
   status          String   @default("sent")
   successCount    Int      @default(0)
   failedCount     Int      @default(0)
-  recipients      Json     @default("[]") // Array of emails
-  openedBy        Json     @default("[]") // Array of emails
-  clickedBy       Json     @default("[]") // Array of emails
+  recipients      Json     @default("[]")
+  openedBy        Json     @default("[]")
+  clickedBy       Json     @default("[]")
   introText       String?
   imageData       String?  @db.Text
   embedUrl        String?
@@ -24,9 +762,9 @@ model Newsletter {
 }
 
 model AutomatedTemplate {
-  id      String @id // e.g. "föndsterputs_welcome", "birthday"
+  id      String @id
   subject String
-  blocks  Json   @default("[]") // Array of builder blocks
+  blocks  Json   @default("[]")
 }
 
 model AutomationLog {
@@ -35,4 +773,10 @@ model AutomationLog {
   customerEmail String
   templateId    String
   sentAt        DateTime @default(now())
+}
+
+model MissionNote {
+  missionId  String @id
+  adminNote  String @default("")
+  schemaNote String @default("")
 }
