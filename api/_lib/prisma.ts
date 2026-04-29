@@ -14,18 +14,10 @@ const globalForPrisma = global as unknown as { prisma: InstanceType<typeof Prism
 
 export function getPrisma() {
   if (!globalForPrisma.prisma) {
-    // Always use standard postgres URL, let the Neon adapter handle the WebSocket/HTTP connection
-    let envUrl = process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.PRISMA_DATABASE_URL;
-    let connectionString = envUrl || '';
-    if (process.env.NODE_ENV !== 'production') {
-      try {
-        const envPath = path.resolve(process.cwd(), '.env');
-        if (fs.existsSync(envPath)) {
-          const parsed = dotenv.parse(fs.readFileSync(envPath, 'utf-8'));
-          if (parsed.DATABASE_URL) connectionString = parsed.DATABASE_URL;
-        }
-      } catch {}
-    }
+    // Use DATABASE_URL from process.env (already loaded by server.ts via dotenv,
+    // with .env.local overriding .env). Do NOT re-read .env and override — that
+    // would undo the .env.local override.
+    let connectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.PRISMA_DATABASE_URL || '';
     
     // Neon serverless requires WebSocket
     neonConfig.webSocketConstructor = ws;
@@ -50,7 +42,10 @@ export function getPrisma() {
       // Prisma Data Proxy V1 uses TCP, so we must use standard pg adapter
       const { Pool: PgPool } = require('pg');
       const { PrismaPg } = require('@prisma/adapter-pg');
-      const pool = new PgPool({ connectionString: finalConnectionString || '' });
+      const pool = new PgPool({
+        connectionString: finalConnectionString || '',
+        ssl: { rejectUnauthorized: false },
+      });
       const adapter = new PrismaPg(pool);
       globalForPrisma.prisma = new PrismaClient({ adapter });
     } else {

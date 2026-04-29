@@ -11,13 +11,42 @@ import cookieParser from "cookie-parser";
 import axios from "axios";
 import { clerkMiddleware } from "@clerk/express";
 import nodemailer from "nodemailer";
+import clientsRouter from "./api/routes/clients.js";
+import employeesRouter from "./api/routes/employees.js";
+import teamsRouter from "./api/routes/teams.js";
+import servicesRouter from "./api/routes/services.js";
+import agreementsRouter from "./api/routes/agreements.js";
+import missionsRouter from "./api/routes/missions.js";
+import timeEntriesRouter from "./api/routes/timeEntries.js";
+import invoicesRouter from "./api/routes/invoices.js";
+import payrollRouter from "./api/routes/payroll.js";
+import ticketsRouter from "./api/routes/tickets.js";
+import notesRouter from "./api/routes/notes.js";
+import jobsRouter from "./api/routes/jobs.js";
+import importRouter from "./api/routes/import.js";
+import { errorMiddleware } from "./api/_lib/errors.js";
 
 const app = express();
 const INITIAL_PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
 app.use(cookieParser());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 app.use(clerkMiddleware());
+
+// HeadOf 2.0 API routes
+app.use("/api/clients", clientsRouter);
+app.use("/api/employees", employeesRouter);
+app.use("/api/teams", teamsRouter);
+app.use("/api/services", servicesRouter);
+app.use("/api/agreements", agreementsRouter);
+app.use("/api/missions", missionsRouter);
+app.use("/api/time", timeEntriesRouter);
+app.use("/api/invoices", invoicesRouter);
+app.use("/api/payroll", payrollRouter);
+app.use("/api/tickets", ticketsRouter);
+app.use("/api/notes", notesRouter);
+app.use("/api/jobs", jobsRouter);
+app.use("/api/import", importRouter);
 
 // In-memory store for tokens (for prototype purposes)
 // In a real app, store this securely in a database associated with a user session
@@ -270,7 +299,19 @@ let timewaveAccessToken: string | null = null;
 let tokenExpiresAt = 0;
 let tokenPromise: Promise<string> | null = null;
 
+// --- IN-MEMORY CACHE ---
+const apiCache = new Map<string, { expiresAt: number, data: any }>();
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes cache
 
+function getCachedData(key: string) {
+  const cached = apiCache.get(key);
+  if (cached && Date.now() < cached.expiresAt) return cached.data;
+  return null;
+}
+
+function setCachedData(key: string, data: any) {
+  apiCache.set(key, { expiresAt: Date.now() + CACHE_TTL_MS, data });
+}
 const getTimewaveToken = async (): Promise<string> => {
   const apiKey = process.env.TIMEWAVE_API_KEY!;
   const clientId = process.env.TIMEWAVE_CLIENT_ID || "879";
@@ -289,13 +330,16 @@ const getTimewaveToken = async (): Promise<string> => {
   // Start a new refresh
   tokenPromise = (async () => {
     try {
-      const tokenBody = new FormData();
+      const tokenBody = new URLSearchParams();
       tokenBody.append("client_id", clientId);
       tokenBody.append("client_secret", apiKey);
       tokenBody.append("grant_type", "client_credentials");
       const tokenRes = await fetch(`${timewaveBaseUrl}/oauth/token`, {
         method: "POST",
-        body: tokenBody,
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: tokenBody.toString(),
       });
       if (!tokenRes.ok) {
         throw new Error(`Timewave auth failed: ${await tokenRes.text()}`);
@@ -558,6 +602,10 @@ app.get("/api/fortnox/summary", async (req, res) => {
 
 // Staff summary: per-employee stats (hours, revenue, absence, occupancy)
 app.get("/api/timewave-summary/staff", async (req, res) => {
+  const cacheKey = "staff_summary";
+  const cached = getCachedData(cacheKey);
+  if (cached) return res.json(cached);
+
   try {
     let token = await getTimewaveToken();
     const timewaveBaseUrl = "https://api.timewave.se/v3";
@@ -657,12 +705,15 @@ app.get("/api/timewave-summary/staff", async (req, res) => {
       })
       .sort((a: any, b: any) => b.hours - a.hours);
 
-    res.json({
+    const result = {
       employees: staffList,
       totalEmployees: staffList.length,
       totalHours: Math.round(staffList.reduce((s: number, e: any) => s + e.hours, 0)),
       avgOccupancy: staffList.length > 0 ? Math.round(staffList.reduce((s: number, e: any) => s + e.occupancy, 0) / staffList.length) : 0,
-    });
+    };
+    
+    setCachedData(cacheKey, result);
+    res.json(result);
   } catch (err: any) {
     console.error("Staff summary error:", err.message);
     res.status(500).json({ error: err.message });
@@ -671,14 +722,19 @@ app.get("/api/timewave-summary/staff", async (req, res) => {
 
 // Dedicated endpoint: fetch ALL mission pages for a date range and return summary
 app.get("/api/timewave-summary/missions", async (req, res) => {
-  if (!process.env.TIMEWAVE_API_KEY) {
-    return res.status(500).json({ error: "TIMEWAVE_API_KEY is not configured" });
-  }
-
   const startDate = req.query.startDate as string;
   const endDate = req.query.endDate as string;
+  
   if (!startDate || !endDate) {
     return res.status(400).json({ error: "startDate and endDate are required" });
+  }
+
+  const cacheKey = "missions_summary_" + startDate + "_" + endDate;
+  const cached = getCachedData(cacheKey);
+  if (cached) return res.json(cached);
+
+  if (!process.env.TIMEWAVE_API_KEY) {
+    return res.status(500).json({ error: "TIMEWAVE_API_KEY is not configured" });
   }
 
   const timewaveBaseUrl = "https://api.timewave.se/v3";
@@ -705,30 +761,7 @@ app.get("/api/timewave-summary/missions", async (req, res) => {
     } catch { /* ignore */ }
 
     // Fetch all pages
-    while (page <= lastPage) {
-      const url = `${timewaveBaseUrl}/missions?filter[startdate]=${startDate}&filter[enddate]=${endDate}&page[number]=${page}`;
-      let response = await fetch(url, {
-        headers: { "Authorization": `Bearer ${token}`, "Accept": "application/json" }
-      });
-
-      // Retry on 403
-      if (response.status === 403) {
-        token = await forceRefreshTimewaveToken();
-        response = await fetch(url, {
-          headers: { "Authorization": `Bearer ${token}`, "Accept": "application/json" }
-        });
-      }
-
-      if (!response.ok) {
-        throw new Error(`Timewave API error ${response.status}: ${await response.text()}`);
-      }
-
-      const data = await response.json();
-      lastPage = data.last_page || 1;
-      allMissions = allMissions.concat(data.data || []);
-      console.log(`Timewave missions: fetched page ${page}/${lastPage} (${data.data?.length || 0} items)`);
-      page++;
-    }
+    allMissions = await fetchAllMissionsChunked(startDate, endDate, 100);
 
     // Compute summary
     let totalHours = 0;
@@ -1060,34 +1093,22 @@ app.get("/api/timewave-summary/missions", async (req, res) => {
         sickLeaveByEmployee.forEach((v, k) => sickLeave3m.set(k, { ...v }));
 
         // Fetch previous months
-        let page3m = 1;
-        let lastPage3m = 1;
-        while (page3m <= lastPage3m) {
-          const url3m = `${timewaveBaseUrl}/missions?filter[startdate]=${threeMonthStart}&filter[enddate]=${startDate}&page[number]=${page3m}`;
-          const resp3m = await fetch(url3m, {
-            headers: { "Authorization": `Bearer ${token}`, "Accept": "application/json" }
-          });
-          if (!resp3m.ok) break;
-          const data3m = await resp3m.json();
-          lastPage3m = data3m.last_page || 1;
-
-          for (const m of (data3m.data || [])) {
-            const svcs = m.services || [];
-            if (svcs.some((s: any) => s.id === 3)) {
-              for (const emp of (m.employees || [])) {
-                if (emp.id) {
-                  const name = employeeNames.get(emp.id) || `${emp.first_name || ''} ${emp.last_name || ''}`.trim() || `Anställd #${emp.id}`;
-                  const existing = sickLeave3m.get(emp.id);
-                  if (existing) {
-                    existing.count++;
-                  } else {
-                    sickLeave3m.set(emp.id, { name, count: 1 });
-                  }
+        const missions3m = await fetchAllMissionsChunked(threeMonthStart, startDate, 100);
+        for (const m of missions3m) {
+          const svcs = m.services || [];
+          if (svcs.some((s: any) => s.id === 3)) {
+            for (const emp of (m.employees || [])) {
+              if (emp.id) {
+                const name = employeeNames.get(emp.id) || `${emp.first_name || ''} ${emp.last_name || ''}`.trim() || `Anställd #${emp.id}`;
+                const existing = sickLeave3m.get(emp.id);
+                if (existing) {
+                  existing.count++;
+                } else {
+                  sickLeave3m.set(emp.id, { name, count: 1 });
                 }
               }
             }
           }
-          page3m++;
         }
         console.log(`Timewave: found ${sickLeave3m.size} employees with sick leave in 3 months (${threeMonthStart} to ${endDate})`);
         responseData.sickLeave3Months = Array.from(sickLeave3m.values())
@@ -1100,6 +1121,7 @@ app.get("/api/timewave-summary/missions", async (req, res) => {
       console.error("Error fetching 3-month sick leave:", err.message);
     }
 
+    setCachedData(cacheKey, responseData);
     res.json(responseData);
   } catch (err: any) {
     console.error("Timewave summary error:", err.message);
@@ -1108,6 +1130,12 @@ app.get("/api/timewave-summary/missions", async (req, res) => {
 });
 
 app.all("/api/timewave/*", async (req, res) => {
+  if (req.method === 'GET') {
+    const cacheKey = "twproxy_" + req.originalUrl;
+    const cached = getCachedData(cacheKey);
+    if (cached) return res.json(cached);
+  }
+
   if (!process.env.TIMEWAVE_API_KEY) {
     return res.status(500).json({ error: "TIMEWAVE_API_KEY is not configured" });
   }
@@ -1126,16 +1154,17 @@ app.all("/api/timewave/*", async (req, res) => {
       method: req.method,
       headers: {
         "Authorization": `Bearer ${token}`,
-        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
         "Accept": "application/json"
       }
     };
 
     if (req.method !== 'GET' && req.method !== 'HEAD' && req.body && Object.keys(req.body).length > 0) {
+      (fetchConfig.headers as any)["Content-Type"] = "application/json";
       fetchConfig.body = JSON.stringify(req.body);
     }
 
-    console.log(`Timewave: ${req.method} ${url.toString()}`);
+    console.log(`\n\n[PROXY FIRE] Method: ${req.method} URL: ${url.toString()}\nToken Prefix: ${token.substring(0,6)}... \nIs Browser? ${!!req.headers['sec-ch-ua'] || !!req.headers['user-agent']?.includes('Mozilla')}`);
     return fetch(url.toString(), fetchConfig);
   };
 
@@ -1157,6 +1186,17 @@ app.all("/api/timewave/*", async (req, res) => {
       jsonData = JSON.parse(textData);
     } catch {
       jsonData = textData;
+    }
+
+    if (req.method === 'GET' && response.ok) {
+      const cacheKey = "twproxy_" + req.originalUrl;
+      setCachedData(cacheKey, jsonData);
+    } else if (req.method !== 'GET' && response.ok) {
+      for (const key of apiCache.keys()) {
+        if (key.startsWith("twproxy_") || key.startsWith("missions_summary_")) {
+          apiCache.delete(key);
+        }
+      }
     }
 
     res.status(response.status).json(jsonData);
@@ -1188,6 +1228,9 @@ app.post("/api/newsletter/send", (req, res) => sendHandler(req as any, res as an
 app.post("/api/newsletter/sms", (req, res) => smsHandler(req as any, res as any));
 app.post("/api/newsletter/:id/resend", (req, res) => resendHandler(req as any, res as any));
 app.all("/api/automations/templates", (req, res) => templatesHandler(req as any, res as any));
+
+// API error handler (must be registered after all /api routes)
+app.use("/api", errorMiddleware);
 
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
