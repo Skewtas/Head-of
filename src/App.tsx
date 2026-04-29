@@ -34,7 +34,9 @@ import {
   Image as ImageIcon,
   RefreshCw,
   Newspaper,
-  Building2
+  Building2,
+  BrainCircuit,
+  CalendarSearch
 } from 'lucide-react';
 import {
   BarChart,
@@ -51,6 +53,10 @@ import { timewaveService } from './services/timewaveService';
 import DispatchBoard from './DispatchBoard';
 import NewsletterView from './NewsletterView';
 import AutomationsView from './AutomationsView';
+import MasterScheduleView from './MasterScheduleView';
+import ClientsView from './ClientsView';
+import HeadOfScheduleView from './ScheduleView';
+import ImportView from './ImportView';
 
 // Utility for Tailwind classes
 function cn(...inputs: ClassValue[]) {
@@ -1558,12 +1564,17 @@ const ScheduleView = () => (
   </div>
 );
 
+
 // --- MAIN APP ---
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState('schedule');
 
   const tabs = [
+    { id: 'schedule', label: 'SCHEMA & LUCKOR', icon: CalendarSearch },
+    { id: 'schedule2', label: 'SCHEMA (HeadOf 2)', icon: CalendarDays },
+    { id: 'clients', label: 'KUNDER', icon: Users },
+    { id: 'import', label: 'IMPORTERA FRÅN TIMEWAVE', icon: RefreshCw },
     { id: 'overview', label: 'ÖVERSIKT', icon: LayoutDashboard },
     { id: 'sales', label: 'FÖRSÄLJNING', icon: TrendingUp },
     { id: 'staff', label: 'PERSONAL', icon: Briefcase },
@@ -1637,6 +1648,10 @@ export default function App() {
               {activeTab === 'mail' && <MailView />}
               {activeTab === 'newsletter' && <NewsletterView />}
               {activeTab === 'automations' && <AutomationsView />}
+              {activeTab === 'schedule' && <div className="h-[calc(100vh-140px)] -mx-8 -my-8"><MasterScheduleView /></div>}
+              {activeTab === 'schedule2' && <div className="h-[calc(100vh-140px)] -mx-8 -my-8"><HeadOfScheduleView /></div>}
+              {activeTab === 'clients' && <ClientsView />}
+              {activeTab === 'import' && <ImportView />}
             </div>
           </main>
         </div>
