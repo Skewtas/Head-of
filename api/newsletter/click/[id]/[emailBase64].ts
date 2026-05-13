@@ -39,6 +39,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
-  // Redirect to the original URL
-  res.redirect(url as string);
+  // Redirect to the original URL — defensively normalize so a missing scheme
+  // doesn't turn into a same-origin relative redirect (which would land the
+  // user back on head-of.vercel.app).
+  const normalized = normalizeLink(url as string);
+  res.redirect(normalized);
+}
+
+function normalizeLink(u: string): string {
+  const trimmed = (u || '').trim();
+  if (!trimmed) return '/';
+  if (/^(https?:|mailto:|tel:|#)/i.test(trimmed)) return trimmed;
+  if (trimmed.startsWith('//')) return `https:${trimmed}`;
+  return `https://${trimmed}`;
 }

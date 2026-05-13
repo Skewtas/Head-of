@@ -119,6 +119,17 @@ function toLocalDateTimeInput(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+// Ensure user-entered link has a usable scheme. Otherwise email clients treat
+// "boka.stodona.se" as a relative path and prepend the sender domain.
+function normalizeLinkUrl(u: string | undefined | null): string {
+  if (!u) return "";
+  const trimmed = String(u).trim();
+  if (!trimmed) return "";
+  if (/^(https?:|mailto:|tel:|#)/i.test(trimmed)) return trimmed;
+  if (trimmed.startsWith("//")) return `https:${trimmed}`;
+  return `https://${trimmed}`;
+}
+
 export default function NewsletterView() {
   // Editor blocks
   const [blocks, setBlocks] = useState<EditorBlock[]>([
@@ -537,8 +548,9 @@ export default function NewsletterView() {
         case "image":
           if (block.imageData) {
             const imgTag = `<img src="${block.imageData}" alt="${block.content || "Bild"}" style="width:100%;max-width:536px;height:auto;border-radius:10px;display:block;margin:0 auto;" />`;
-            const contentLinked = block.buttonUrl
-              ? `<a href="${block.buttonUrl}" target="_blank" style="display:block;text-decoration:none;">${imgTag}</a>`
+            const href = normalizeLinkUrl(block.buttonUrl);
+            const contentLinked = href
+              ? `<a href="${href}" target="_blank" style="display:block;text-decoration:none;">${imgTag}</a>`
               : imgTag;
             bodyContent += `<div style="padding:0 32px;margin:0 0 20px;">${contentLinked}</div>`;
           }
@@ -546,8 +558,9 @@ export default function NewsletterView() {
         case "canva":
           if (block.imageData) {
             const imgTag = `<img src="${block.imageData}" alt="Canva Design" style="width:100%;height:auto;display:block;margin:0;padding:0;" />`;
-            const contentLinked = block.buttonUrl
-              ? `<a href="${block.buttonUrl}" target="_blank" style="display:block;text-decoration:none;">${imgTag}</a>`
+            const href = normalizeLinkUrl(block.buttonUrl);
+            const contentLinked = href
+              ? `<a href="${href}" target="_blank" style="display:block;text-decoration:none;">${imgTag}</a>`
               : imgTag;
             bodyContent += `<div style="margin:0 0 20px;">${contentLinked}</div>`;
           }
@@ -559,8 +572,9 @@ export default function NewsletterView() {
             const imgCell = block.imageData
               ? `<img src="${block.imageData}" alt="${block.content ? block.content.slice(0, 40) : "Bild"}" width="240" style="display:block;width:240px;max-width:240px;height:auto;border-radius:10px;" />`
               : `<div style="width:240px;height:160px;background:#f0ebe0;border-radius:10px;"></div>`;
-            const imgWithLink = block.buttonUrl
-              ? `<a href="${block.buttonUrl}" target="_blank" style="display:block;text-decoration:none;">${imgCell}</a>`
+            const href = normalizeLinkUrl(block.buttonUrl);
+            const imgWithLink = href
+              ? `<a href="${href}" target="_blank" style="display:block;text-decoration:none;">${imgCell}</a>`
               : imgCell;
             const textCell = `<div style="font-size:15px;line-height:1.7;color:#444;font-family:'Inter','Helvetica Neue',Arial,sans-serif;">${(block.content || "").replace(/\n/g, "<br/>")}</div>`;
             const cells =
@@ -572,7 +586,8 @@ export default function NewsletterView() {
           break;
         case "button":
           if (block.content && block.buttonUrl) {
-            bodyContent += `<div style="padding:0 32px;text-align:center;margin:24px 0;"><a href="${block.buttonUrl}" target="_blank" style="display:inline-block;padding:14px 36px;background:${block.buttonColor || "#1a1a2e"};color:#fff;border-radius:10px;text-decoration:none;font-weight:600;font-size:14px;letter-spacing:0.5px;font-family:'Inter','Helvetica Neue',Arial,sans-serif;">${block.content}</a></div>`;
+            const href = normalizeLinkUrl(block.buttonUrl);
+            bodyContent += `<div style="padding:0 32px;text-align:center;margin:24px 0;"><a href="${href}" target="_blank" style="display:inline-block;padding:14px 36px;background:${block.buttonColor || "#1a1a2e"};color:#fff;border-radius:10px;text-decoration:none;font-weight:600;font-size:14px;letter-spacing:0.5px;font-family:'Inter','Helvetica Neue',Arial,sans-serif;">${block.content}</a></div>`;
           }
           break;
         case "divider":
