@@ -70,6 +70,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
+    // Reinforce the employee-name map from mission payloads themselves.
+    // Timewave's /employees endpoint may 403 on this API key but missions
+    // include nested employee details (first_name/last_name/etc), so harvest
+    // names from there as a robust fallback.
+    for (const m of allMissions) {
+      for (const emp of (m.employees || [])) {
+        if (!emp?.id || employeeNames.has(emp.id)) continue;
+        const candidate =
+          [emp.first_name, emp.last_name].filter(Boolean).join(' ').trim() ||
+          emp.full_name ||
+          emp.name ||
+          emp.display_name ||
+          emp.username ||
+          '';
+        if (candidate) employeeNames.set(emp.id, candidate);
+      }
+    }
+
     // Compute summary
     let totalHours = 0;
     let totalRevenueExVat = 0;
@@ -174,7 +192,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (services.some((svc: any) => svc.id === 3)) {
         (m.employees || []).forEach((emp: any) => {
           if (emp.id) {
-            const name = employeeNames.get(emp.id) || `${emp.first_name || ''} ${emp.last_name || ''}`.trim() || `Anställd #${emp.id}`;
+            const name =
+              employeeNames.get(emp.id) ||
+              [emp.first_name, emp.last_name].filter(Boolean).join(' ').trim() ||
+              emp.full_name ||
+              emp.name ||
+              emp.display_name ||
+              emp.username ||
+              `Anställd #${emp.id}`;
+            if (name && !name.startsWith('Anställd #')) employeeNames.set(emp.id, name);
             const existing = sickLeaveByEmployee.get(emp.id);
             if (existing) {
               existing.count++;
@@ -395,7 +421,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             if (svcs.some((s: any) => s.id === 3)) {
               for (const emp of (m.employees || [])) {
                 if (emp.id) {
-                  const name = employeeNames.get(emp.id) || `${emp.first_name || ''} ${emp.last_name || ''}`.trim() || `Anställd #${emp.id}`;
+                  const name =
+              employeeNames.get(emp.id) ||
+              [emp.first_name, emp.last_name].filter(Boolean).join(' ').trim() ||
+              emp.full_name ||
+              emp.name ||
+              emp.display_name ||
+              emp.username ||
+              `Anställd #${emp.id}`;
+            if (name && !name.startsWith('Anställd #')) employeeNames.set(emp.id, name);
                   const existing = sickLeave3m.get(emp.id);
                   if (existing) {
                     existing.count++;

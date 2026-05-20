@@ -763,6 +763,25 @@ app.get("/api/timewave-summary/missions", async (req, res) => {
     // Fetch all pages
     allMissions = await fetchAllMissionsChunked(startDate, endDate, 100);
 
+    // Reinforce the employee-name map from mission payloads themselves.
+    // Timewave often returns first_name / last_name (and sometimes full_name
+    // / username) nested inside each mission's employees[] entry. We harvest
+    // every name we can find here so we don't depend on the /employees
+    // endpoint, which the current API key can't read (returns 403).
+    for (const m of allMissions) {
+      for (const emp of (m.employees || [])) {
+        if (!emp?.id || employeeNames.has(emp.id)) continue;
+        const candidate =
+          [emp.first_name, emp.last_name].filter(Boolean).join(' ').trim() ||
+          emp.full_name ||
+          emp.name ||
+          emp.display_name ||
+          emp.username ||
+          '';
+        if (candidate) employeeNames.set(emp.id, candidate);
+      }
+    }
+
     // Compute summary
     let totalHours = 0;
     let totalRevenueExVat = 0;
@@ -888,7 +907,16 @@ app.get("/api/timewave-summary/missions", async (req, res) => {
       if (services.some((svc: any) => svc.id === 3)) {
         (m.employees || []).forEach((emp: any) => {
           if (emp.id) {
-            const name = employeeNames.get(emp.id) || `${emp.first_name || ''} ${emp.last_name || ''}`.trim() || `Anställd #${emp.id}`;
+            const name =
+              employeeNames.get(emp.id) ||
+              [emp.first_name, emp.last_name].filter(Boolean).join(' ').trim() ||
+              emp.full_name ||
+              emp.name ||
+              emp.display_name ||
+              emp.username ||
+              `Anställd #${emp.id}`;
+            // Cache so the next mission with the same id reuses the same name.
+            if (name && !name.startsWith('Anställd #')) employeeNames.set(emp.id, name);
             const existing = sickLeaveByEmployee.get(emp.id);
             if (existing) {
               existing.count++;
@@ -1099,7 +1127,16 @@ app.get("/api/timewave-summary/missions", async (req, res) => {
           if (svcs.some((s: any) => s.id === 3)) {
             for (const emp of (m.employees || [])) {
               if (emp.id) {
-                const name = employeeNames.get(emp.id) || `${emp.first_name || ''} ${emp.last_name || ''}`.trim() || `Anställd #${emp.id}`;
+                const name =
+              employeeNames.get(emp.id) ||
+              [emp.first_name, emp.last_name].filter(Boolean).join(' ').trim() ||
+              emp.full_name ||
+              emp.name ||
+              emp.display_name ||
+              emp.username ||
+              `Anställd #${emp.id}`;
+            // Cache so the next mission with the same id reuses the same name.
+            if (name && !name.startsWith('Anställd #')) employeeNames.set(emp.id, name);
                 const existing = sickLeave3m.get(emp.id);
                 if (existing) {
                   existing.count++;
