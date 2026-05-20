@@ -7,7 +7,12 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { prisma } from './_lib/prisma.js';
 
-const DEFAULT_RECIPIENTS = ['mikaela.wigert@stodona.se'];
+const DEFAULT_RECIPIENTS = [
+  'mikaela.wigert@stodona.se',
+  'info@stodona.se',
+  'tenita@stodona.se',
+  'elvedina@stodona.se',
+];
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'GET' && req.method !== 'POST') {
