@@ -452,20 +452,38 @@ function TasksPanel({
   const [showAdd, setShowAdd] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [quickAddText, setQuickAddText] = useState('');
-  const [quickAddOwner, setQuickAddOwner] = useState('');
   const [quickAdding, setQuickAdding] = useState(false);
 
+  // Parses "Ringa Lista, Tenita, 31 maj" into { title, owner, deadline }.
+  // Comma-separated parts. The 1st is always the title; the 2nd is an owner
+  // unless it looks like a date (then it's the deadline). The 3rd is treated
+  // as a deadline.
+  const parseQuickAdd = (raw: string) => {
+    const parts = raw.split(',').map((s) => s.trim()).filter(Boolean);
+    if (parts.length === 0) return null;
+    const title = parts[0];
+    let owner: string | null = null;
+    let deadline: string | null = null;
+    for (const p of parts.slice(1)) {
+      const date = tryParseSwedishDate(p);
+      if (date && !deadline) deadline = date;
+      else if (!owner) owner = p;
+    }
+    return { title, owner, deadline };
+  };
+
   const quickAdd = async () => {
-    const text = quickAddText.trim();
-    if (!text) return;
+    const parsed = parseQuickAdd(quickAddText);
+    if (!parsed) return;
     setQuickAdding(true);
     try {
       await api(`/api/ops/tasks`, {
         method: 'POST',
         body: JSON.stringify({
           section,
-          title: text,
-          owner: section === 'PERSONAL' ? quickAddOwner.trim() || null : null,
+          title: parsed.title,
+          owner: parsed.owner,
+          deadline: parsed.deadline,
           status: 'OPEN',
         }),
       });
@@ -542,48 +560,63 @@ function TasksPanel({
         </div>
       </div>
 
-      {/* Quick add — type and press Enter */}
-      <div className="bg-white border border-gray-200 rounded-xl p-3 flex items-center gap-2">
-        <Plus className="w-4 h-4 text-gray-400 flex-shrink-0" />
-        {section === 'PERSONAL' && (
-          <input
-            type="text"
-            value={quickAddOwner}
-            onChange={(e) => setQuickAddOwner(e.target.value)}
-            placeholder="Person"
-            disabled={quickAdding}
-            className="w-28 text-sm border-none outline-none bg-transparent text-brand-dark placeholder:text-gray-400"
-          />
-        )}
-        <input
-          type="text"
-          value={quickAddText}
-          onChange={(e) => setQuickAddText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
-              quickAdd();
-            }
-          }}
-          placeholder={
-            section === 'PIPELINE'
-              ? 'Ny kund eller anställd i pipen… (Enter)'
-              : section === 'ACTION'
-                ? 'Ny action… (Enter)'
-                : 'Ny task… (Enter)'
-          }
-          disabled={quickAdding}
-          className="flex-1 text-sm border-none outline-none bg-transparent text-brand-dark placeholder:text-gray-400"
-        />
-        <button
-          onClick={() => setShowAdd(true)}
-          disabled={quickAdding}
-          className="text-[11px] text-gray-400 hover:text-gray-600 underline whitespace-nowrap"
-          title="Öppna fullständigt formulär (deadline, nästa steg, koppling …)"
-        >
-          fler fält
-        </button>
-      </div>
+      {/* Quick add — type "Titel, Ansvarig, Deadline" and press Enter */}
+      {(() => {
+        const parsed = parseQuickAdd(quickAddText);
+        return (
+          <div className="bg-white border border-gray-200 rounded-xl p-3 space-y-1">
+            <div className="flex items-center gap-2">
+              <Plus className="w-4 h-4 text-gray-400 flex-shrink-0" />
+              <input
+                type="text"
+                value={quickAddText}
+                onChange={(e) => setQuickAddText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    quickAdd();
+                  }
+                }}
+                placeholder='Ex: "Ringa Lista, Tenita, 31 maj" → Enter'
+                disabled={quickAdding}
+                autoFocus={false}
+                className="flex-1 text-sm border-none outline-none bg-transparent text-brand-dark placeholder:text-gray-400"
+              />
+              <button
+                onClick={() => setShowAdd(true)}
+                disabled={quickAdding}
+                className="text-[11px] text-gray-400 hover:text-gray-600 underline whitespace-nowrap"
+                title="Öppna fullständigt formulär (nästa steg, kopplad till, mer)"
+              >
+                fler fält
+              </button>
+            </div>
+            {parsed && (parsed.owner || parsed.deadline) && (
+              <div className="pl-6 text-[11px] text-gray-500">
+                <span className="text-gray-400">Tolkas som: </span>
+                <strong className="text-brand-dark">{parsed.title}</strong>
+                {parsed.owner && (
+                  <>
+                    {' · '}ansvarig <strong className="text-brand-dark">{parsed.owner}</strong>
+                  </>
+                )}
+                {parsed.deadline && (
+                  <>
+                    {' · '}deadline{' '}
+                    <strong className="text-brand-dark">
+                      {new Date(parsed.deadline).toLocaleDateString('sv-SE', {
+                        day: 'numeric',
+                        month: 'short',
+                        year: 'numeric',
+                      })}
+                    </strong>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {loading ? (
         <div className="text-sm text-gray-400">Laddar...</div>
@@ -901,4 +934,80 @@ function getISOWeek(d: Date): number {
   date.setDate(date.getDate() + 3 - ((date.getDay() + 6) % 7));
   const week1 = new Date(date.getFullYear(), 0, 4);
   return 1 + Math.round(((date.getTime() - week1.getTime()) / 86400000 - 3 + ((week1.getDay() + 6) % 7)) / 7);
+}
+
+// Try to parse a Swedish-style date string. Returns "YYYY-MM-DD" or null.
+// Accepts:
+//   "31 maj"           → 31 may current year (or next year if past)
+//   "31 maj 2026"      → 31 may 2026
+//   "31/5"             → 31 may current year
+//   "31/5/2026"        → 31 may 2026
+//   "2026-05-31"       → as-is
+//   "imorgon", "idag"  → relative
+function tryParseSwedishDate(raw: string): string | null {
+  const s = raw.trim().toLowerCase();
+  if (!s) return null;
+
+  // ISO yyyy-mm-dd
+  const iso = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (iso) {
+    const y = +iso[1], m = +iso[2], d = +iso[3];
+    return fmtIso(new Date(y, m - 1, d));
+  }
+
+  // Relative
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  if (s === 'idag' || s === 'today') return fmtIso(today);
+  if (s === 'imorgon' || s === 'tomorrow') {
+    const t = new Date(today);
+    t.setDate(t.getDate() + 1);
+    return fmtIso(t);
+  }
+
+  // Numeric "31/5" or "31/5/2026"
+  const slash = s.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?$/);
+  if (slash) {
+    const d = +slash[1];
+    const m = +slash[2];
+    let y = slash[3] ? +slash[3] : today.getFullYear();
+    if (y < 100) y += 2000;
+    const result = new Date(y, m - 1, d);
+    if (!slash[3] && result < today) result.setFullYear(y + 1);
+    return fmtIso(result);
+  }
+
+  // "31 maj" or "31 maj 2026"
+  const months: Record<string, number> = {
+    januari: 0, jan: 0,
+    februari: 1, feb: 1,
+    mars: 2, mar: 2,
+    april: 3, apr: 3,
+    maj: 4,
+    juni: 5, jun: 5,
+    juli: 6, jul: 6,
+    augusti: 7, aug: 7,
+    september: 8, sep: 8, sept: 8,
+    oktober: 9, okt: 9,
+    november: 10, nov: 10,
+    december: 11, dec: 11,
+  };
+  const word = s.match(/^(\d{1,2})\s+([a-zåäö]+)(?:\s+(\d{2,4}))?$/);
+  if (word) {
+    const d = +word[1];
+    const m = months[word[2]];
+    if (m === undefined) return null;
+    let y = word[3] ? +word[3] : today.getFullYear();
+    if (y < 100) y += 2000;
+    const result = new Date(y, m, d);
+    if (!word[3] && result < today) result.setFullYear(y + 1);
+    return fmtIso(result);
+  }
+
+  return null;
+}
+
+function fmtIso(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
