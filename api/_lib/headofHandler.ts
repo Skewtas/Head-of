@@ -12,5 +12,13 @@ let cached: ReturnType<typeof buildHeadofApp> | null = null;
 
 export default function handler(req: VercelRequest, res: VercelResponse) {
   if (!cached) cached = buildHeadofApp();
+  // Strip "/api/hf" prefix so Express routers (mounted at /api/clients,
+  // /api/ops, etc.) still match. The frontend calls /api/hf/clients/...; the
+  // app internally sees /api/clients/... like in local dev.
+  if (req.url?.startsWith('/api/hf/')) {
+    req.url = req.url.replace('/api/hf', '/api');
+  } else if (req.url === '/api/hf' || req.url === '/api/hf/') {
+    req.url = '/api';
+  }
   return cached(req as any, res as any);
 }
