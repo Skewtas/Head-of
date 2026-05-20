@@ -98,8 +98,14 @@ function fmtNum(v: number): string {
 }
 
 function buildHtml(goals: any[], tasks: any[]): string {
-  const yearGoals = goals.filter((g) => g.periodType === 'YEAR');
-  const monthGoals = goals.filter((g) => g.periodType === 'MONTH');
+  // Only include monthly goals whose period covers TODAY, plus all weekly goals.
+  const now = new Date();
+  const monthGoals = goals.filter((g) => {
+    if (g.periodType !== 'MONTH') return false;
+    const ps = new Date(g.periodStart);
+    const pe = new Date(g.periodEnd);
+    return ps <= now && now <= pe;
+  });
   const weekGoals = goals.filter((g) => g.periodType === 'WEEK');
 
   const pipeline = tasks.filter((t) => t.section === 'PIPELINE');
@@ -218,13 +224,13 @@ h1, h2, h3 { font-family: 'Playfair Display', Georgia, serif !important; }
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f3ef;padding:24px 0;">
   <tr><td align="center">
     <table width="700" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.06);">
-      <tr><td style="padding:32px 32px 0;">
+      <tr><td style="padding:32px 32px 0;text-align:center;">
+        <img src="${process.env.APP_URL || 'https://head-of.vercel.app'}/logotyp1.png" alt="Stodona" style="height:42px;width:auto;display:inline-block;margin-bottom:18px;" />
         <h1 style="margin:0;font-size:26px;font-weight:400;color:#1a1a2e;">Veckouppföljning</h1>
         <p style="margin:6px 0 0;color:#999;font-size:13px;">Snapshot från HeadOf — ${escapeHtml(new Date().toLocaleString('sv-SE'))}</p>
       </td></tr>
       <tr><td style="padding:8px 32px 32px;">
-        ${goalTable(yearGoals, 'Årsmål')}
-        ${goalTable(monthGoals, 'Månadsmål')}
+        ${goalTable(monthGoals, 'Månadsmål — ' + new Date().toLocaleDateString('sv-SE', { month: 'long', year: 'numeric' }))}
         ${goalTable(weekGoals, 'Veckomål')}
         ${taskTable(pipeline, 'Pipeline — kunder & anställda', false)}
         ${taskTable(actions, 'Actionlista', false)}
