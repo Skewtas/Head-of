@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getTimewaveToken, forceRefreshTimewaveToken } from '../_lib/timewaveAuth.js';
 
+// Touch cache: 2026-05-20
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const apiKey = process.env.TIMEWAVE_API_KEY;
 
