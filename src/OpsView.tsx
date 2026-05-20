@@ -451,6 +451,32 @@ function TasksPanel({
   const [filterStatus, setFilterStatus] = useState<string>('open'); // open | all
   const [showAdd, setShowAdd] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [quickAddText, setQuickAddText] = useState('');
+  const [quickAddOwner, setQuickAddOwner] = useState('');
+  const [quickAdding, setQuickAdding] = useState(false);
+
+  const quickAdd = async () => {
+    const text = quickAddText.trim();
+    if (!text) return;
+    setQuickAdding(true);
+    try {
+      await api(`/api/ops/tasks`, {
+        method: 'POST',
+        body: JSON.stringify({
+          section,
+          title: text,
+          owner: section === 'PERSONAL' ? quickAddOwner.trim() || null : null,
+          status: 'OPEN',
+        }),
+      });
+      setQuickAddText('');
+      await reload();
+    } catch (e) {
+      alert(`Fel: ${(e as Error).message}`);
+    } finally {
+      setQuickAdding(false);
+    }
+  };
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -498,12 +524,6 @@ function TasksPanel({
     <div className="space-y-4">
       <div className="flex items-center gap-3">
         <h3 className="text-sm font-medium text-gray-700">{title}</h3>
-        <button
-          onClick={() => setShowAdd(true)}
-          className="flex items-center gap-1 px-3 py-1.5 bg-brand-accent text-white rounded-lg text-xs font-medium"
-        >
-          <Plus className="w-3 h-3" /> Lägg till
-        </button>
         <div className="ml-auto flex bg-gray-100 rounded-lg p-0.5 text-xs">
           {[
             { value: 'open', label: 'Aktiva' },
@@ -522,11 +542,54 @@ function TasksPanel({
         </div>
       </div>
 
+      {/* Quick add — type and press Enter */}
+      <div className="bg-white border border-gray-200 rounded-xl p-3 flex items-center gap-2">
+        <Plus className="w-4 h-4 text-gray-400 flex-shrink-0" />
+        {section === 'PERSONAL' && (
+          <input
+            type="text"
+            value={quickAddOwner}
+            onChange={(e) => setQuickAddOwner(e.target.value)}
+            placeholder="Person"
+            disabled={quickAdding}
+            className="w-28 text-sm border-none outline-none bg-transparent text-brand-dark placeholder:text-gray-400"
+          />
+        )}
+        <input
+          type="text"
+          value={quickAddText}
+          onChange={(e) => setQuickAddText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              quickAdd();
+            }
+          }}
+          placeholder={
+            section === 'PIPELINE'
+              ? 'Ny kund eller anställd i pipen… (Enter)'
+              : section === 'ACTION'
+                ? 'Ny action… (Enter)'
+                : 'Ny task… (Enter)'
+          }
+          disabled={quickAdding}
+          className="flex-1 text-sm border-none outline-none bg-transparent text-brand-dark placeholder:text-gray-400"
+        />
+        <button
+          onClick={() => setShowAdd(true)}
+          disabled={quickAdding}
+          className="text-[11px] text-gray-400 hover:text-gray-600 underline whitespace-nowrap"
+          title="Öppna fullständigt formulär (deadline, nästa steg, koppling …)"
+        >
+          fler fält
+        </button>
+      </div>
+
       {loading ? (
         <div className="text-sm text-gray-400">Laddar...</div>
       ) : groups.length === 0 || groups.every(([, list]) => list.length === 0) ? (
         <div className="p-6 bg-gray-50 rounded-xl text-sm text-gray-500 text-center">
-          Inga {title.toLowerCase()} än. Klicka <em>Lägg till</em>.
+          Inga {title.toLowerCase()} än. Skriv ovan och tryck <em>Enter</em>.
         </div>
       ) : (
         groups.map(([owner, list]) => (
