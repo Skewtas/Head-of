@@ -558,55 +558,6 @@ const OverviewView = () => {
         </Card>
       </div>
 
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader title="Fakturerad försäljning vs Mål" icon={TrendingUp} />
-          <CardContent className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={stats.salesData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} />
-                <YAxis axisLine={false} tickLine={false} tickFormatter={(value) => `${value / 1000}k`} />
-                <Tooltip
-                  formatter={(value: number) => new Intl.NumberFormat('sv-SE').format(value) + ' kr'}
-                  cursor={{ fill: '#f9fafb' }}
-                />
-                <Bar dataKey="actual" name="Utfall" fill="#151515" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="goal" name="Mål" fill="#c8b6a6" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader title="Senaste Kundfeedback" icon={Star} />
-          <CardContent className="p-0">
-            <div className="divide-y divide-gray-100">
-              {recentFeedback.slice(0, 3).map((fb) => (
-                <div key={fb.id} className="p-5 hover:bg-gray-50/50 transition-colors">
-                  <div className="flex justify-between items-start mb-2">
-                    <div className="flex items-center gap-3">
-                      {fb.rating === 'GREEN' && <Smile className="w-6 h-6 text-emerald-500" />}
-                      {fb.rating === 'YELLOW' && <Smile className="w-6 h-6 text-yellow-400" />}
-                      {fb.rating === 'ORANGE' && <Meh className="w-6 h-6 text-orange-500" />}
-                      {fb.rating === 'RED' && <Frown className="w-6 h-6 text-brand-accent" />}
-                      <div>
-                        <div className="font-serif text-brand-dark text-sm">{fb.customer}</div>
-                        <div className="text-xs text-brand-muted">Städare: {fb.cleaner}</div>
-                      </div>
-                    </div>
-                    <span className="text-xs font-medium text-gray-400">{fb.time}</span>
-                  </div>
-                  <p className="text-sm text-brand-muted mt-2 line-clamp-2">
-                    "{fb.comment}"
-                  </p>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
     </div>
   );
 };

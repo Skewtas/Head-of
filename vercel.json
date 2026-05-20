@@ -10,6 +10,10 @@
     {
       "path": "/api/newsletter/process-scheduled",
       "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/dashboard/email-summary",
+      "schedule": "0 6 * * 1-5"
     }
   ],
   "rewrites": [
