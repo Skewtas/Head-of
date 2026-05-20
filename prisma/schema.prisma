@@ -793,3 +793,67 @@ model MissionNote {
   adminNote  String @default("")
   schemaNote String @default("")
 }
+
+// ============================================================================
+// OPS — weekly/monthly/yearly follow-up (mirrors Mikaela's Excel)
+// ============================================================================
+
+enum OpsPeriodType {
+  YEAR
+  MONTH
+  WEEK
+}
+
+enum OpsTaskSection {
+  PIPELINE      // Kunder & anställda i pipen
+  ACTION        // Företagsövergripande actions
+  PERSONAL      // Per-person todo (Mikaela, Tenita, Ella, Erik, etc)
+}
+
+enum OpsTaskStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING
+  DONE
+  CANCELLED
+}
+
+model OpsGoal {
+  id             Int           @id @default(autoincrement())
+  periodType     OpsPeriodType @map("period_type")
+  periodStart    DateTime      @map("period_start") @db.Date
+  periodEnd      DateTime      @map("period_end") @db.Date
+  metricKey      String        @map("metric_key")    // revenue | online_bookings | avg_price | recurring_clients | staff_count | churn | custom
+  metricLabel    String        @map("metric_label")  // "Fakturerad försäljning"
+  targetValue    Float         @map("target_value")
+  actualOverride Float?        @map("actual_override") // null = compute from data
+  unit           String?       // "kr", "st", "%"
+  notes          String?
+  sortOrder      Int           @default(0) @map("sort_order")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  @@index([periodType, periodStart])
+  @@index([metricKey])
+  @@map("ops_goals")
+}
+
+model OpsTask {
+  id          Int            @id @default(autoincrement())
+  section     OpsTaskSection
+  owner       String?        // free-text or clerk user id
+  title       String
+  nextStep    String?        @map("next_step")
+  relatedTo   String?        @map("related_to") // e.g. "Victoria", "Tandläkarhuset Solna"
+  status      OpsTaskStatus  @default(OPEN)
+  deadline    DateTime?      @db.Date
+  notes       String?
+  sortOrder   Int            @default(0) @map("sort_order")
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
+  deletedAt   DateTime?      @map("deleted_at")
+
+  @@index([section, status])
+  @@index([owner])
+  @@map("ops_tasks")
+}

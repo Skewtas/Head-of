@@ -25,6 +25,7 @@ import ticketsRouter from '../routes/tickets.js';
 import notesRouter from '../routes/notes.js';
 import jobsRouter from '../routes/jobs.js';
 import importRouter from '../routes/import.js';
+import opsRouter from '../routes/ops.js';
 import { errorMiddleware } from './errors.js';
 
 export function buildHeadofApp(): Express {
@@ -46,6 +47,7 @@ export function buildHeadofApp(): Express {
   app.use('/api/notes', notesRouter);
   app.use('/api/jobs', jobsRouter);
   app.use('/api/import', importRouter);
+  app.use('/api/ops', opsRouter);
 
   app.use('/api', errorMiddleware);
   return app;

@@ -36,7 +36,8 @@ import {
   Newspaper,
   Building2,
   BrainCircuit,
-  CalendarSearch
+  CalendarSearch,
+  Target
 } from 'lucide-react';
 import {
   BarChart,
@@ -57,6 +58,7 @@ import MasterScheduleView from './MasterScheduleView';
 import ClientsView from './ClientsView';
 import HeadOfScheduleView from './ScheduleView';
 import ImportView from './ImportView';
+import OpsView from './OpsView';
 
 // Utility for Tailwind classes
 function cn(...inputs: ClassValue[]) {
@@ -1525,6 +1527,7 @@ export default function App() {
     { id: 'schedule', label: 'SCHEMA & LUCKOR', icon: CalendarSearch },
     { id: 'schedule2', label: 'SCHEMA (HeadOf 2)', icon: CalendarDays },
     { id: 'clients', label: 'KUNDER', icon: Users },
+    { id: 'ops', label: 'VECKOUPPFÖLJNING', icon: Target },
     { id: 'import', label: 'IMPORTERA FRÅN TIMEWAVE', icon: RefreshCw },
     { id: 'overview', label: 'ÖVERSIKT', icon: LayoutDashboard },
     { id: 'sales', label: 'FÖRSÄLJNING', icon: TrendingUp },
@@ -1602,6 +1605,7 @@ export default function App() {
               {activeTab === 'schedule' && <div className="h-[calc(100vh-140px)] -mx-8 -my-8"><MasterScheduleView /></div>}
               {activeTab === 'schedule2' && <div className="h-[calc(100vh-140px)] -mx-8 -my-8"><HeadOfScheduleView /></div>}
               {activeTab === 'clients' && <ClientsView />}
+              {activeTab === 'ops' && <OpsView />}
               {activeTab === 'import' && <ImportView />}
             </div>
           </main>
