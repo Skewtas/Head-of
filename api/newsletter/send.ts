@@ -2,6 +2,9 @@ import { prisma } from '../_lib/prisma.js';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { deliverNewsletter } from '../_lib/newsletterSender.js';
 
+// Stora nyhetsbrev med många bilder kan lätt passera 4.5 MB-defaultet.
+export const config = { api: { bodyParser: { sizeLimit: '15mb' } } };
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
   const {
