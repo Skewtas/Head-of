@@ -753,6 +753,7 @@ model Newsletter {
   successCount    Int      @default(0)
   failedCount     Int      @default(0)
   recipients      Json     @default("[]")
+  pendingRecipients Json   @default("[]")  // kö för bakgrundskörning
   failedRecipients Json    @default("[]")
   openedBy        Json     @default("[]")
   clickedBy       Json     @default("[]")

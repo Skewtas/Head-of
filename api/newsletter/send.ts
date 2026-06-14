@@ -109,7 +109,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   }
 
-  // Immediate send
+  // Pre-fyll kön med alla giltiga mottagare så cron kan ta över om
+  // vi inte hinner med dem i det första funktionsanropet.
+  await prisma.newsletter.update({
+    where: { id: newsletter.id },
+    data: { pendingRecipients: validRecipients as any },
+  });
+
+  // Försök skicka så mycket som möjligt direkt — men avbryt på 45 s
+  // så funktionen hinner returnera innan Vercels 60 s-tak.
   const result = await deliverNewsletter({
     newsletterId: newsletter.id,
     recipients: validRecipients,
@@ -119,9 +127,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     embedUrl,
     htmlContent,
     appUrl: baseUrl,
+    budgetMs: 45_000,
   });
 
-  const finalStatus = result.failed === 0 ? 'sent' : result.sent > 0 ? 'partial' : 'failed';
+  const isQueued = result.remainingRecipients.length > 0;
+  const finalStatus = isQueued
+    ? 'queued'
+    : result.failed === 0
+      ? 'sent'
+      : result.sent > 0
+        ? 'partial'
+        : 'failed';
+
   await prisma.newsletter.update({
     where: { id: newsletter.id },
     data: {
@@ -129,20 +146,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       successCount: result.sent,
       failedCount: result.failed,
       failedRecipients: result.failedRecipients as any,
+      pendingRecipients: result.remainingRecipients as any,
       sentAt: new Date(),
     },
   });
 
-  const msg = process.env.RESEND_API_KEY
-    ? `Skickat till ${result.sent}/${validRecipients.length} mottagare${result.failed > 0 ? ` (${result.failed} misslyckades)` : ''}.`
-    : `Nyhetsbrev sparat i databas (Resend ej konfigurerat — inga mail skickades). Ange RESEND_API_KEY under .env om test.`;
+  const msg = !process.env.RESEND_API_KEY
+    ? `Nyhetsbrev sparat (Resend ej konfigurerat — inga mail skickades).`
+    : isQueued
+      ? `Skickade ${result.sent} direkt, ${result.remainingRecipients.length} ligger i kö (körs i bakgrunden varje minut).`
+      : `Skickat till ${result.sent}/${validRecipients.length} mottagare${result.failed > 0 ? ` (${result.failed} misslyckades)` : ''}.`;
 
   res.json({
     success: true,
     scheduled: false,
+    queued: isQueued,
     message: msg,
     sent: result.sent,
     failed: result.failed,
+    pending: result.remainingRecipients.length,
     newsletterId: newsletter.id,
     reminderScheduledFor: reminderAt,
   });

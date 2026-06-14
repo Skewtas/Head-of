@@ -98,12 +98,19 @@ export interface SendNewsletterOpts {
   embedUrl?: string | null;
   htmlContent?: string | null;
   appUrl: string;
+  /**
+   * Avbryt när vi närmar oss budgeten (i ms) — det som finns kvar
+   * returneras som `remainingRecipients` så att kallaren kan spara
+   * tillbaka kön och fortsätta i nästa funktionsanrop.
+   */
+  budgetMs?: number;
 }
 
 export interface SendNewsletterResult {
   sent: number;
   failed: number;
   failedRecipients: string[];
+  remainingRecipients: string[];
 }
 
 /**
@@ -150,8 +157,12 @@ export async function deliverNewsletter(opts: SendNewsletterOpts): Promise<SendN
 
   if (!process.env.RESEND_API_KEY) {
     // Dry-run
-    return { sent: recipients.length, failed: 0, failedRecipients: [] };
+    return { sent: recipients.length, failed: 0, failedRecipients: [], remainingRecipients: [] };
   }
+
+  const startedAt = Date.now();
+  const budget = opts.budgetMs ?? Number.POSITIVE_INFINITY;
+  const pending = [...recipients];
 
   // Resends batch-endpoint (POST /emails/batch) tar upp till 100 mejl per
   // anrop. Det gör ett 2000-mottagar-utskick till ~20 HTTP-anrop istället
@@ -207,16 +218,24 @@ export async function deliverNewsletter(opts: SendNewsletterOpts): Promise<SendN
     }
   };
 
-  // Bygg listor av 100-mottagar-chunks och kör 4 batchar samtidigt
-  const chunks: string[][] = [];
-  for (let i = 0; i < recipients.length; i += CHUNK) {
-    chunks.push(recipients.slice(i, i + CHUNK));
-  }
-  for (let i = 0; i < chunks.length; i += PARALLEL) {
-    await Promise.all(chunks.slice(i, i + PARALLEL).map(sendBatch));
+  // Bygg listor av 100-mottagar-chunks och kör 4 batchar samtidigt.
+  // Avbryt så snart vi närmar oss budgeten — det som ligger kvar i `pending`
+  // returneras så att kallaren kan spara det och fortsätta i nästa anrop.
+  while (pending.length > 0) {
+    if (Date.now() - startedAt > budget) break;
+    const next: string[][] = [];
+    for (let i = 0; i < PARALLEL && pending.length > 0; i++) {
+      next.push(pending.splice(0, CHUNK));
+    }
+    await Promise.all(next.map(sendBatch));
   }
 
-  return { sent, failed: failedRecipients.length, failedRecipients };
+  return {
+    sent,
+    failed: failedRecipients.length,
+    failedRecipients,
+    remainingRecipients: pending,
+  };
 }
 
 /**

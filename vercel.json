@@ -12,6 +12,10 @@
       "schedule": "*/15 * * * *"
     },
     {
+      "path": "/api/newsletter/process-queue",
+      "schedule": "* * * * *"
+    },
+    {
       "path": "/api/dashboard/email-summary",
       "schedule": "0 6 * * 1"
     },
