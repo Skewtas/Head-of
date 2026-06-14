@@ -1611,14 +1611,13 @@ export default function App() {
   const tabs = [
     { id: 'overview', label: 'ÖVERSIKT', icon: LayoutDashboard },
     { id: 'schedule2', label: 'SCHEMA', icon: CalendarDays },
-    { id: 'clients', label: 'KUNDER', icon: Users },
     { id: 'ops', label: 'VECKOUPPFÖLJNING', icon: Target },
     { id: 'sales', label: 'FÖRSÄLJNING', icon: TrendingUp },
-    { id: 'staff', label: 'PERSONAL', icon: Briefcase },
     { id: 'newsletter', label: 'NYHETSBREV', icon: Newspaper },
     { id: 'automations', label: 'AUTOMATIONER', icon: Zap },
     { id: 'import', label: 'IMPORTERA FRÅN TIMEWAVE', icon: RefreshCw },
-    // Pensionerade flikar — ACTIONLISTA / ÄRENDEHANTERING / MAIL döljs men koden ligger kvar.
+    // Dolda flikar — KUNDER / PERSONAL / ACTIONLISTA / ÄRENDEHANTERING / MAIL.
+    // Komponenterna ligger kvar i koden och kan visas igen med en rad här.
   ];
 
   return (
