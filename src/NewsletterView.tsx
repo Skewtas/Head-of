@@ -655,7 +655,35 @@ export default function NewsletterView() {
     try {
       // Send email
       if (willSendEmail) {
-        const htmlContent = buildHtmlFromBlocks();
+        let htmlContent = buildHtmlFromBlocks();
+
+        // Vercel-platformen tar max ~4.5 MB per POST. Stora nyhetsbrev med
+        // base64-bilder fastnar då. Ladda upp varje bild separat först och
+        // ersätt data:image i htmlContent med korta URL-referenser.
+        const imgRegex = /src="(data:image\/[^;]+;base64,[^"]+)"/g;
+        const dataUris = Array.from(new Set(
+          Array.from(htmlContent.matchAll(imgRegex)).map((m) => m[1])
+        ));
+        for (const dataUri of dataUris) {
+          try {
+            const upRes = await fetch("/api/newsletter/staged-image", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ data: dataUri }),
+            });
+            if (!upRes.ok) continue;
+            const { url } = await upRes.json();
+            // Escape regex specials
+            const safe = dataUri.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            htmlContent = htmlContent.replace(
+              new RegExp(`src="${safe}"`, "g"),
+              `src="${url}"`,
+            );
+          } catch {
+            // Om uppladdningen misslyckas låt base64 ligga kvar — fail loud i serverlogg.
+          }
+        }
+
         const res = await fetch("/api/newsletter/send", {
           method: "POST",
           headers: { "Content-Type": "application/json" },

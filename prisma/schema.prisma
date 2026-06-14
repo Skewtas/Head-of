@@ -868,3 +868,15 @@ model DashboardSnapshot {
 
   @@map("dashboard_snapshots")
 }
+
+// Pre-uploaded newsletter images so the actual /newsletter/send POST stays
+// well under Vercel's 4.5 MB platform limit. Frontend laddar upp en bild i
+// taget, sparar id:n och sätter <img src> till /api/newsletter/staged-image/:id.
+model NewsletterImage {
+  id        String   @id @default(cuid())
+  mime      String
+  data      String   @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("newsletter_images")
+}
