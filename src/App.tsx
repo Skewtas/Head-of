@@ -299,6 +299,31 @@ const OverviewView = () => {
     isLoading: true
   });
 
+  type TenureData = {
+    activeCustomers: number;
+    averageMonths: number;
+    medianMonths: number;
+    buckets: {
+      lt3mo: number;
+      '3to6mo': number;
+      '6to12mo': number;
+      '1to2yr': number;
+      '2plus': number;
+    };
+    oldestKnownMonths: number;
+    windowMonths: number;
+    cached?: boolean;
+  };
+  const [tenure, setTenure] = React.useState<TenureData | null>(null);
+  const [tenureLoading, setTenureLoading] = React.useState(true);
+  React.useEffect(() => {
+    fetch('/api/dashboard/customer-tenure')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setTenure(d))
+      .catch(() => setTenure(null))
+      .finally(() => setTenureLoading(false));
+  }, []);
+
   React.useEffect(() => {
     const fetchStats = async () => {
       try {
@@ -492,6 +517,66 @@ const OverviewView = () => {
                 </tr>
               </tbody>
             </table>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Kundlojalitet */}
+      <Card>
+        <CardContent className="p-5">
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <h4 className="text-sm font-semibold text-brand-dark mb-1 flex items-center gap-2">
+                <Users className="w-4 h-4 text-brand-accent" />
+                Kundlojalitet — hur länge stannar kunderna?
+              </h4>
+              <p className="text-xs text-brand-muted">
+                Genomsnittlig tid sedan första bokning för kunder som varit aktiva senaste 60 dgr.
+              </p>
+            </div>
+            {tenure && (
+              <div className="flex items-baseline gap-1">
+                <span className="text-4xl font-light text-brand-dark">{tenure.averageMonths}</span>
+                <span className="text-sm text-brand-muted">mån</span>
+                <span className="text-xs text-brand-muted ml-3">(median {tenure.medianMonths} mån · {tenure.activeCustomers} aktiva kunder)</span>
+              </div>
+            )}
+          </div>
+
+          {tenureLoading ? (
+            <div className="flex justify-center py-6">
+              <RefreshCw className="w-5 h-5 animate-spin text-gray-400" />
+            </div>
+          ) : !tenure ? (
+            <p className="text-xs text-brand-muted mt-3 italic">Kunde inte beräkna kundlojalitet just nu.</p>
+          ) : (
+            <div className="mt-5 space-y-2">
+              {[
+                { key: 'lt3mo' as const, label: '< 3 mån', color: 'bg-red-300' },
+                { key: '3to6mo' as const, label: '3–6 mån', color: 'bg-amber-300' },
+                { key: '6to12mo' as const, label: '6–12 mån', color: 'bg-yellow-400' },
+                { key: '1to2yr' as const, label: '1–2 år', color: 'bg-emerald-400' },
+                { key: '2plus' as const, label: '2+ år', color: 'bg-emerald-600' },
+              ].map((b) => {
+                const count = tenure.buckets[b.key];
+                const pct = tenure.activeCustomers > 0 ? (count / tenure.activeCustomers) * 100 : 0;
+                return (
+                  <div key={b.key} className="flex items-center gap-3 text-xs">
+                    <span className="w-20 text-brand-muted">{b.label}</span>
+                    <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden">
+                      <div className={`h-full ${b.color} transition-all`} style={{ width: `${pct}%` }} />
+                    </div>
+                    <span className="w-24 text-right text-brand-dark font-medium tabular-nums">
+                      {count} st <span className="text-brand-muted font-normal">({pct.toFixed(0)}%)</span>
+                    </span>
+                  </div>
+                );
+              })}
+              <p className="text-[10px] text-brand-muted mt-3">
+                Beräknat på senaste {tenure.windowMonths} mån av Timewave-data. Kunder som varit hos er längre än det
+                räknas in i "2+ år". {tenure.cached ? '(Cachad)' : '(Färsk)'}
+              </p>
+            </div>
           )}
         </CardContent>
       </Card>
