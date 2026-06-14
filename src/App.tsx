@@ -299,6 +299,28 @@ const OverviewView = () => {
     isLoading: true
   });
 
+  type StaffOcc = {
+    id: number;
+    name: string;
+    hours: number;
+    occupancy: number;
+    missions: number;
+    sickDays: number;
+    absenceDays: number;
+    status: number | string;
+  };
+  const [staffOcc, setStaffOcc] = React.useState<StaffOcc[]>([]);
+  const [staffOccLoading, setStaffOccLoading] = React.useState(true);
+  React.useEffect(() => {
+    fetch('/api/timewave-summary/staff')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d && Array.isArray(d.employees)) setStaffOcc(d.employees);
+      })
+      .catch(() => {})
+      .finally(() => setStaffOccLoading(false));
+  }, []);
+
   type TenureData = {
     activeCustomers: number;
     averageMonths: number;
@@ -575,6 +597,82 @@ const OverviewView = () => {
               <p className="text-[10px] text-brand-muted mt-3">
                 Baserat på fakturahistorik från Timewave ({tenure.windowMonths} mån bakåt). Kunder som funnits längre
                 räknas in i "2+ år" — verkligt snitt kan därför vara högre. {tenure.cached ? '· Cachad 1 h' : '· Just beräknad'}
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Beläggning per anställd */}
+      <Card>
+        <CardContent className="p-5">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h4 className="text-sm font-semibold text-brand-dark flex items-center gap-2">
+                <Briefcase className="w-4 h-4 text-brand-accent" />
+                Beläggning per anställd — {currentMonthName}
+              </h4>
+              <p className="text-xs text-brand-muted mt-0.5">
+                Timmar bokade hittills i månaden. 100% = 160 h (heltid). Klicka på en rad för att kopiera namnet.
+              </p>
+            </div>
+            {!staffOccLoading && staffOcc.length > 0 && (
+              <div className="text-right">
+                <div className="text-2xl font-light text-brand-dark">
+                  {Math.round(
+                    staffOcc.reduce((s, e) => s + e.occupancy, 0) / Math.max(staffOcc.length, 1)
+                  )}%
+                </div>
+                <div className="text-[10px] text-brand-muted uppercase tracking-wider">snitt</div>
+              </div>
+            )}
+          </div>
+          {staffOccLoading ? (
+            <RefreshCw className="w-5 h-5 animate-spin text-gray-400 mx-auto my-6" />
+          ) : staffOcc.length === 0 ? (
+            <p className="text-xs text-brand-muted italic">Kunde inte hämta personal-data.</p>
+          ) : (
+            <div className="space-y-1.5">
+              {[...staffOcc]
+                .filter((e) => e.status !== 0 && e.status !== '0')
+                .sort((a, b) => a.occupancy - b.occupancy)
+                .map((e) => {
+                  const pct = Math.min(100, e.occupancy);
+                  const color =
+                    e.occupancy >= 95
+                      ? 'bg-emerald-500'
+                      : e.occupancy >= 75
+                      ? 'bg-yellow-400'
+                      : e.occupancy >= 50
+                      ? 'bg-amber-400'
+                      : 'bg-red-400';
+                  const flag = e.occupancy < 75 ? '⚠️' : '';
+                  return (
+                    <button
+                      key={e.id}
+                      onClick={() => {
+                        navigator.clipboard.writeText(e.name).catch(() => {});
+                      }}
+                      className="w-full flex items-center gap-3 text-xs text-left hover:bg-gray-50 rounded px-2 py-1"
+                      title={`${e.name} • ${e.hours} h bokade • ${e.missions} pass${e.sickDays ? ` • ${e.sickDays} sjukdagar` : ''}`}
+                    >
+                      <span className="w-40 text-brand-dark truncate">
+                        {e.name} {flag}
+                      </span>
+                      <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                        <div className={`h-full ${color} transition-all`} style={{ width: `${pct}%` }} />
+                      </div>
+                      <span className="w-16 text-right text-brand-dark font-medium tabular-nums">
+                        {Math.round(e.hours)} h
+                      </span>
+                      <span className="w-12 text-right text-brand-muted tabular-nums">
+                        {e.occupancy}%
+                      </span>
+                    </button>
+                  );
+                })}
+              <p className="text-[10px] text-brand-muted mt-3">
+                ⚠️ markerar &lt;75% beläggning. Sortering: lägst beläggning först.
               </p>
             </div>
           )}
