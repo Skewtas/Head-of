@@ -1868,6 +1868,34 @@ export default function NewsletterView() {
                           >
                             <Copy className="w-3.5 h-3.5" /> Kopiera
                           </button>
+                          {item.failedCount > 0 && (
+                            <button
+                              onClick={async () => {
+                                if (!confirm(`Skicka om till de ${item.failedCount} mottagare som misslyckades?`))
+                                  return;
+                                try {
+                                  const r = await fetch(`/api/newsletter/${item.id}/resend-failed`, {
+                                    method: "POST",
+                                  });
+                                  const data = await r.json();
+                                  if (!r.ok) {
+                                    alert(`Fel: ${data.error || r.statusText}`);
+                                  } else {
+                                    alert(
+                                      `Försökte igen med ${data.attempted}, ${data.sent} gick igenom, ${data.stillFailed} kvar.`,
+                                    );
+                                    fetchHistory();
+                                  }
+                                } catch (e) {
+                                  alert(`Fel: ${(e as Error).message}`);
+                                }
+                              }}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-50 text-red-700 hover:bg-red-600 hover:text-white font-medium rounded-lg text-xs transition-colors"
+                              title={`${item.failedCount} mottagare misslyckades — skicka om till bara dem`}
+                            >
+                              <AlertCircle className="w-3.5 h-3.5" /> Försök igen ({item.failedCount})
+                            </button>
+                          )}
                           {unopenedCount > 0 ? (
                             <button
                               onClick={() => handleResend(item.id, item.subject)}

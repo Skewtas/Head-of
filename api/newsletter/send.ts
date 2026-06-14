@@ -124,7 +124,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const finalStatus = result.failed === 0 ? 'sent' : result.sent > 0 ? 'partial' : 'failed';
   await prisma.newsletter.update({
     where: { id: newsletter.id },
-    data: { status: finalStatus, successCount: result.sent, failedCount: result.failed, sentAt: new Date() },
+    data: {
+      status: finalStatus,
+      successCount: result.sent,
+      failedCount: result.failed,
+      failedRecipients: result.failedRecipients as any,
+      sentAt: new Date(),
+    },
   });
 
   const msg = process.env.RESEND_API_KEY
