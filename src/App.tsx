@@ -531,7 +531,7 @@ const OverviewView = () => {
                 Kundlojalitet — hur länge stannar kunderna?
               </h4>
               <p className="text-xs text-brand-muted">
-                Genomsnittlig tid sedan första bokning för kunder som varit aktiva senaste 60 dgr.
+                Genomsnittlig tid sedan första faktura för kunder som fakturerats senaste 90 dgr.
               </p>
             </div>
             {tenure && (
@@ -573,8 +573,8 @@ const OverviewView = () => {
                 );
               })}
               <p className="text-[10px] text-brand-muted mt-3">
-                Beräknat på senaste {tenure.windowMonths} mån av Timewave-data. Kunder som varit hos er längre än det
-                räknas in i "2+ år". {tenure.cached ? '(Cachad)' : '(Färsk)'}
+                Baserat på fakturahistorik från Timewave ({tenure.windowMonths} mån bakåt). Kunder som funnits längre
+                räknas in i "2+ år" — verkligt snitt kan därför vara högre. {tenure.cached ? '· Cachad 1 h' : '· Just beräknad'}
               </p>
             </div>
           )}
