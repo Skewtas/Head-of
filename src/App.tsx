@@ -54,7 +54,7 @@ import { timewaveService } from './services/timewaveService';
 import DispatchBoard from './DispatchBoard';
 import NewsletterView from './NewsletterView';
 import AutomationsView from './AutomationsView';
-import MasterScheduleView from './MasterScheduleView';
+// MasterScheduleView (gamla SCHEMA & LUCKOR) pensionerad — använd ScheduleView (HeadOf 2.0) istället.
 import ClientsView from './ClientsView';
 import HeadOfScheduleView from './ScheduleView';
 import ImportView from './ImportView';
@@ -1521,11 +1521,10 @@ const ScheduleView = () => (
 // --- MAIN APP ---
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('schedule');
+  const [activeTab, setActiveTab] = useState('overview');
 
   const tabs = [
-    { id: 'schedule', label: 'SCHEMA & LUCKOR', icon: CalendarSearch },
-    { id: 'schedule2', label: 'SCHEMA (HeadOf 2)', icon: CalendarDays },
+    { id: 'schedule2', label: 'SCHEMA', icon: CalendarDays },
     { id: 'clients', label: 'KUNDER', icon: Users },
     { id: 'ops', label: 'VECKOUPPFÖLJNING', icon: Target },
     { id: 'import', label: 'IMPORTERA FRÅN TIMEWAVE', icon: RefreshCw },
@@ -1617,7 +1616,6 @@ export default function App() {
               {activeTab === 'mail' && <MailView />}
               {activeTab === 'newsletter' && <NewsletterView />}
               {activeTab === 'automations' && <AutomationsView />}
-              {activeTab === 'schedule' && <div className="h-[calc(100vh-140px)] -mx-8 -my-8"><MasterScheduleView /></div>}
               {activeTab === 'schedule2' && <div className="h-[calc(100vh-140px)] -mx-8 -my-8"><HeadOfScheduleView /></div>}
               {activeTab === 'clients' && <ClientsView />}
               {activeTab === 'ops' && <OpsView />}
