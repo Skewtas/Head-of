@@ -258,6 +258,11 @@ const recentFeedback = [
 const fmt = (val: number) => new Intl.NumberFormat('sv-SE').format(val);
 
 const OverviewView = () => {
+  const [freshness, setFreshness] = React.useState<{
+    overviewAgeMin: number | null;
+    overviewStale: boolean;
+  }>({ overviewAgeMin: null, overviewStale: false });
+  const [refreshing, setRefreshing] = React.useState(false);
   const [stats, setStats] = React.useState<{
     bookedJobsThisMonth: number;
     totalHoursThisMonth: number;
@@ -313,7 +318,7 @@ const OverviewView = () => {
   const [staffOcc, setStaffOcc] = React.useState<StaffOcc[]>([]);
   const [staffOccLoading, setStaffOccLoading] = React.useState(true);
   React.useEffect(() => {
-    fetch('/api/timewave-summary/staff')
+    fetch('/api/dashboard/staff-occupancy')
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (d && Array.isArray(d.employees)) setStaffOcc(d.employees);
@@ -363,27 +368,62 @@ const OverviewView = () => {
     loadTenure(false);
   }, [loadTenure]);
 
-  React.useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        // Get current month boundaries (use local dates, not UTC)
-        const now = new Date();
-        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-        const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-        const pad = (n: number) => String(n).padStart(2, '0');
-        const toLocalDateStr = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-        const monthStartStr = toLocalDateStr(monthStart);
-        const monthEndStr = toLocalDateStr(monthEnd);
-
-        const [customersRes, employeesRes, missionsSummary, issuesRes, invoicesRes] = await Promise.all([
+  const fetchStats = React.useCallback(async (forceRefresh = false) => {
+    if (forceRefresh) setRefreshing(true);
+    try {
+      const overviewUrl = forceRefresh
+        ? '/api/dashboard/overview-stats?refresh=1'
+        : '/api/dashboard/overview-stats';
+      const [customersRes, employeesRes, missionsSummaryRes, issuesRes, invoicesRes] =
+        await Promise.all([
           timewaveService.getCustomers().catch(() => ({ data: [], total: 0 })),
           timewaveService.getEmployees().catch(() => ({ data: [], total: 0 })),
-          timewaveService.getMissionsSummary(monthStartStr, monthEndStr).catch(() => ({
-            totalJobs: 0, totalHours: 0, totalRevenueExVat: 0, totalInvoicedNet: 0, avgPricePerHour: 0, recurringPrivateClients: 0, recurringCompanyClients: 0, billableClients: 0, newWorkOrdersThisMonth: 0, followUpCount: 0, sickLeaveThisMonth: [], sickLeave3Months: [], onlineBookings: 0, teamBreakdown: []
-          })),
+          fetch(overviewUrl)
+            .then((r) =>
+              r.ok
+                ? r.json()
+                : {
+                    totalJobs: 0,
+                    totalHours: 0,
+                    totalRevenueExVat: 0,
+                    totalInvoicedNet: 0,
+                    avgPricePerHour: 0,
+                    recurringPrivateClients: 0,
+                    recurringCompanyClients: 0,
+                    billableClients: 0,
+                    newWorkOrdersThisMonth: 0,
+                    followUpCount: 0,
+                    sickLeaveThisMonth: [],
+                    sickLeave3Months: [],
+                    onlineBookings: 0,
+                    teamBreakdown: [],
+                  },
+            )
+            .catch(() => ({
+              totalJobs: 0,
+              totalHours: 0,
+              totalRevenueExVat: 0,
+              totalInvoicedNet: 0,
+              avgPricePerHour: 0,
+              recurringPrivateClients: 0,
+              recurringCompanyClients: 0,
+              billableClients: 0,
+              newWorkOrdersThisMonth: 0,
+              followUpCount: 0,
+              sickLeaveThisMonth: [],
+              sickLeave3Months: [],
+              onlineBookings: 0,
+              teamBreakdown: [],
+            })),
           timewaveService.getIssues().catch(() => ({ data: [], total: 0 })),
-          timewaveService.getSalesData().catch(() => ({ data: [], total: 0 }))
+          timewaveService.getSalesData().catch(() => ({ data: [], total: 0 })),
         ]);
+      const missionsSummary = missionsSummaryRes;
+      setFreshness({
+        overviewAgeMin: missionsSummaryRes.ageMinutes ?? 0,
+        overviewStale: !!missionsSummaryRes.stale,
+      });
+      try {
 
         // Use pre-computed summary from server (all pages aggregated)
         const bookedJobsThisMonth = missionsSummary.totalJobs;
@@ -432,16 +472,23 @@ const OverviewView = () => {
           onlineBookings: missionsSummary.onlineBookings || 0,
           teamBreakdown: missionsSummary.teamBreakdown || [],
           salesData: updatedSalesData,
-          isLoading: false
+          isLoading: false,
         });
-      } catch (error) {
-        console.error("Failed to fetch overview stats", error);
-        setStats(s => ({ ...s, isLoading: false }));
+      } catch (innerError) {
+        console.error('Failed to process overview stats', innerError);
+        setStats((s) => ({ ...s, isLoading: false }));
       }
-    };
-
-    fetchStats();
+    } catch (error) {
+      console.error('Failed to fetch overview stats', error);
+      setStats((s) => ({ ...s, isLoading: false }));
+    } finally {
+      setRefreshing(false);
+    }
   }, []);
+
+  React.useEffect(() => {
+    fetchStats(false);
+  }, [fetchStats]);
 
   const currentMonthName = new Date().toLocaleString('sv-SE', { month: 'long' });
 
@@ -456,10 +503,51 @@ const OverviewView = () => {
         <a href="https://skatteverket.se" target="_blank" rel="noopener noreferrer" className="flex items-center justify-center h-11 bg-[#faf8f5] border border-[#eae4d9] rounded-xl text-xs font-bold text-[#5c5750] tracking-widest uppercase shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md hover:bg-white">SKATTEVERKET</a>
       </div>
 
-      {/* Month overview heading */}
-      <h3 className="text-xl font-serif text-brand-dark tracking-tight capitalize">
-        Översikt — {currentMonthName} {new Date().getFullYear()}
-      </h3>
+      {/* Month overview heading + freshness indicator */}
+      <div className="flex items-baseline justify-between gap-3 flex-wrap">
+        <h3 className="text-xl font-serif text-brand-dark tracking-tight capitalize">
+          Översikt — {currentMonthName} {new Date().getFullYear()}
+        </h3>
+        <div className="flex items-center gap-3 text-xs text-brand-muted">
+          {freshness.overviewAgeMin != null && (
+            <span
+              className={cn(
+                'flex items-center gap-1.5 px-2 py-1 rounded-md',
+                freshness.overviewStale ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700',
+              )}
+              title={
+                freshness.overviewStale
+                  ? 'Datan är äldre än 30 min — rekommenderar att uppdatera'
+                  : 'Datan är färsk (uppdateras automatiskt var 30 min)'
+              }
+            >
+              <span className="relative flex w-2 h-2">
+                <span
+                  className={cn(
+                    'absolute inline-flex h-full w-full rounded-full opacity-75',
+                    freshness.overviewStale ? 'bg-amber-400 animate-ping' : 'bg-emerald-400',
+                  )}
+                />
+                <span
+                  className={cn(
+                    'relative inline-flex rounded-full h-2 w-2',
+                    freshness.overviewStale ? 'bg-amber-500' : 'bg-emerald-500',
+                  )}
+                />
+              </span>
+              Uppdaterat {freshness.overviewAgeMin === 0 ? 'nyss' : `för ${freshness.overviewAgeMin} min sedan`}
+            </span>
+          )}
+          <button
+            onClick={() => fetchStats(true)}
+            disabled={refreshing}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-gray-100 hover:bg-brand-dark hover:text-white transition-colors disabled:opacity-50"
+          >
+            <RefreshCw className={cn('w-3 h-3', refreshing && 'animate-spin')} />
+            {refreshing ? 'Uppdaterar…' : 'Uppdatera nu'}
+          </button>
+        </div>
+      </div>
 
       {/* Main KPIs - 5 columns */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
