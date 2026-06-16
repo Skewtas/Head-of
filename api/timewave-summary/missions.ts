@@ -1,6 +1,11 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getTimewaveToken, forceRefreshTimewaveToken } from '../_lib/timewaveAuth.js';
 
+// Aggregeringen drar ihop missions + invoices + workorders → kan ta 15+ s.
+// Default-timeouten på 10 s avbryter ibland → funktionen returnerar
+// partiell data (28 kkr intäkt istället för 1 mkr). Sätter explicit 60 s.
+export const config = { maxDuration: 60 };
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const startDate = req.query.startDate as string;
   const endDate = req.query.endDate as string;

@@ -1,6 +1,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getTimewaveToken, forceRefreshTimewaveToken } from '../_lib/timewaveAuth.js';
 
+// Tar 15+ s att aggregera alla anställda × en månads missions.
+export const config = { maxDuration: 60 };
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     let token = await getTimewaveToken();
