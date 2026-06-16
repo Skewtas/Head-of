@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { getTimewaveToken, forceRefreshTimewaveToken } from '../_lib/timewaveAuth.js';
+import { getTimewaveToken, forceRefreshTimewaveToken } from './_lib/timewaveAuth.js';
 
 // Touch cache: 2026-05-20
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -9,9 +9,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: "TIMEWAVE_API_KEY is not configured" });
   }
 
-  // Extract the catch-all path segments
-  const { path } = req.query;
-  const endpoint = Array.isArray(path) ? path.join('/') : path || '';
+  // Med vercel.json-rewrite får vi den ursprungliga URL:en bevarad i req.url.
+  // Plocka allt efter "/api/timewave/" som endpoint.
+  let endpoint = '';
+  const reqUrl = req.url || '';
+  const m = reqUrl.match(/^\/api\/timewave\/([^?]*)/);
+  if (m) endpoint = m[1];
+  if (!endpoint) {
+    const { path } = req.query;
+    endpoint = Array.isArray(path) ? path.join('/') : (path as string) || '';
+  }
   const timewaveBaseUrl = "https://api.timewave.se/v3";
 
   try {

@@ -30,6 +30,7 @@
   ],
   "rewrites": [
     { "source": "/auth/callback", "destination": "/api/auth/callback" },
+    { "source": "/api/timewave/:path*", "destination": "/api/timewave-proxy" },
     { "source": "/api/clients/:path*", "destination": "/api/hf-handler" },
     { "source": "/api/employees/:path*", "destination": "/api/hf-handler" },
     { "source": "/api/teams/:path*", "destination": "/api/hf-handler" },
