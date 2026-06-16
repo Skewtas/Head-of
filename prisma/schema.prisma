@@ -772,6 +772,12 @@ model Newsletter {
   reminderSentAt        DateTime?
   reminderSubject       String?
   parentNewsletterId    String?   // if set, this row is itself a reminder for parent
+
+  // Daily-reminder loop — skicka samma nyhetsbrev en gång per dygn till de
+  // som inte öppnat tills antingen alla har öppnat eller until-datumet passerar.
+  dailyReminderEnabled      Boolean   @default(false)
+  dailyReminderUntil        DateTime?
+  dailyReminderLastSentAt   DateTime?
   parent                Newsletter?  @relation("NewsletterReminders", fields: [parentNewsletterId], references: [id])
   reminders             Newsletter[] @relation("NewsletterReminders")
 }

@@ -24,6 +24,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       category: n.category,
       successCount: n.successCount,
       failedCount: n.failedCount,
+      dailyReminderEnabled: n.dailyReminderEnabled,
+      dailyReminderUntil: n.dailyReminderUntil,
+      dailyReminderLastSentAt: n.dailyReminderLastSentAt,
     }));
 
     return res.json(historyList);

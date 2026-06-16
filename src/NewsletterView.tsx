@@ -1897,13 +1897,64 @@ export default function NewsletterView() {
                             </button>
                           )}
                           {unopenedCount > 0 ? (
-                            <button
-                              onClick={() => handleResend(item.id, item.subject)}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-brand-bg text-brand-dark hover:bg-brand-accent hover:text-white font-medium rounded-lg text-xs transition-colors"
-                            >
-                              <Bell className="w-3.5 h-3.5" /> Påminnelse (
-                              {unopenedCount})
-                            </button>
+                            <>
+                              <button
+                                onClick={() => handleResend(item.id, item.subject)}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-brand-bg text-brand-dark hover:bg-brand-accent hover:text-white font-medium rounded-lg text-xs transition-colors"
+                              >
+                                <Bell className="w-3.5 h-3.5" /> Påminnelse (
+                                {unopenedCount})
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  const isOn = (item as any).dailyReminderEnabled;
+                                  const action = isOn ? "stänga av" : "starta";
+                                  if (!confirm(
+                                    isOn
+                                      ? "Stänga av daglig påminnelse?"
+                                      : `Starta daglig påminnelse? Då skickas samma nyhetsbrev varje morgon (09:00) till alla som inte öppnat. Stoppar automatiskt när alla öppnat.`,
+                                  )) return;
+                                  try {
+                                    const r = await fetch(
+                                      `/api/newsletter/${item.id}/daily-reminder`,
+                                      {
+                                        method: "POST",
+                                        headers: { "Content-Type": "application/json" },
+                                        body: JSON.stringify({ enabled: !isOn }),
+                                      },
+                                    );
+                                    const data = await r.json();
+                                    if (!r.ok) alert(`Fel: ${data.error || r.statusText}`);
+                                    else {
+                                      alert(
+                                        isOn
+                                          ? "Daglig påminnelse avstängd."
+                                          : "Daglig påminnelse aktiverad. Första utskicket sker imorgon 09:00 (eller kör manuellt via 'Påminnelse'-knappen).",
+                                      );
+                                      fetchHistory();
+                                    }
+                                  } catch (e) {
+                                    alert(`Fel: ${(e as Error).message}`);
+                                  }
+                                }}
+                                className={cn(
+                                  "inline-flex items-center gap-1.5 px-3 py-1.5 font-medium rounded-lg text-xs transition-colors",
+                                  (item as any).dailyReminderEnabled
+                                    ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+                                    : "bg-gray-100 text-brand-dark hover:bg-brand-dark hover:text-white",
+                                )}
+                                title={
+                                  (item as any).dailyReminderEnabled
+                                    ? "Daglig påminnelse är PÅ — klicka för att stänga av"
+                                    : "Skicka samma nyhetsbrev varje morgon till de som inte öppnat (tills alla öppnat)"
+                                }
+                              >
+                                <RefreshCw className="w-3.5 h-3.5" />
+                                {(item as any).dailyReminderEnabled
+                                  ? "Daglig: PÅ"
+                                  : "Daglig påminnelse"}
+                              </button>
+                            </>
                           ) : (
                             <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-gray-50 text-gray-400 rounded-md text-xs font-medium">
                               <CheckCircle className="w-3.5 h-3.5" /> Alla har
