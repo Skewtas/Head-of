@@ -88,14 +88,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const services: any[] = m.services || [];
       const serviceIds = services.map((s: any) => s.service_id || s.id);
       const isAbsence = serviceIds.length > 0 && serviceIds.every((id: number) => ABSENCE_SERVICE_IDS.has(id));
-      const dateRaw: string = m.startdate || '';
-      const date = dateRaw.split(' ')[0].split('T')[0];
-      if (!date) continue;
 
       for (const emp of (m.employees || [])) {
         const empId = emp.employee_id || emp.id;
         const s = stats.get(empId);
         if (!s) continue;
+        // Timewave lägger datumet PÅ skiftet (emp.startdate), inte på
+        // mission-objektet. Fallback till m.startdate om det någon gång dyker upp.
+        const dateRaw: string = emp.startdate || m.startdate || '';
+        const date = dateRaw.split(' ')[0].split('T')[0];
+        if (!date) continue;
         if (isAbsence) {
           s.absenceDates.add(date);
         } else if (!emp.cancelled) {
