@@ -184,9 +184,11 @@ export default function NewsletterView() {
     areas: { name: string; count: number }[];
     clientTypes: { name: string; count: number }[];
     serviceTypes?: { name: string; count: number }[];
+    patterns?: { name: string; count: number }[];
   }>({ areas: [], clientTypes: [] });
   const [selectedAreas, setSelectedAreas] = useState<string[]>([]);
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
+  const [selectedPatterns, setSelectedPatterns] = useState<string[]>([]);
 
   // Computed: customers with phone numbers for SMS sending who haven't opted out
   const smsRecipients = React.useMemo(() => {
@@ -506,6 +508,11 @@ export default function NewsletterView() {
         c.serviceTypes?.some((s: string) => selectedServices.includes(s)),
       );
     }
+    if (selectedPatterns.length > 0) {
+      filtered = filtered.filter((c) =>
+        selectedPatterns.includes(c.pattern || 'Okänd historik'),
+      );
+    }
     const emails = filtered.map((c: any) => c.email);
     setRecipients([...new Set(emails)]);
     setSendResult({
@@ -527,6 +534,11 @@ export default function NewsletterView() {
   const toggleService = (svc: string) => {
     setSelectedServices((prev) =>
       prev.includes(svc) ? prev.filter((s) => s !== svc) : [...prev, svc],
+    );
+  };
+  const togglePattern = (p: string) => {
+    setSelectedPatterns((prev) =>
+      prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p],
     );
   };
 
@@ -1452,9 +1464,38 @@ export default function NewsletterView() {
                       </div>
                     )}
 
+                  {/* Kundmönster — engångskunder vs återkommande */}
+                  {segments.patterns && segments.patterns.length > 0 && (
+                    <div>
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-2">
+                        Filtrera efter Kundmönster
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {segments.patterns.map((p) => (
+                          <button
+                            key={p.name}
+                            onClick={() => togglePattern(p.name)}
+                            className={cn(
+                              "px-2.5 py-1 rounded-lg text-xs font-medium transition-all border",
+                              selectedPatterns.includes(p.name)
+                                ? "bg-brand-dark text-white border-brand-dark"
+                                : "bg-white text-brand-muted border-gray-200 hover:border-gray-300",
+                            )}
+                          >
+                            {p.name} <span className="opacity-60">({p.count})</span>
+                          </button>
+                        ))}
+                      </div>
+                      <p className="mt-1 text-[10px] text-gray-400 italic">
+                        Baseras på Timewave-bokningar de senaste 24 månaderna. "Engångskunder" = har aldrig haft återkommande städning hos oss.
+                      </p>
+                    </div>
+                  )}
+
                   {(selectedAreas.length > 0 ||
                     selectedTypes.length > 0 ||
-                    selectedServices.length > 0) && (
+                    selectedServices.length > 0 ||
+                    selectedPatterns.length > 0) && (
                     <div className="flex items-center gap-2 mt-4 pt-2 border-t border-gray-200">
                       <button
                         onClick={applySegments}
@@ -1467,6 +1508,7 @@ export default function NewsletterView() {
                           setSelectedAreas([]);
                           setSelectedTypes([]);
                           setSelectedServices([]);
+                          setSelectedPatterns([]);
                         }}
                         className="text-xs text-gray-400 hover:text-red-500"
                       >

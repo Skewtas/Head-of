@@ -12,6 +12,13 @@ export interface TimewaveCustomer {
   serviceTypes: string[];
   personalNumber: string | null;
   createdAt: string;
+  // Kundmönster — härleds från missions (Timewave). "Återkommande" = har
+  // någonsin haft en mission med type === 'reccurent'. "Engångskunder" = har
+  // enbart haft engångsuppdrag. "Okänd historik" = vi hittade inga missions
+  // (nyregistrerad eller ej bokad under lookback-fönstret).
+  pattern?: 'Återkommande' | 'Engångskunder' | 'Okänd historik';
+  totalMissions?: number;
+  recurringMissions?: number;
 }
 
 /** Normalize Swedish phone to E.164 (+46...) */
@@ -60,6 +67,68 @@ export async function getTimewaveCustomers(): Promise<TimewaveCustomer[]> {
     results.forEach(res => {
       allClients = allClients.concat(res.data || []);
     });
+  }
+
+  // ----- Kundmönster: hämta missions för ~24 mån och räkna reccurent per client -----
+  // Ratelimit-skyddat på samma sätt som api/timewave-summary/missions.ts:
+  // page[size]=200 + batchar om 4 samtidigt + backoff vid 429.
+  const now = new Date();
+  const missionEnd = now.toISOString().slice(0, 10);
+  const missionStartDate = new Date(now);
+  missionStartDate.setMonth(missionStartDate.getMonth() - 24);
+  const missionStart = missionStartDate.toISOString().slice(0, 10);
+  const missionUrlBase = `${timewaveBaseUrl}/missions?filter[startdate]=${missionStart}&filter[enddate]=${missionEnd}&page[size]=200`;
+  const fetchMissionsPage = async (p: number, retry = true): Promise<any> => {
+    let r = await fetch(`${missionUrlBase}&page[number]=${p}`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+    });
+    if (r.status === 403 && retry) {
+      token = await forceRefreshTimewaveToken();
+      return fetchMissionsPage(p, false);
+    }
+    if (r.status === 429) {
+      await new Promise((res) => setTimeout(res, 1000));
+      r = await fetch(`${missionUrlBase}&page[number]=${p}`, {
+        headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+      });
+    }
+    if (!r.ok) return { data: [], last_page: 0 };
+    return r.json();
+  };
+
+  const clientMissionStats: Record<string, { total: number; recurring: number }> = {};
+  const recordMission = (m: any) => {
+    if (m.cancelled === 1) return;
+    const cid = m.client?.id;
+    if (!cid) return;
+    const key = String(cid);
+    const stats = clientMissionStats[key] || (clientMissionStats[key] = { total: 0, recurring: 0 });
+    stats.total += 1;
+    if (m.type === 'reccurent') stats.recurring += 1;
+  };
+
+  try {
+    const firstMissions = await fetchMissionsPage(1);
+    (firstMissions.data || []).forEach(recordMission);
+    const missionLastPage = firstMissions.last_page || 1;
+    if (missionLastPage > 1) {
+      const PAR = 4;
+      for (let p = 2; p <= missionLastPage; p += PAR) {
+        const batch: number[] = [];
+        for (let i = 0; i < PAR && p + i <= missionLastPage; i++) batch.push(p + i);
+        const results = await Promise.all(
+          batch.map((pn) =>
+            fetchMissionsPage(pn).catch((e) => {
+              console.error('customers: missions page', pn, e.message);
+              return { data: [] };
+            })
+          )
+        );
+        results.forEach((data: any) => (data.data || []).forEach(recordMission));
+      }
+    }
+  } catch (err: any) {
+    console.error('customers: mission-fetch failed, pattern falls back to Okänd historik', err.message);
   }
 
   const ordersResp = await fetch(`${timewaveBaseUrl}/orders?page[size]=1000`, {
@@ -155,9 +224,15 @@ export async function getTimewaveCustomers(): Promise<TimewaveCustomer[]> {
       const sTypes = clientServices[String(c.id)] ? Array.from(clientServices[String(c.id)]) : ['Okänd Tjänst'];
 
       const normPhone = normalizePhone(c.phone || c.mobile || c.cellphone);
-      const parsedEmail = (c.email && c.email.includes('@')) 
-         ? c.email.toLowerCase().trim() 
+      const parsedEmail = (c.email && c.email.includes('@'))
+         ? c.email.toLowerCase().trim()
          : `${normPhone}@no-email.stodona.se`;
+
+      const stats = clientMissionStats[String(c.id)];
+      let pattern: TimewaveCustomer['pattern'] = 'Okänd historik';
+      if (stats && stats.total > 0) {
+        pattern = stats.recurring > 0 ? 'Återkommande' : 'Engångskunder';
+      }
 
       return {
         id: c.id,
@@ -170,19 +245,29 @@ export async function getTimewaveCustomers(): Promise<TimewaveCustomer[]> {
         postalCode,
         serviceTypes: sTypes,
         personalNumber: c.personal_number || c.ssn || c.social_security_number || c.registration_number || c.national_id || c.org_number || null,
-        createdAt: c.created_at || new Date().toISOString()
+        createdAt: c.created_at || new Date().toISOString(),
+        pattern,
+        totalMissions: stats?.total ?? 0,
+        recurringMissions: stats?.recurring ?? 0,
       };
     });
 
   const uniqueMap = new Map<string, any>();
-  customers.forEach((c: any) => { 
+  customers.forEach((c: any) => {
     if (!uniqueMap.has(c.email)) {
-      uniqueMap.set(c.email, c); 
+      uniqueMap.set(c.email, c);
     } else {
       const existing = uniqueMap.get(c.email);
       existing.serviceTypes = Array.from(new Set([...existing.serviceTypes, ...c.serviceTypes]));
+      // Slå ihop missions-stats; om NÅGON av delkunderna är återkommande
+      // räknas hela e-postgruppen som återkommande.
+      existing.totalMissions = (existing.totalMissions ?? 0) + (c.totalMissions ?? 0);
+      existing.recurringMissions = (existing.recurringMissions ?? 0) + (c.recurringMissions ?? 0);
+      if (existing.totalMissions > 0) {
+        existing.pattern = existing.recurringMissions > 0 ? 'Återkommande' : 'Engångskunder';
+      }
     }
   });
-  
+
   return Array.from(uniqueMap.values());
 }

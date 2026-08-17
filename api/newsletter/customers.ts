@@ -85,6 +85,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           existing.clientType = twContact.clientType;
           existing.area = twContact.area;
           existing.serviceTypes = twContact.serviceTypes;
+          existing.pattern = twContact.pattern;
+          existing.totalMissions = twContact.totalMissions;
+          existing.recurringMissions = twContact.recurringMissions;
           existing.source = 'timewave';
         } else {
           twContact.source = 'timewave';
@@ -121,6 +124,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const areaCounts: Record<string, number> = {};
     const typeCounts: Record<string, number> = {};
     const serviceCounts: Record<string, number> = {};
+    const patternCounts: Record<string, number> = {};
     
     // Check for internal team members
     const internalKeywords = ['emma selenius', 'mikaela wigert', 'rani shakir', 'annika wigert', '@stodona.se'];
@@ -130,6 +134,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       areaCounts[c.area] = (areaCounts[c.area] || 0) + 1;
       typeCounts[c.clientType] = (typeCounts[c.clientType] || 0) + 1;
       c.serviceTypes.forEach((s: string) => serviceCounts[s] = (serviceCounts[s] || 0) + 1);
+      const pat = c.pattern || 'Okänd historik';
+      patternCounts[pat] = (patternCounts[pat] || 0) + 1;
       
       const isInternal = internalKeywords.some(kw => c.name.toLowerCase().includes(kw) || c.email.toLowerCase().includes(kw));
       if (isInternal) {
@@ -152,6 +158,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         areas: Object.entries(areaCounts).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count),
         clientTypes: Object.entries(typeCounts).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count),
         serviceTypes: Object.entries(serviceCounts).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count),
+        patterns: Object.entries(patternCounts).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count),
       }
     });
   } catch (err: any) {
