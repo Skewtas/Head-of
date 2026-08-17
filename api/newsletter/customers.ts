@@ -2,6 +2,11 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getTimewaveCustomers } from '../_lib/timewaveData.js';
 import { prisma } from '../_lib/prisma.js';
 
+// Sync-vägen drar all klientlista (paginerad) + 24 mån missions för att
+// klassificera pattern → kan lätt ta 30+ s. Utan explicit maxDuration
+// använder Vercel default (10 s) och sync trunkeras tyst.
+export const config = { maxDuration: 60 };
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'GET' && req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
