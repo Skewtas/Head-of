@@ -150,7 +150,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const subject = `Beläggning · vecka ${week} — ${under.length} personer att åtgärda`;
 
     if (dryRun) {
-      return res.json({ ok: true, dryRun: true, subject, recipients: RECIPIENTS, underCount: under.length, totalMissing, openDaysCount: openDays.length, htmlLength: html.length });
+      return res.json({
+        ok: true, dryRun: true, subject, recipients: RECIPIENTS,
+        underCount: under.length, totalMissing, openDaysCount: openDays.length,
+        htmlLength: html.length,
+        tracked: tracked.map((e) => ({ name: e.name, occupation: e.occupation, hours: Math.round(stats.get(e.id)!.hours), target: (e.occupation / 100) * WORK_HOURS_PER_MONTH_100 })),
+        under: under.map(({ name, occupation, hours, target, missing, pct }) => ({ name, occupation, hours, target, missing, pct })),
+        openDays: openDays.map((o) => ({ name: o.name, occupation: o.occupation, days: o.dates.length })),
+        period: { monthStart, monthEnd, historyStart },
+      });
     }
 
     const sent: string[] = [];
