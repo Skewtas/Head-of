@@ -327,8 +327,7 @@ export default function AutomationsView() {
   const previewHtml = `
     <div style="max-width:600px;margin:0 auto;font-family:'Segoe UI',sans-serif;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.06);">
       <div style="padding:40px 32px 0;">
-        <h1 style="margin:0 0 8px;font-size:28px;color:#1a1a2e;font-weight:300;">Stodona</h1>
-        <div style="height:3px;width:40px;background:#c9a96e;margin-bottom:24px;"></div>
+        <img src="/logotyp1.png" alt="Stodona" style="height:45px;width:auto;margin-bottom:24px;display:block;" />
       </div>
       <div style="padding:0 32px 32px;">${buildHtmlFromBlocks()}</div>
       <div style="padding:24px 32px;background:#faf8f5;border-top:1px solid #eae4d9;text-align:center;">
