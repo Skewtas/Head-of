@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { userTokens, generateSessionId } from '../_lib/tokenStore.js';
 import { setSessionCookie } from '../_lib/cookies.js';
+import { saveGraphRefreshToken } from '../_lib/graphTokenStore.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const { code, error } = req.query;
@@ -60,6 +61,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       refreshToken: refresh_token,
       expiresAt: Date.now() + expires_in * 1000,
     };
+
+    // Persistera refresh_token i DB så cronjobb (obesvarade-ärenden-mail
+    // etc.) kan använda den utan att någon behöver vara inloggad.
+    if (refresh_token) {
+      try {
+        // Hämta vem det är för trevlig loggning
+        let userEmail: string | undefined;
+        try {
+          const meResp = await fetch('https://graph.microsoft.com/v1.0/me?$select=mail,userPrincipalName', {
+            headers: { Authorization: `Bearer ${access_token}` },
+          });
+          if (meResp.ok) {
+            const me = await meResp.json();
+            userEmail = me.mail || me.userPrincipalName;
+          }
+        } catch { /* ignore */ }
+        await saveGraphRefreshToken(refresh_token, userEmail);
+      } catch (e: any) {
+        console.error('[auth/callback] Kunde inte spara graph refresh_token:', e?.message);
+        // Sväljs — sessionen fungerar fortfarande
+      }
+    }
 
     res.setHeader('Set-Cookie', setSessionCookie(sessionId));
 
