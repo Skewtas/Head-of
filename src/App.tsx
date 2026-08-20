@@ -372,6 +372,22 @@ const OverviewView = () => {
     loadTenure(false);
   }, [loadTenure]);
 
+  // Obesvarade kundserviceärenden ur Outlook-inkorgen (kräver att man
+  // är inloggad i MAIL-tabben — annars visas "koppla först")
+  type Ticket = { id: string; conversationId: string; subject: string; preview: string; senderName: string; senderEmail: string; receivedAt: string; waitingHours: number; category: string; sla_hours: number; overdue: boolean; suggest: string };
+  type TicketData = { total: number; overdueCount: number; tickets: Ticket[]; countsByCategory: Record<string, number>; lookbackDays: number; notConnected?: boolean };
+  const [tickets, setTickets] = React.useState<TicketData | null>(null);
+  const [ticketsLoading, setTicketsLoading] = React.useState(true);
+  React.useEffect(() => {
+    fetch('/api/dashboard/unanswered-tickets')
+      .then(async (r) => {
+        if (r.status === 401) { setTickets({ total: 0, overdueCount: 0, tickets: [], countsByCategory: {}, lookbackDays: 14, notConnected: true }); return; }
+        if (r.ok) setTickets(await r.json());
+      })
+      .catch(() => {})
+      .finally(() => setTicketsLoading(false));
+  }, []);
+
   const fetchStats = React.useCallback(async (forceRefresh = false) => {
     if (forceRefresh) setRefreshing(true);
     try {
@@ -649,6 +665,86 @@ const OverviewView = () => {
                 </tr>
               </tbody>
             </table>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Obesvarade kundserviceärenden */}
+      <Card>
+        <CardContent className="p-5">
+          <div className="flex items-start justify-between gap-3 mb-3">
+            <div>
+              <h4 className="text-sm font-semibold text-brand-dark flex items-center gap-2">
+                <Inbox className="w-4 h-4 text-brand-accent" />
+                Obesvarade kundserviceärenden
+              </h4>
+              <p className="text-[11px] text-brand-muted mt-0.5">
+                Senaste {tickets?.lookbackDays ?? 14} dagarna · Outlook-inkorg
+              </p>
+            </div>
+            {tickets && !tickets.notConnected && tickets.total > 0 && (
+              <div className="flex items-center gap-2">
+                <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${tickets.overdueCount > 0 ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'}`}>
+                  {tickets.total} obesvarade
+                </span>
+                {tickets.overdueCount > 0 && (
+                  <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-red-100 text-red-800">
+                    {tickets.overdueCount} över SLA
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+
+          {ticketsLoading ? (
+            <RefreshCw className="w-5 h-5 animate-spin text-gray-400 mx-auto my-4" />
+          ) : tickets?.notConnected ? (
+            <div className="text-center py-6 text-xs text-brand-muted">
+              <Mail className="w-6 h-6 text-gray-300 mx-auto mb-2" />
+              Koppla Outlook i <b>MAIL</b>-tabben så visas obesvarade kundserviceärenden här.
+            </div>
+          ) : !tickets || tickets.total === 0 ? (
+            <div className="text-center py-6 text-xs text-emerald-700 bg-emerald-50/50 rounded-lg">
+              Inkorgen är i mål — inga obesvarade kundmail de senaste 14 dagarna.
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {tickets.tickets.slice(0, 10).map((t) => {
+                const days = Math.floor(t.waitingHours / 24);
+                const waitLabel = days > 0 ? `${days}d ${t.waitingHours % 24}h` : `${t.waitingHours}h`;
+                return (
+                  <div key={t.id} className={`border rounded-lg p-3 ${t.overdue ? 'border-red-200 bg-red-50/40' : 'border-gray-200 bg-white'}`}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${t.overdue ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-700'}`}>
+                            {t.category}
+                          </span>
+                          <span className={`text-[11px] ${t.overdue ? 'text-red-700 font-semibold' : 'text-brand-muted'}`}>
+                            väntar {waitLabel}
+                          </span>
+                          {t.overdue && <span className="text-[10px] font-bold text-red-700">ÖVER SLA ({t.sla_hours}h)</span>}
+                        </div>
+                        <div className="text-sm font-medium text-brand-dark truncate">{t.subject}</div>
+                        <div className="text-xs text-brand-muted truncate mt-0.5">
+                          Från: {t.senderName} <span className="text-gray-400">&lt;{t.senderEmail}&gt;</span>
+                        </div>
+                        <div className="text-xs text-gray-500 mt-1.5 line-clamp-2">{t.preview}</div>
+                        <div className="text-[11px] text-brand-accent mt-2 flex items-start gap-1.5">
+                          <span className="font-bold text-[10px] uppercase tracking-wider mt-0.5">Gör:</span>
+                          <span className="text-brand-dark">{t.suggest}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              {tickets.total > 10 && (
+                <p className="text-[11px] text-brand-muted text-center pt-1">
+                  +{tickets.total - 10} till — hantera i MAIL-tabben
+                </p>
+              )}
+            </div>
           )}
         </CardContent>
       </Card>
