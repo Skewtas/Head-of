@@ -350,6 +350,7 @@ function TasksBlock({
   const [tasks, setTasks] = useState<OpsTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [showDone, setShowDone] = useState(false);
+  const [showStale, setShowStale] = useState(false);
   const [quickText, setQuickText] = useState('');
   const [quickAdding, setQuickAdding] = useState(false);
 
@@ -392,10 +393,25 @@ function TasksBlock({
     }
   };
 
-  const visible = tasks.filter(
-    (t) => showDone || (t.status !== 'DONE' && t.status !== 'CANCELLED')
-  );
+  // Stale-filter: tasks vars deadline passerat med >30 dagar räknas som
+  // gamla — dölj som default så veckouppföljningen inte fylls upp av
+  // bortglömda uppdrag från månader sen. Odaterade tasks räknas inte som
+  // gamla; de kan vara löpande.
+  const isStale = (t: OpsTask): boolean => {
+    if (!t.deadline) return false;
+    const daysAgo = (Date.now() - new Date(t.deadline).getTime()) / 86_400_000;
+    return daysAgo > 30;
+  };
+  const visible = tasks.filter((t) => {
+    const done = t.status === 'DONE' || t.status === 'CANCELLED';
+    if (done && !showDone) return false;
+    if (!done && isStale(t) && !showStale) return false;
+    return true;
+  });
   const doneCount = tasks.filter((t) => t.status === 'DONE' || t.status === 'CANCELLED').length;
+  const staleCount = tasks.filter(
+    (t) => isStale(t) && t.status !== 'DONE' && t.status !== 'CANCELLED'
+  ).length;
 
   const groups: Array<[string | null, OpsTask[]]> = useMemo(() => {
     if (!groupByOwner) return [[null, visible]];
@@ -410,8 +426,17 @@ function TasksBlock({
 
   return (
     <section className="space-y-2">
-      <header className="flex items-center gap-3">
+      <header className="flex items-center gap-3 flex-wrap">
         <h2 className="text-lg font-serif text-brand-dark">{title}</h2>
+        {staleCount > 0 && (
+          <button
+            onClick={() => setShowStale((v) => !v)}
+            className="text-xs text-amber-700 hover:text-amber-900"
+            title="Tasks med deadline >30 dgr sen"
+          >
+            {showStale ? `Dölj gamla (${staleCount})` : `Visa gamla (${staleCount})`}
+          </button>
+        )}
         {doneCount > 0 && (
           <button
             onClick={() => setShowDone((v) => !v)}
