@@ -1133,8 +1133,24 @@ model ContractAttachment {
   filename          String
   contentType       String   @map("content_type")
   fileUrl           String   @map("file_url")
+  fileId            String?  @map("file_id")
+  file              ContractFile? @relation(fields: [fileId], references: [id])
   uploadedByClerkId String   @map("uploaded_by_clerk_id")
   createdAt         DateTime @default(now()) @map("created_at")
 
   @@map("contract_attachments")
+}
+
+/// Binära filer (PDF/DOCX) för avtal — base64 i DB, mönster från
+/// NewsletterImage. Byt till Vercel Blob senare vid behov.
+model ContractFile {
+  id          String   @id @default(cuid())
+  mime        String
+  data        String   @db.Text
+  sizeBytes   Int      @default(0) @map("size_bytes")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  attachments ContractAttachment[]
+
+  @@map("contract_files")
 }

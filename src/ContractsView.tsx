@@ -6,8 +6,8 @@
  *   Fas 3 — Skapa anställningsavtal från mall (6-stegs guide)
  *   Fas 4 — Signering via Visma Sign
  */
-import React, { useEffect, useMemo, useState } from 'react';
-import { FileText, AlertTriangle, CheckCircle, Send, Clock, Plus, Search } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { FileText, AlertTriangle, CheckCircle, Send, Clock, Plus, Search, Upload, X, Loader } from 'lucide-react';
 import { api } from './lib/api';
 
 type Stats = {
@@ -73,24 +73,28 @@ const STATUS_STYLE: Record<string, { label: string; bg: string; text: string }> 
 export default function ContractsView() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [contracts, setContracts] = useState<Contract[]>([]);
+  const [companies, setCompanies] = useState<{ id: number; name: string }[]>([]);
   const [isSuperadmin, setIsSuperadmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('');
+  const [uploadOpen, setUploadOpen] = useState(false);
+
+  const reload = async () => {
+    const [s, list, cos] = await Promise.all([
+      api<Stats>('/api/contracts/stats').catch(() => null),
+      api<{ data: Contract[]; isSuperadmin: boolean }>('/api/contracts').catch(() => ({ data: [], isSuperadmin: false })),
+      api<{ id: number; name: string }[]>('/api/contracts/companies').catch(() => []),
+    ]);
+    if (s) setStats(s);
+    setContracts(list.data);
+    setIsSuperadmin(list.isSuperadmin);
+    setCompanies(cos);
+  };
 
   useEffect(() => {
     (async () => {
-      try {
-        const [s, list] = await Promise.all([
-          api<Stats>('/api/contracts/stats').catch(() => null),
-          api<{ data: Contract[]; isSuperadmin: boolean }>('/api/contracts').catch(() => ({ data: [], isSuperadmin: false })),
-        ]);
-        if (s) setStats(s);
-        setContracts(list.data);
-        setIsSuperadmin(list.isSuperadmin);
-      } finally {
-        setLoading(false);
-      }
+      try { await reload(); } finally { setLoading(false); }
     })();
   }, []);
 
@@ -122,14 +126,33 @@ export default function ContractsView() {
               : 'Du ser dina egna avtal + de som delats med dig.'}
           </p>
         </div>
-        <button
-          className="flex items-center gap-2 px-4 py-2 bg-brand-dark text-white rounded-lg text-sm font-semibold hover:bg-brand-accent"
-          disabled
-          title="Kommer i Fas 3"
-        >
-          <Plus className="w-4 h-4" /> Nytt anställningsavtal
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setUploadOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-brand-dark text-brand-dark rounded-lg text-sm font-semibold hover:bg-gray-50"
+          >
+            <Upload className="w-4 h-4" /> Ladda upp befintligt
+          </button>
+          <button
+            className="flex items-center gap-2 px-4 py-2 bg-brand-dark text-white rounded-lg text-sm font-semibold hover:bg-brand-accent opacity-50"
+            disabled
+            title="Kommer i Fas 3"
+          >
+            <Plus className="w-4 h-4" /> Nytt anställningsavtal
+          </button>
+        </div>
       </header>
+
+      {uploadOpen && (
+        <UploadModal
+          companies={companies}
+          onClose={() => setUploadOpen(false)}
+          onDone={async () => {
+            setUploadOpen(false);
+            await reload();
+          }}
+        />
+      )}
 
       {/* KPI-strip */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
@@ -250,6 +273,236 @@ function KpiCard({
         <Icon className="w-3 h-3" /> {label}
       </div>
       <div className={`mt-2 text-2xl font-semibold ${accentColor[accent]}`}>{value}</div>
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────
+// Upload befintligt avtal — Fas 2
+// ──────────────────────────────────────────────────────────────────
+
+function UploadModal({
+  companies,
+  onClose,
+  onDone,
+}: {
+  companies: { id: number; name: string }[];
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const fileInput = useRef<HTMLInputElement>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const [title, setTitle] = useState('');
+  const [category, setCategory] = useState('ANSTALLNINGSAVTAL');
+  const [ownCompanyId, setOwnCompanyId] = useState<number | ''>(companies[0]?.id ?? '');
+  const [personFirst, setPersonFirst] = useState('');
+  const [personLast, setPersonLast] = useState('');
+  const [personEmail, setPersonEmail] = useState('');
+  const [externalCompany, setExternalCompany] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [alreadySigned, setAlreadySigned] = useState(true);
+  const [signedAt, setSignedAt] = useState('');
+
+  const readFileToBase64 = (f: File): Promise<string> =>
+    new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => {
+        const s = String(r.result || '');
+        res(s.split(',')[1] || s);
+      };
+      r.onerror = () => rej(r.error);
+      r.readAsDataURL(f);
+    });
+
+  const acceptFile = (f: File | null | undefined) => {
+    if (!f) return;
+    const ok = ['pdf', 'docx', 'doc'].some((e) => f.name.toLowerCase().endsWith('.' + e));
+    if (!ok) { setErr('Endast PDF eller DOCX tillåts'); return; }
+    if (f.size > 4_500_000) { setErr('Filen är större än 4.5 MB'); return; }
+    setErr(null);
+    setFile(f);
+    if (!title) setTitle(f.name.replace(/\.[^.]+$/, ''));
+  };
+
+  const submit = async () => {
+    if (!file) { setErr('Välj en fil'); return; }
+    if (!title || !category || !ownCompanyId) { setErr('Titel, kategori och företag krävs'); return; }
+    setSaving(true); setErr(null);
+    try {
+      const base64 = await readFileToBase64(file);
+      await api('/api/contracts-upload', {
+        method: 'POST',
+        body: JSON.stringify({
+          title,
+          category,
+          ownCompanyId,
+          person: (personFirst || personLast) ? {
+            firstName: personFirst,
+            lastName: personLast,
+            email: personEmail || null,
+          } : null,
+          externalCompanyName: externalCompany || null,
+          startDate: startDate || null,
+          endDate: endDate || null,
+          alreadySigned,
+          signedAt: alreadySigned ? (signedAt || null) : null,
+          file: {
+            filename: file.name,
+            contentType: file.type || 'application/pdf',
+            base64,
+          },
+        }),
+      });
+      onDone();
+    } catch (e: any) {
+      setErr(e?.message ?? String(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
+      <div
+        className="bg-white rounded-2xl max-w-2xl w-full shadow-2xl overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+          <h3 className="text-lg font-serif text-brand-dark">Ladda upp befintligt avtal</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-brand-dark"><X className="w-5 h-5" /></button>
+        </div>
+
+        <div className="p-6 space-y-5 max-h-[75vh] overflow-y-auto">
+          {/* Drop-zone */}
+          <div
+            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={(e) => {
+              e.preventDefault(); setDragOver(false);
+              acceptFile(e.dataTransfer.files?.[0]);
+            }}
+            onClick={() => fileInput.current?.click()}
+            className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition ${
+              dragOver ? 'border-brand-accent bg-brand-accent/5' : 'border-gray-200'
+            }`}
+          >
+            <input
+              ref={fileInput}
+              type="file"
+              accept=".pdf,.docx,.doc,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              onChange={(e) => acceptFile(e.target.files?.[0])}
+              className="hidden"
+            />
+            {file ? (
+              <div className="text-sm text-brand-dark">
+                <FileText className="w-6 h-6 mx-auto mb-2 text-brand-accent" />
+                <div className="font-medium">{file.name}</div>
+                <div className="text-xs text-brand-muted mt-1">{Math.round(file.size / 1024)} kB</div>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setFile(null); }}
+                  className="text-xs text-red-600 hover:underline mt-2"
+                >Ta bort</button>
+              </div>
+            ) : (
+              <>
+                <Upload className="w-6 h-6 mx-auto mb-2 text-gray-400" />
+                <div className="text-sm text-brand-muted">Dra hit PDF/DOCX eller klicka för att välja</div>
+                <div className="text-xs text-gray-400 mt-1">Max 4.5 MB</div>
+              </>
+            )}
+          </div>
+
+          <Row label="Avtalsnamn" required>
+            <input value={title} onChange={(e) => setTitle(e.target.value)} className={inp} placeholder="Ex: Anställningsavtal — Anna Andersson" />
+          </Row>
+
+          <div className="grid grid-cols-2 gap-4">
+            <Row label="Kategori" required>
+              <select value={category} onChange={(e) => setCategory(e.target.value)} className={inp}>
+                {Object.entries(CATEGORY_LABEL).map(([k, v]) => (
+                  <option key={k} value={k}>{v}</option>
+                ))}
+              </select>
+            </Row>
+            <Row label="Företag (vi)" required>
+              <select
+                value={ownCompanyId}
+                onChange={(e) => setOwnCompanyId(Number(e.target.value))}
+                className={inp}
+              >
+                {companies.length === 0 && <option value="">Inga företag — kör migration först</option>}
+                {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </Row>
+          </div>
+
+          <div>
+            <div className="text-[10px] font-bold uppercase tracking-wider text-brand-muted mb-2">Motpart</div>
+            <div className="grid grid-cols-2 gap-3">
+              <input value={personFirst} onChange={(e) => setPersonFirst(e.target.value)} placeholder="Förnamn" className={inp} />
+              <input value={personLast} onChange={(e) => setPersonLast(e.target.value)} placeholder="Efternamn" className={inp} />
+              <input value={personEmail} onChange={(e) => setPersonEmail(e.target.value)} placeholder="E-post (valfritt)" className={`${inp} col-span-2`} />
+            </div>
+            <div className="text-[10px] uppercase tracking-wider text-brand-muted mt-3 mb-2">— eller externt företag —</div>
+            <input value={externalCompany} onChange={(e) => setExternalCompany(e.target.value)} placeholder="Företagsnamn (leverantör, hyresvärd…)" className={inp} />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <Row label="Startdatum">
+              <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className={inp} />
+            </Row>
+            <Row label="Slutdatum">
+              <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className={inp} />
+            </Row>
+          </div>
+
+          <label className="flex items-center gap-2 text-sm text-brand-dark cursor-pointer">
+            <input type="checkbox" checked={alreadySigned} onChange={(e) => setAlreadySigned(e.target.checked)} />
+            Redan signerat
+          </label>
+          {alreadySigned && (
+            <Row label="Signerat datum">
+              <input type="date" value={signedAt} onChange={(e) => setSignedAt(e.target.value)} className={inp} />
+            </Row>
+          )}
+
+          {err && (
+            <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-2">
+              {err}
+            </div>
+          )}
+        </div>
+
+        <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end gap-3">
+          <button onClick={onClose} className="px-4 py-2 text-sm font-semibold text-gray-500 hover:text-brand-dark">Avbryt</button>
+          <button
+            onClick={submit}
+            disabled={saving || !file}
+            className="px-5 py-2 bg-brand-dark text-white rounded-lg text-sm font-semibold hover:bg-brand-accent disabled:opacity-50 flex items-center gap-2"
+          >
+            {saving && <Loader className="w-4 h-4 animate-spin" />} Spara avtalet
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const inp = 'w-full px-3 py-2 border border-gray-200 rounded-lg outline-none focus:border-brand-accent text-sm';
+
+function Row({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-muted mb-1">
+        {label}{required && <span className="text-red-500 ml-1">*</span>}
+      </label>
+      {children}
     </div>
   );
 }

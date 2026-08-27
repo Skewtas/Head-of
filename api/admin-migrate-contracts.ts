@@ -20,25 +20,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const sqlPath = join(process.cwd(), 'prisma/migrations/20260827_contracts_module/migration.sql');
-    const sql = readFileSync(sqlPath, 'utf-8');
-
-    // Kör hela filen som en enda transaktion — pg tolererar CREATE ... IF NOT
-    // EXISTS + DO-blocken vi använder för enums.
-    await prisma.$executeRawUnsafe(sql);
+    const migrations = [
+      '20260827_contracts_module',
+      '20260827_contracts_files',
+    ];
+    const applied: string[] = [];
+    for (const m of migrations) {
+      const sqlPath = join(process.cwd(), `prisma/migrations/${m}/migration.sql`);
+      const sql = readFileSync(sqlPath, 'utf-8');
+      await prisma.$executeRawUnsafe(sql);
+      applied.push(m);
+    }
 
     // Verifiera att tabellerna finns
     const tables: Array<{ tablename: string }> = await prisma.$queryRawUnsafe(
       `SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename IN (
         'own_companies','contract_persons','contracts','contract_versions',
         'contract_templates','contract_permissions','contract_signers',
-        'contract_reminders','contract_attachments'
+        'contract_reminders','contract_attachments','contract_files'
       ) ORDER BY tablename`
     );
 
     res.json({
       ok: true,
-      applied: true,
+      applied,
       tablesFound: tables.map((t) => t.tablename),
       note: 'Kan köras om säkert — idempotent.',
     });
