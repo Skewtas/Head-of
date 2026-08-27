@@ -25,6 +25,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       '20260827_contracts_files',
       '20260827_contracts_templates_seed',
       '20260827_stodona_services_seed',
+      '20260828_contract_person_timewave_id',
     ];
     const applied: string[] = [];
     for (const m of migrations) {

@@ -993,12 +993,16 @@ model ContractPerson {
   city             String?
   linkedEmployeeId Int?      @map("linked_employee_id")
   linkedEmployee   Employee? @relation(fields: [linkedEmployeeId], references: [id])
+  /// Timewave-employee.id (bild-id). Prisma Employee-tabellen är ofta tom,
+  /// personal-datan lever i Timewave. Vi lagrar bara Timewave-ID:t här.
+  timewaveEmployeeId Int?    @map("timewave_employee_id")
   createdAt        DateTime  @default(now()) @map("created_at")
   updatedAt        DateTime  @updatedAt @map("updated_at")
 
   contracts Contract[]
 
   @@index([lastName, firstName])
+  @@index([timewaveEmployeeId])
   @@map("contract_persons")
 }
 

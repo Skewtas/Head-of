@@ -88,17 +88,20 @@ export default function ContractsView() {
   const [categoryFilter, setCategoryFilter] = useState<string>('');
   const [uploadOpen, setUploadOpen] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
+  const [missing, setMissing] = useState<{ totalActive: number; missing: any[]; missingCount: number } | null>(null);
 
   const reload = async () => {
-    const [s, list, cos] = await Promise.all([
+    const [s, list, cos, miss] = await Promise.all([
       api<Stats>('/api/contracts/stats').catch(() => null),
       api<{ data: Contract[]; isSuperadmin: boolean }>('/api/contracts').catch(() => ({ data: [], isSuperadmin: false })),
       api<{ id: number; name: string }[]>('/api/contracts/companies').catch(() => []),
+      api<{ totalActive: number; missing: any[]; missingCount: number }>('/api/contracts/missing-employees').catch(() => null),
     ]);
     if (s) setStats(s);
     setContracts(list.data);
     setIsSuperadmin(list.isSuperadmin);
     setCompanies(cos);
+    if (miss) setMissing(miss);
   };
 
   useEffect(() => {
@@ -183,6 +186,39 @@ export default function ContractsView() {
         <KpiCard label="Löper ut inom 60 dgr" value={stats?.expiring ?? '—'} icon={Clock} accent="amber" />
         <KpiCard label="Utgångna" value={stats?.expired ?? '—'} icon={AlertTriangle} accent="red" />
       </div>
+
+      {/* Varning: aktiva Timewave-anställda utan aktivt anställningsavtal */}
+      {missing && missing.missingCount > 0 && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4 space-y-3">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-red-700 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <h3 className="text-sm font-semibold text-red-900">
+                {missing.missingCount} anställd{missing.missingCount === 1 ? '' : 'a'} utan aktivt anställningsavtal
+              </h3>
+              <p className="text-xs text-red-700/80 mt-0.5">
+                Aktiva i Timewave men saknar signerat eller aktivt anställningsavtal i systemet. Ladda upp befintligt eller skapa ett nytt.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {missing.missing.slice(0, 20).map((p) => (
+              <button
+                key={p.timewaveEmployeeId}
+                className="text-xs px-3 py-1.5 bg-white border border-red-200 rounded-lg hover:border-red-400 hover:bg-red-50 text-red-900 flex items-center gap-1.5"
+                onClick={() => { /* TODO: pre-fill wizard with employee data */ setWizardOpen(true); }}
+                title={`Skapa avtal för ${p.firstName} ${p.lastName}`}
+              >
+                {p.firstName} {p.lastName}
+                {p.occupation && <span className="text-red-500 text-[10px]">· {p.occupation}%</span>}
+              </button>
+            ))}
+            {missing.missingCount > 20 && (
+              <span className="text-xs text-red-700 self-center">+{missing.missingCount - 20} till</span>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Sök/filter */}
       <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">

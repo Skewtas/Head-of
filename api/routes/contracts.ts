@@ -322,6 +322,108 @@ router.get('/companies', async (_req, res) => {
   res.json(list);
 });
 
+// ─── ANSTÄLLDA UTAN AKTIVT ANSTÄLLNINGSAVTAL ───────────────────────────
+/**
+ * Hämtar aktiva Timewave-anställda och korsreferar mot ContractPersons +
+ * aktiva avtal. Returnerar dem som saknar ett aktivt/signerat anställnings-
+ * kontrakt.
+ */
+router.get('/missing-employees', async (req, res) => {
+  try {
+    const baseUrl = process.env.APP_URL || `https://${req.headers.host}`;
+    // Fetcha via vår Timewave-proxy — går genom befintlig token-refresh
+    const r = await fetch(`${baseUrl}/api/timewave/employees?page[size]=200`);
+    if (!r.ok) return res.status(502).json({ error: 'Kunde inte hämta anställda från Timewave' });
+    const data = await r.json();
+    const employees: any[] = (data.data || []).filter((e: any) => !e.deleted && e.status === 'active');
+
+    // Hämta alla aktiva anställningsavtal + linked person
+    const EMPLOYMENT_CATEGORIES = [
+      'ANSTALLNINGSAVTAL',
+      'PROVANSTALLNING',
+      'TILLSVIDAREANSTALLNING',
+      'VISSTIDSANSTALLNING',
+      'TIMANSTALLNING',
+    ];
+    const activeContracts = await prisma.contract.findMany({
+      where: {
+        status: { in: ['ACTIVE', 'SIGNED', 'SENT', 'PARTIALLY_SIGNED'] },
+        category: { in: EMPLOYMENT_CATEGORIES as any },
+      },
+      select: {
+        id: true,
+        endDate: true,
+        person: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            personalNumber: true,
+            timewaveEmployeeId: true,
+          },
+        },
+      },
+    });
+
+    const now = Date.now();
+    const covered = new Set<number>();
+    const nameKeys = new Map<string, number>();  // normalized name → contract count
+    const emailKeys = new Map<string, number>();
+    const personalKeys = new Map<string, number>();
+    for (const c of activeContracts) {
+      // Räknas bara som "aktivt" om det inte är utgånget
+      if (c.endDate && c.endDate.getTime() < now) continue;
+      if (!c.person) continue;
+      if (c.person.timewaveEmployeeId) covered.add(c.person.timewaveEmployeeId);
+      const nk = normalizeName(c.person.firstName, c.person.lastName);
+      if (nk) nameKeys.set(nk, (nameKeys.get(nk) ?? 0) + 1);
+      if (c.person.email) emailKeys.set(c.person.email.toLowerCase(), (emailKeys.get(c.person.email.toLowerCase()) ?? 0) + 1);
+      if (c.person.personalNumber) personalKeys.set(normalizePnr(c.person.personalNumber), 1);
+    }
+
+    const missing = employees
+      .filter((e) => {
+        if (covered.has(e.id)) return false;
+        const nk = normalizeName(e.first_name || '', e.last_name || '');
+        if (nk && nameKeys.get(nk)) return false;
+        if (e.email && emailKeys.get(String(e.email).toLowerCase())) return false;
+        if (e.personal_number && personalKeys.get(normalizePnr(String(e.personal_number)))) return false;
+        return true;
+      })
+      .map((e) => ({
+        timewaveEmployeeId: e.id,
+        firstName: e.first_name || '',
+        lastName: e.last_name || '',
+        email: e.email || null,
+        phone: e.mobile || e.phone || null,
+        personalNumber: e.personal_number || null,
+        startDate: e.employee_startdate || null,
+        occupation: e.base_contract?.occupation ?? null,
+      }))
+      .sort((a, b) => (a.lastName + a.firstName).localeCompare(b.lastName + b.firstName));
+
+    res.json({
+      totalActive: employees.length,
+      missing,
+      missingCount: missing.length,
+    });
+  } catch (err: any) {
+    console.error('[missing-employees] failed:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+function normalizeName(first: string, last: string): string {
+  const n = `${first} ${last}`.toLowerCase().trim()
+    .replace(/[åä]/g, 'a').replace(/ö/g, 'o').replace(/[éè]/g, 'e')
+    .replace(/\s+/g, ' ');
+  return n;
+}
+function normalizePnr(s: string): string {
+  return s.replace(/[^0-9]/g, '');
+}
+
 // ─── UPLOAD EXISTING CONTRACT (PDF/DOCX) ───────────────────────────────
 /**
  * Skapar Contract + ContractPerson + Attachment + File i en transaktion.
