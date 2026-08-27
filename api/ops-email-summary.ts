@@ -8,6 +8,50 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { prisma } from './_lib/prisma.js';
 import { signTaskDone } from './ops-task-done.js';
 
+type Actuals = {
+  totalRevenueExVat?: number;
+  totalInvoicedNet?: number;
+  onlineBookings?: number;
+  newRecurringClients?: number;
+};
+
+/** Hämtar live-siffror från Timewave-summeringen för månad eller vecka */
+async function fetchActuals(req: VercelRequest, scope: 'month' | 'week'): Promise<Actuals> {
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  let startDate: string;
+  let endDate: string;
+
+  if (scope === 'month') {
+    startDate = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-01`;
+    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    endDate = `${lastDay.getFullYear()}-${pad(lastDay.getMonth() + 1)}-${pad(lastDay.getDate())}`;
+  } else {
+    const d = new Date(now);
+    const day = d.getDay() || 7;
+    d.setDate(d.getDate() - (day - 1));
+    startDate = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    d.setDate(d.getDate() + 6);
+    endDate = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  }
+
+  try {
+    const baseUrl = process.env.APP_URL || `https://${req.headers.host}`;
+    const r = await fetch(`${baseUrl}/api/timewave-summary/missions?startDate=${startDate}&endDate=${endDate}`);
+    if (!r.ok) return {};
+    const d = await r.json();
+    return {
+      totalRevenueExVat: d.totalRevenueExVat,
+      totalInvoicedNet: d.totalInvoicedNet,
+      onlineBookings: d.onlineBookings,
+      newRecurringClients: d.newRecurringClients,
+    };
+  } catch (e: any) {
+    console.error(`[ops-email] fetchActuals(${scope}) failed:`, e?.message);
+    return {};
+  }
+}
+
 const DEFAULT_RECIPIENTS = [
   'mikaela.wigert@stodona.se',
   'info@stodona.se',
@@ -41,7 +85,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .map((s) => s.trim())
         .filter(Boolean);
 
-  const [goals, tasks] = await Promise.all([
+  const [goals, tasks, monthActuals, weekActuals] = await Promise.all([
     prisma.opsGoal.findMany({
       orderBy: [{ periodType: 'asc' }, { periodStart: 'desc' }, { sortOrder: 'asc' }],
     }),
@@ -49,7 +93,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       where: { deletedAt: null },
       orderBy: [{ section: 'asc' }, { status: 'asc' }, { createdAt: 'desc' }],
     }),
+    fetchActuals(req, 'month'),
+    fetchActuals(req, 'week'),
   ]);
+
+  // Om goal.actualOverride är null — fyll med live-siffra från Timewave.
+  // Så ser man alltid ett värde i mailet utan att behöva skriva in manuellt.
+  const metricToActual: Record<string, keyof typeof monthActuals> = {
+    revenue: 'totalInvoicedNet',
+    booked_revenue: 'totalRevenueExVat',
+    online_bookings_month: 'onlineBookings',
+    new_recurring_clients: 'newRecurringClients',
+  };
+  const goalsWithActuals = (goals as any[]).map((g) => {
+    if (g.actualOverride != null) return g;
+    const src = g.periodType === 'WEEK' ? weekActuals : g.periodType === 'MONTH' ? monthActuals : null;
+    const field = metricToActual[g.metricKey];
+    if (!src || !field || src[field] == null) return g;
+    return { ...g, actualOverride: src[field] as number, actualIsAuto: true };
+  });
 
   const fromAddress = process.env.SMTP_FROM || process.env.SMTP_USER || 'info@stodona.se';
   const subject = `HeadOf — Veckouppföljning ${new Date().toLocaleDateString('sv-SE', {
@@ -57,7 +119,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     day: 'numeric',
     month: 'long',
   })}`;
-  const html = buildHtml(goals as any[], tasks as any[]);
+  const html = buildHtml(goalsWithActuals, tasks as any[]);
 
   // ?preview=1 returnerar HTML:en direkt så man kan inspektera mailet
   // i browsern utan att trigga något utskick.
