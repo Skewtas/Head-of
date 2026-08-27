@@ -8,6 +8,9 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { prisma } from './_lib/prisma.js';
 import { signTaskDone } from './ops-task-done.js';
 
+// Två fetches mot Timewave-summeringen kan ta 20-40s totalt (månad + vecka)
+export const config = { maxDuration: 60 };
+
 type Actuals = {
   totalRevenueExVat?: number;
   totalInvoicedNet?: number;
@@ -36,10 +39,22 @@ async function fetchActuals(req: VercelRequest, scope: 'month' | 'week'): Promis
   }
 
   try {
-    const baseUrl = process.env.APP_URL || `https://${req.headers.host}`;
-    const r = await fetch(`${baseUrl}/api/timewave-summary/missions?startDate=${startDate}&endDate=${endDate}`);
-    if (!r.ok) return {};
+    const host = req.headers.host || 'head-of.vercel.app';
+    const baseUrl = process.env.APP_URL || `https://${host}`;
+    const url = `${baseUrl}/api/timewave-summary/missions?startDate=${startDate}&endDate=${endDate}`;
+    console.log(`[ops-email] fetchActuals(${scope}) → ${url}`);
+    const r = await fetch(url);
+    if (!r.ok) {
+      console.error(`[ops-email] fetchActuals(${scope}) HTTP ${r.status}`);
+      return {};
+    }
     const d = await r.json();
+    console.log(`[ops-email] fetchActuals(${scope}) →`, {
+      totalRevenueExVat: d.totalRevenueExVat,
+      totalInvoicedNet: d.totalInvoicedNet,
+      onlineBookings: d.onlineBookings,
+      newRecurringClients: d.newRecurringClients,
+    });
     return {
       totalRevenueExVat: d.totalRevenueExVat,
       totalInvoicedNet: d.totalInvoicedNet,
@@ -47,7 +62,7 @@ async function fetchActuals(req: VercelRequest, scope: 'month' | 'week'): Promis
       newRecurringClients: d.newRecurringClients,
     };
   } catch (e: any) {
-    console.error(`[ops-email] fetchActuals(${scope}) failed:`, e?.message);
+    console.error(`[ops-email] fetchActuals(${scope}) failed:`, e?.message, e?.stack);
     return {};
   }
 }
@@ -120,6 +135,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     month: 'long',
   })}`;
   const html = buildHtml(goalsWithActuals, tasks as any[]);
+
+  // ?debug=1 dumpar råa värden så vi kan se om auto-actuals fungerade.
+  if (req.query.debug === '1') {
+    return res.json({
+      monthActuals,
+      weekActuals,
+      goals: goalsWithActuals.map((g: any) => ({
+        metricKey: g.metricKey,
+        metricLabel: g.metricLabel,
+        periodType: g.periodType,
+        actualOverride: g.actualOverride,
+        actualIsAuto: g.actualIsAuto ?? false,
+        targetValue: g.targetValue,
+        unit: g.unit,
+      })),
+    });
+  }
 
   // ?preview=1 returnerar HTML:en direkt så man kan inspektera mailet
   // i browsern utan att trigga något utskick.
