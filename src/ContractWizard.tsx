@@ -47,6 +47,8 @@ export default function ContractWizard({
 
   const [role, setRole] = useState('');
   const [occupationPct, setOccupationPct] = useState('100');
+  const [employmentForm, setEmploymentForm] = useState<'TILLSVIDARE' | 'PROV' | 'VISSTID' | 'TIM'>('TILLSVIDARE');
+  const [workArea, setWorkArea] = useState('Stockholm med omnejd');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [probationEndDate, setProbationEndDate] = useState('');
@@ -74,10 +76,21 @@ export default function ContractWizard({
   const selectedTemplate = templates.find((t) => t.id === templateId) || null;
 
   const employmentCtx = useMemo(() => ({
-    role, occupationPct, startDate, endDate, probationEndDate,
-    salary, hourlyRate, workplace, workHours, vacation, noticePeriod,
-    collectiveAgreement, otherTerms,
-  }), [role, occupationPct, startDate, endDate, probationEndDate, salary, hourlyRate, workplace, workHours, vacation, noticePeriod, collectiveAgreement, otherTerms]);
+    // camelCase (för gamla mallar) + snake_case (för Stodona Standard-mallen)
+    role, job_title: role,
+    occupationPct, percentage: occupationPct,
+    startDate, start_date: startDate,
+    endDate, end_date: endDate,
+    probationEndDate, probation_end_date: probationEndDate,
+    salary, hourlyRate, hourly_rate: hourlyRate,
+    workplace, work_area: workArea || workplace,
+    workHours, vacation,
+    noticePeriod, notice_period: noticePeriod,
+    collectiveAgreement, collective_agreement: collectiveAgreement,
+    otherTerms,
+    employment_form: employmentForm,
+    employmentForm,
+  }), [role, occupationPct, startDate, endDate, probationEndDate, salary, hourlyRate, workplace, workArea, workHours, vacation, noticePeriod, collectiveAgreement, otherTerms, employmentForm]);
 
   const personCtx = useMemo(() => ({
     firstName, lastName, personalNumber,
@@ -196,14 +209,31 @@ export default function ContractWizard({
               <section>
                 <h4 className="text-[10px] font-bold uppercase tracking-wider text-brand-muted mb-3">Anställningsvillkor</h4>
                 <div className="grid grid-cols-2 gap-3">
+                  <Field label="Anställningsform *">
+                    <select value={employmentForm} onChange={(e) => setEmploymentForm(e.target.value as any)} className={inp}>
+                      <option value="TILLSVIDARE">Tillsvidareanställning</option>
+                      <option value="PROV">Provanställning</option>
+                      <option value="VISSTID">Visstidsanställning</option>
+                      <option value="TIM">Timanställning</option>
+                    </select>
+                  </Field>
                   <Field label="Befattning *"><input value={role} onChange={(e) => setRole(e.target.value)} placeholder="Städare, Teamledare…" className={inp} /></Field>
                   <Field label="Anställningsgrad (%)"><input value={occupationPct} onChange={(e) => setOccupationPct(e.target.value)} type="number" className={inp} /></Field>
                   <Field label="Tillträdesdag *"><input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className={inp} /></Field>
-                  <Field label="Slutdatum (visstid)"><input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className={inp} /></Field>
-                  <Field label="Provanställning t.o.m."><input type="date" value={probationEndDate} onChange={(e) => setProbationEndDate(e.target.value)} className={inp} /></Field>
-                  <Field label="Arbetsplats"><input value={workplace} onChange={(e) => setWorkplace(e.target.value)} placeholder="Stockholm, hemadress etc." className={inp} /></Field>
-                  <Field label="Månadslön (kr)"><input value={salary} onChange={(e) => setSalary(e.target.value)} type="number" className={inp} /></Field>
-                  <Field label="Timlön (kr)"><input value={hourlyRate} onChange={(e) => setHourlyRate(e.target.value)} type="number" className={inp} /></Field>
+                  {employmentForm === 'VISSTID' && (
+                    <Field label="Slutdatum *"><input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className={inp} /></Field>
+                  )}
+                  {employmentForm === 'PROV' && (
+                    <Field label="Provanställning t.o.m. *"><input type="date" value={probationEndDate} onChange={(e) => setProbationEndDate(e.target.value)} className={inp} /></Field>
+                  )}
+                  <Field label="Arbetsområde"><input value={workArea} onChange={(e) => setWorkArea(e.target.value)} placeholder="Stockholm med omnejd" className={inp} /></Field>
+                  <Field label="Arbetsplats (specifik)"><input value={workplace} onChange={(e) => setWorkplace(e.target.value)} placeholder="Ex: hos våra kunder" className={inp} /></Field>
+                  {employmentForm !== 'TIM' && (
+                    <Field label="Månadslön (kr)"><input value={salary} onChange={(e) => setSalary(e.target.value)} type="number" className={inp} /></Field>
+                  )}
+                  {employmentForm === 'TIM' && (
+                    <Field label="Timlön (kr) *"><input value={hourlyRate} onChange={(e) => setHourlyRate(e.target.value)} type="number" className={inp} /></Field>
+                  )}
                 </div>
                 <Field label="Arbetstid"><input value={workHours} onChange={(e) => setWorkHours(e.target.value)} className={inp} /></Field>
                 <div className="grid grid-cols-2 gap-3 mt-3">

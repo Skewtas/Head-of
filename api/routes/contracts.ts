@@ -630,8 +630,108 @@ function substituteVariables(template: string, ctx: Record<string, any>): string
       cur = cur[p];
     }
     if (cur == null) return '';
+    // Derived paragrafer är redan sanerad HTML — släpp igenom orört.
+    // Övriga värden HTML-escapas.
+    if (typeof cur === 'string' && cur.startsWith('__HTML__')) return cur.slice(8);
     return escapeHtmlText(String(cur));
   });
+}
+
+/** Bygger snake_case-context för Stodona Standard-mallen med derived paragrafer. */
+function buildSubstitutionContext(
+  company: { name: string; organizationNumber: string; address?: string | null; postalCode?: string | null; city?: string | null; signatoryName?: string | null },
+  person: Record<string, any>,
+  employment: Record<string, any>,
+): Record<string, any> {
+  const emp = employment || {};
+
+  const formLabels: Record<string, string> = {
+    TILLSVIDARE: 'Tillsvidareanställning',
+    PROV: 'Provanställning',
+    VISSTID: 'Visstidsanställning',
+    TIM: 'Timanställning',
+  };
+  const form = String(emp.employment_form || emp.employmentForm || 'TILLSVIDARE').toUpperCase();
+  const employmentFormLabel = formLabels[form] || 'Tillsvidareanställning';
+
+  const startDate = emp.start_date || emp.startDate || '';
+  const endDate = emp.end_date || emp.endDate || '';
+  const probEnd = emp.probation_end_date || emp.probationEndDate || '';
+
+  // §3 Anställningsform — HTML-block som substitueras in råtext (via __HTML__ prefix)
+  let formParagraph = '';
+  if (form === 'PROV') {
+    formParagraph = `<p>Anställningen är en provanställning enligt 6 § lagen om anställningsskydd (LAS). Provanställningen gäller från och med <strong>${escapeHtmlText(startDate)}</strong> till och med <strong>${escapeHtmlText(probEnd)}</strong>. Om provanställningen inte avbryts senast två veckor före provperiodens utgång övergår anställningen automatiskt i en tillsvidareanställning. Både Arbetsgivaren och Arbetstagaren har rätt att avbryta provanställningen utan angivande av skäl med tillämpning av gällande varselregler.</p>`;
+  } else if (form === 'VISSTID') {
+    formParagraph = `<p>Anställningen är en visstidsanställning enligt gällande arbetsrättsliga regler. Anställningen gäller från och med <strong>${escapeHtmlText(startDate)}</strong> till och med <strong>${escapeHtmlText(endDate)}</strong>, då den upphör utan uppsägning. Anställningen kan inte avbrytas i förtid annat än enligt gällande lag och kollektivavtal.</p>`;
+  } else if (form === 'TIM') {
+    formParagraph = `<p>Anställningen är en timanställning (intermittent). Arbete utförs efter överenskommelse i varje enskilt fall. Arbetstagaren är inte skyldig att stå till Arbetsgivarens förfogande utanför de arbetstillfällen som överenskommits. Tillträdesdag är <strong>${escapeHtmlText(startDate)}</strong>.</p>`;
+  } else {
+    formParagraph = `<p>Anställningen är en tillsvidareanställning enligt lagen om anställningsskydd (LAS). Tillträdesdag är <strong>${escapeHtmlText(startDate)}</strong>.</p>`;
+  }
+
+  // §10 Lön
+  const salary = emp.salary || emp.monthlySalary || '';
+  const hourly = emp.hourly_rate || emp.hourlyRate || '';
+  let salaryParagraph = '';
+  if (form === 'TIM' || (!salary && hourly)) {
+    salaryParagraph = `Timlön uppgår till <strong>${escapeHtmlText(String(hourly || ''))} kronor per timme</strong>. Semesterersättning om 12 % samt eventuellt OB-tillägg utgår enligt tillämpligt kollektivavtal utöver timlönen.`;
+  } else {
+    salaryParagraph = `Månadslön uppgår till <strong>${escapeHtmlText(String(salary || ''))} kronor</strong>.`;
+  }
+
+  // §23 Kollektivavtal
+  const collective = String(emp.collective_agreement || emp.collectiveAgreement || '').trim();
+  const collectiveParagraph = collective
+    ? `Följande kollektivavtal tillämpas på anställningen: <strong>${escapeHtmlText(collective)}</strong>. Vid motstridighet mellan detta avtal och kollektivavtalet har kollektivavtalet företräde i den utsträckning kollektivavtalets bestämmelser är tvingande.`
+    : `Något kollektivavtal tillämpas för närvarande inte på anställningen.`;
+
+  return {
+    today: new Date().toLocaleDateString('sv-SE'),
+    employee: {
+      first_name: person.firstName || person.first_name || '',
+      last_name: person.lastName || person.last_name || '',
+      personal_number: person.personalNumber || person.personal_number || '',
+      email: person.email || '',
+      phone: person.phone || '',
+      address: [person.address, person.postalCode || person.postal_code, person.city].filter(Boolean).join(', '),
+      // camelCase alias för äldre mallar
+      firstName: person.firstName || person.first_name || '',
+      lastName: person.lastName || person.last_name || '',
+      personalNumber: person.personalNumber || person.personal_number || '',
+    },
+    company: {
+      name: company.name,
+      organization_number: company.organizationNumber,
+      organizationNumber: company.organizationNumber,
+      address: [company.address, company.postalCode, company.city].filter(Boolean).join(', '),
+      signatory_name: company.signatoryName || '',
+      signatoryName: company.signatoryName || '',
+    },
+    employment: {
+      ...emp,
+      job_title: emp.job_title || emp.role || '',
+      role: emp.role || emp.job_title || '',
+      percentage: emp.percentage || emp.occupationPct || '',
+      occupationPct: emp.occupationPct || emp.percentage || '',
+      start_date: startDate,
+      startDate,
+      end_date: endDate,
+      endDate,
+      probation_end_date: probEnd,
+      probationEndDate: probEnd,
+      work_area: emp.work_area || emp.workplace || '',
+      workplace: emp.workplace || emp.work_area || '',
+      notice_period: emp.notice_period || emp.noticePeriod || '',
+      noticePeriod: emp.noticePeriod || emp.notice_period || '',
+      employment_form: form,
+      employment_form_label: employmentFormLabel,
+      // Derived HTML — prefix __HTML__ så substitutionen inte escaper
+      form_paragraph: '__HTML__' + formParagraph,
+      salary_paragraph: '__HTML__' + salaryParagraph,
+      collective_agreement_paragraph: '__HTML__' + collectiveParagraph,
+    },
+  };
 }
 
 function escapeHtmlText(s: string): string {
@@ -657,24 +757,7 @@ router.post('/preview-template', async (req, res) => {
   const company = await prisma.ownCompany.findUnique({ where: { id: body.ownCompanyId } });
   if (!company) return res.status(404).json({ error: 'Företag hittades inte' });
 
-  const p = body.person || {};
-  const ctx = {
-    today: new Date().toLocaleDateString('sv-SE'),
-    employee: {
-      firstName: p.firstName || '',
-      lastName: p.lastName || '',
-      personalNumber: p.personalNumber || '',
-      email: p.email || '',
-      address: [p.address, p.postalCode, p.city].filter(Boolean).join(', '),
-    },
-    company: {
-      name: company.name,
-      organizationNumber: company.organizationNumber,
-      address: [company.address, company.postalCode, company.city].filter(Boolean).join(', '),
-      signatoryName: company.signatoryName || '',
-    },
-    employment: body.employment || {},
-  };
+  const ctx = buildSubstitutionContext(company, body.person || {}, body.employment || {});
   res.json({ content: substituteVariables(template.content, ctx), templateName: template.name });
 });
 
@@ -733,26 +816,8 @@ router.post('/from-template', async (req, res) => {
       personId = personRow.id;
     }
 
-    // Bygg context för variabelsubstitution
-    const ctx = {
-      today: new Date().toLocaleDateString('sv-SE'),
-      employee: personRow
-        ? {
-            firstName: personRow.firstName,
-            lastName: personRow.lastName,
-            personalNumber: personRow.personalNumber || '',
-            email: personRow.email || '',
-            address: [personRow.address, personRow.postalCode, personRow.city].filter(Boolean).join(', '),
-          }
-        : {},
-      company: {
-        name: company.name,
-        organizationNumber: company.organizationNumber,
-        address: [company.address, company.postalCode, company.city].filter(Boolean).join(', '),
-        signatoryName: company.signatoryName || '',
-      },
-      employment: body.employment ?? {},
-    };
+    // Bygg context för variabelsubstitution (delad hjälpare — samma som preview)
+    const ctx = buildSubstitutionContext(company, personRow || {}, body.employment ?? {});
     const content = substituteVariables(template.content, ctx);
 
     // Titel-fallback: "<Mall> — <Namn>" eller mall-namnet
