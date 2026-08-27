@@ -18,17 +18,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'GET' && req.method !== 'POST') {
     return res.status(405).send('Method Not Allowed');
   }
-  if (process.env.CRON_SECRET) {
+
+  // ?to=<email> tillåter test-send till en enskild whitelistad adress
+  // utan CRON_SECRET (så man kan trycka på URL:en från en browser).
+  // Cron-body-utan-?to kräver alltid secret.
+  const toOverride = typeof req.query.to === 'string' ? req.query.to.trim().toLowerCase() : null;
+  const allowedTestRecipients = new Set(DEFAULT_RECIPIENTS.map((r) => r.toLowerCase()));
+  const isWhitelistedTest = toOverride && allowedTestRecipients.has(toOverride);
+
+  if (process.env.CRON_SECRET && !isWhitelistedTest) {
     const auth = req.headers.authorization || '';
     if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
   }
 
-  const recipients = (process.env.OPS_SUMMARY_EMAILS || DEFAULT_RECIPIENTS.join(','))
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
+  const recipients = toOverride
+    ? [toOverride]
+    : (process.env.OPS_SUMMARY_EMAILS || DEFAULT_RECIPIENTS.join(','))
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
 
   const [goals, tasks] = await Promise.all([
     prisma.opsGoal.findMany({
