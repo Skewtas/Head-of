@@ -322,6 +322,149 @@ router.get('/companies', async (_req, res) => {
   res.json(list);
 });
 
+// ─── UPLOAD EXISTING CONTRACT (PDF/DOCX) ───────────────────────────────
+/**
+ * Skapar Contract + ContractPerson + Attachment + File i en transaktion.
+ * Fil kan skickas antingen som base64 (för filer under ~4 MB) eller som
+ * en tidigare uppladdad Blob-URL (för filer över 4,5 MB Vercel-caps).
+ */
+router.post('/upload', async (req, res) => {
+  const userId = getUserId(req)!;
+  const b = req.body as any;
+
+  if (!b?.title || !b?.category || !b?.ownCompanyId) {
+    return res.status(400).json({ error: 'title, category och ownCompanyId krävs' });
+  }
+  if (!b?.file?.filename) {
+    return res.status(400).json({ error: 'file.filename krävs' });
+  }
+
+  const useBase64 = typeof b.file.base64 === 'string' && b.file.base64.length > 0;
+  const useBlobUrl = typeof b.file.blobUrl === 'string' && b.file.blobUrl.length > 0;
+  if (!useBase64 && !useBlobUrl) {
+    return res.status(400).json({ error: 'file.base64 eller file.blobUrl krävs' });
+  }
+
+  const contentType = b.file.contentType || guessContentType(b.file.filename);
+  if (contentType !== 'application/pdf' && !contentType.includes('word') && !contentType.includes('officedocument')) {
+    return res.status(400).json({ error: `Otillåten filtyp: ${contentType}` });
+  }
+
+  let pureBase64: string | null = null;
+  let sizeBytes = Number(b.file.sizeBytes) || 0;
+  if (useBase64) {
+    const raw = String(b.file.base64);
+    const m = raw.match(/^data:[^;]+;base64,(.+)$/);
+    pureBase64 = m ? m[1] : raw;
+    sizeBytes = Math.floor((pureBase64.length * 3) / 4);
+  }
+
+  try {
+    const contract = await prisma.$transaction(async (tx) => {
+      let personId: number | null = null;
+      if (typeof b.personId === 'number') {
+        personId = b.personId;
+      } else if (b.person && (b.person.firstName || b.person.lastName)) {
+        const p = await tx.contractPerson.create({
+          data: {
+            firstName: (b.person.firstName || '').trim(),
+            lastName: (b.person.lastName || '').trim(),
+            personalNumber: b.person.personalNumber || null,
+            email: b.person.email || null,
+            phone: b.person.phone || null,
+            address: b.person.address || null,
+            postalCode: b.person.postalCode || null,
+            city: b.person.city || null,
+            linkedEmployeeId: b.person.linkedEmployeeId || null,
+          },
+        });
+        personId = p.id;
+      }
+
+      const alreadySigned = !!b.alreadySigned;
+      const status = alreadySigned
+        ? (b.endDate && new Date(b.endDate).getTime() < Date.now() ? 'EXPIRED' : 'ACTIVE')
+        : 'DRAFT';
+
+      const c = await tx.contract.create({
+        data: {
+          title: String(b.title),
+          category: String(b.category) as any,
+          status: status as any,
+          ownCompanyId: Number(b.ownCompanyId),
+          personId,
+          externalCompanyName: b.externalCompanyName || null,
+          externalCompanyOrgNr: b.externalCompanyOrgNr || null,
+          startDate: b.startDate ? new Date(b.startDate) : null,
+          endDate: b.endDate ? new Date(b.endDate) : null,
+          probationEndDate: b.probationEndDate ? new Date(b.probationEndDate) : null,
+          ownerClerkId: userId,
+          metadata: {
+            uploadedExisting: true,
+            alreadySigned,
+            signedAt: b.signedAt ?? null,
+            storage: useBlobUrl ? 'blob' : 'db',
+          } as any,
+        },
+      });
+
+      let fileId: string | null = null;
+      let fileUrl: string;
+      if (useBase64 && pureBase64) {
+        const file = await tx.contractFile.create({
+          data: { mime: contentType, data: pureBase64, sizeBytes },
+        });
+        fileId = file.id;
+        fileUrl = `/api/contracts-file?id=${file.id}`;
+      } else {
+        fileUrl = b.file.blobUrl;
+      }
+
+      await tx.contractAttachment.create({
+        data: {
+          contractId: c.id,
+          filename: b.file.filename,
+          contentType,
+          fileUrl,
+          fileId,
+          uploadedByClerkId: userId,
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorClerkId: userId,
+          action: 'uploaded_existing',
+          entityType: 'Contract',
+          entityId: String(c.id),
+          after: {
+            title: c.title,
+            filename: b.file.filename,
+            alreadySigned,
+            storage: useBlobUrl ? 'blob' : 'db',
+            sizeBytes,
+          },
+        },
+      });
+
+      return c;
+    });
+
+    res.status(201).json({ id: contract.id, title: contract.title, status: contract.status });
+  } catch (err: any) {
+    console.error('[contracts/upload] failed:', err.message, err.stack);
+    res.status(500).json({ error: err.message || 'Uppladdning misslyckades' });
+  }
+});
+
+function guessContentType(filename: string): string {
+  const ext = filename.toLowerCase().split('.').pop();
+  if (ext === 'pdf') return 'application/pdf';
+  if (ext === 'docx') return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  if (ext === 'doc') return 'application/msword';
+  return 'application/octet-stream';
+}
+
 // ─── TEMPLATES ──────────────────────────────────────────────────────────
 router.get('/templates', async (req, res) => {
   const category = typeof req.query.category === 'string' ? req.query.category : undefined;

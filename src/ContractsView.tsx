@@ -8,8 +8,15 @@
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { FileText, AlertTriangle, CheckCircle, Send, Clock, Plus, Search, Upload, X, Loader } from 'lucide-react';
+import { upload as blobUpload } from '@vercel/blob/client';
 import { api } from './lib/api';
 import ContractWizard from './ContractWizard';
+
+// Vercel serverless-body cap är 4,5 MB. Alla större filer måste gå direkt
+// till Blob-storage (upload() från @vercel/blob/client — signerad URL
+// hämtas från /api/contracts-blob-upload).
+const BASE64_MAX_BYTES = 4_000_000;
+const BLOB_MAX_BYTES = 50 * 1024 * 1024;
 
 type Stats = {
   total: number;
@@ -337,7 +344,7 @@ function UploadModal({
     if (!f) return;
     const ok = ['pdf', 'docx', 'doc'].some((e) => f.name.toLowerCase().endsWith('.' + e));
     if (!ok) { setErr('Endast PDF eller DOCX tillåts'); return; }
-    if (f.size > 4_500_000) { setErr('Filen är större än 4.5 MB'); return; }
+    if (f.size > BLOB_MAX_BYTES) { setErr('Filen är större än 50 MB'); return; }
     setErr(null);
     setFile(f);
     if (!title) setTitle(f.name.replace(/\.[^.]+$/, ''));
@@ -348,8 +355,28 @@ function UploadModal({
     if (!title || !category || !ownCompanyId) { setErr('Titel, kategori och företag krävs'); return; }
     setSaving(true); setErr(null);
     try {
-      const base64 = await readFileToBase64(file);
-      await api('/api/contracts-upload', {
+      const fileMeta: any = {
+        filename: file.name,
+        contentType: file.type || 'application/pdf',
+        sizeBytes: file.size,
+      };
+
+      if (file.size > BASE64_MAX_BYTES) {
+        // Stor fil → Blob-storage (kringgår 4,5 MB Vercel-cap)
+        const contentType = file.type || 'application/pdf';
+        const path = `contracts/${Date.now()}-${sanitizeFilename(file.name)}`;
+        const blob = await blobUpload(path, file, {
+          access: 'public',
+          handleUploadUrl: '/api/contracts-blob-upload',
+          contentType,
+        });
+        fileMeta.blobUrl = blob.url;
+      } else {
+        // Liten fil → base64 direkt i requesten
+        fileMeta.base64 = await readFileToBase64(file);
+      }
+
+      await api('/api/contracts/upload', {
         method: 'POST',
         body: JSON.stringify({
           title,
@@ -365,11 +392,7 @@ function UploadModal({
           endDate: endDate || null,
           alreadySigned,
           signedAt: alreadySigned ? (signedAt || null) : null,
-          file: {
-            filename: file.name,
-            contentType: file.type || 'application/pdf',
-            base64,
-          },
+          file: fileMeta,
         }),
       });
       onDone();
@@ -427,7 +450,7 @@ function UploadModal({
               <>
                 <Upload className="w-6 h-6 mx-auto mb-2 text-gray-400" />
                 <div className="text-sm text-brand-muted">Dra hit PDF/DOCX eller klicka för att välja</div>
-                <div className="text-xs text-gray-400 mt-1">Max 4.5 MB</div>
+                <div className="text-xs text-gray-400 mt-1">Max 50 MB (större filer laddas upp via Vercel Blob automatiskt)</div>
               </>
             )}
           </div>
@@ -509,6 +532,15 @@ function UploadModal({
 }
 
 const inp = 'w-full px-3 py-2 border border-gray-200 rounded-lg outline-none focus:border-brand-accent text-sm';
+
+function sanitizeFilename(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[åä]/g, 'a')
+    .replace(/ö/g, 'o')
+    .replace(/[^a-z0-9._-]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
 
 function Row({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
