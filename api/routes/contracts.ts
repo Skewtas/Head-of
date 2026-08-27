@@ -11,6 +11,7 @@
  */
 import express, { Request, Response } from 'express';
 import { z } from 'zod';
+import { handleUpload, type HandleUploadBody } from '@vercel/blob/client';
 import { prisma } from '../_lib/prisma.js';
 import { requireAuth, getUserId } from '../_lib/auth.js';
 
@@ -314,6 +315,37 @@ router.delete('/:id(\\d+)/permissions/:userId', async (req, res) => {
   });
   await logAudit(userId, 'permission_revoked', id, { revoked: target });
   res.json({ ok: true });
+});
+
+// ─── VERCEL BLOB CLIENT-UPLOAD TOKEN ───────────────────────────────────
+/**
+ * Genererar en signerad upload-URL som klienten sen laddar filen direkt
+ * mot (kringgår Vercels 4,5 MB request-cap). Kräver BLOB_READ_WRITE_TOKEN.
+ */
+router.post('/blob-upload', async (req, res) => {
+  const userId = getUserId(req)!;
+  try {
+    const jsonResponse = await handleUpload({
+      body: req.body as HandleUploadBody,
+      request: req as any,
+      onBeforeGenerateToken: async () => ({
+        allowedContentTypes: [
+          'application/pdf',
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          'application/msword',
+        ],
+        maximumSizeInBytes: 50 * 1024 * 1024,
+        tokenPayload: JSON.stringify({ userId }),
+      }),
+      onUploadCompleted: async ({ blob }) => {
+        console.log('[contracts/blob-upload] done:', blob.url);
+      },
+    });
+    return res.status(200).json(jsonResponse);
+  } catch (err: any) {
+    console.error('[contracts/blob-upload] failed:', err.message, err.stack);
+    return res.status(400).json({ error: err.message || 'Blob token misslyckades' });
+  }
 });
 
 // ─── OWN COMPANIES ──────────────────────────────────────────────────────

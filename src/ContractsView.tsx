@@ -403,7 +403,7 @@ function UploadModal({
         const path = `contracts/${Date.now()}-${sanitizeFilename(file.name)}`;
         const blob = await blobUpload(path, file, {
           access: 'public',
-          handleUploadUrl: '/api/contracts-blob-upload',
+          handleUploadUrl: '/api/contracts/blob-upload',
           contentType,
         });
         fileMeta.blobUrl = blob.url;
