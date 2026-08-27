@@ -98,7 +98,7 @@ router.get('/', async (req, res) => {
       person: true,
       ownCompany: true,
       attachments: {
-        select: { id: true, filename: true, contentType: true, fileUrl: true },
+        select: { id: true, filename: true, contentType: true, fileUrl: true, fileId: true },
         orderBy: { createdAt: 'asc' },
       },
       _count: { select: { signers: true, versions: true, reminders: true, attachments: true } },
@@ -106,6 +106,14 @@ router.get('/', async (req, res) => {
     orderBy: [{ updatedAt: 'desc' }],
     take: 200,
   });
+  // Migrera gamla /api/contracts-file?id=... på fluggen
+  for (const c of contracts as any[]) {
+    for (const a of c.attachments) {
+      if (a.fileId && a.fileUrl && a.fileUrl.includes('/api/contracts-file')) {
+        a.fileUrl = `/api/contracts/file/${a.fileId}`;
+      }
+    }
+  }
   res.json({ data: contracts, isSuperadmin: isSuperadmin(req) });
 });
 
@@ -320,6 +328,58 @@ router.delete('/:id(\\d+)/permissions/:userId', async (req, res) => {
   await logAudit(userId, 'permission_revoked', id, { revoked: target });
   res.json({ ok: true });
 });
+
+// ─── SERVE ATTACHMENT FILE ─────────────────────────────────────────────
+/**
+ * GET /api/contracts/file/:fileId — serverar base64-lagrade PDF/DOCX.
+ * Blob-URL:er går direkt — den här routen behövs bara för filer som
+ * ligger i contract_files-tabellen (< 4 MB).
+ */
+router.get('/file/:fileId', async (req, res) => {
+  const userId = getUserId(req)!;
+  const fileId = String(req.params.fileId);
+
+  const file = await prisma.contractFile.findUnique({
+    where: { id: fileId },
+    include: { attachments: { select: { contractId: true } } },
+  });
+  if (!file) return res.status(404).json({ error: 'Not found' });
+
+  if (!isSuperadmin(req)) {
+    const contractIds = file.attachments.map((a) => a.contractId);
+    if (contractIds.length === 0) return res.status(403).json({ error: 'No access' });
+    const accessibleCount = await prisma.contract.count({
+      where: {
+        id: { in: contractIds },
+        OR: [
+          { ownerClerkId: userId },
+          {
+            permissions: {
+              some: {
+                clerkUserId: userId,
+                OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+              },
+            },
+          },
+        ],
+      },
+    });
+    if (accessibleCount === 0) return res.status(403).json({ error: 'No access' });
+  }
+
+  const buffer = Buffer.from(file.data, 'base64');
+  res.setHeader('Content-Type', file.mime);
+  res.setHeader('Content-Length', String(buffer.length));
+  res.setHeader('Content-Disposition', `inline; filename="contract-${fileId}.${fileExt(file.mime)}"`);
+  res.setHeader('Cache-Control', 'private, max-age=300');
+  return res.status(200).send(buffer);
+});
+
+function fileExt(mime: string): string {
+  if (mime === 'application/pdf') return 'pdf';
+  if (mime.includes('word')) return 'docx';
+  return 'bin';
+}
 
 // ─── VERCEL BLOB CLIENT-UPLOAD TOKEN ───────────────────────────────────
 /**
@@ -554,7 +614,7 @@ router.post('/upload', async (req, res) => {
           data: { mime: contentType, data: pureBase64, sizeBytes },
         });
         fileId = file.id;
-        fileUrl = `/api/contracts-file?id=${file.id}`;
+        fileUrl = `/api/contracts/file/${file.id}`;
       } else {
         fileUrl = b.file.blobUrl;
       }
