@@ -199,55 +199,56 @@ enum SyncDirection {
 // ============================================================================
 
 model Team {
-  id          Int      @id @default(autoincrement())
-  name        String
-  regionCode  String?  @map("region_code")
-  status      String   @default("ACTIVE")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id         Int      @id @default(autoincrement())
+  name       String
+  regionCode String?  @map("region_code")
+  status     String   @default("ACTIVE")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
 
-  employees       EmployeeTeam[]
-  agreements      Agreement[]
-  missions        Mission[]
+  employees  EmployeeTeam[]
+  agreements Agreement[]
+  missions   Mission[]
 
   @@map("teams")
 }
 
 model Employee {
-  id                Int             @id @default(autoincrement())
-  clerkUserId       String?         @unique @map("clerk_user_id")
-  firstName         String          @map("first_name")
-  lastName          String          @map("last_name")
-  email             String?         @unique
-  phone             String?
-  personalNumber    String?         @map("personal_number") // encrypted at app layer
-  employmentType    EmploymentType  @default(HOURLY) @map("employment_type")
-  baseHourlyRateCents Int           @default(0) @map("base_hourly_rate_cents")
-  obMultiplier      Float           @default(1.0) @map("ob_multiplier")
-  primaryTeamId     Int?            @map("primary_team_id")
-  homeLat           Float?          @map("home_lat")
-  homeLng           Float?          @map("home_lng")
-  tags              String[]        @default([])
-  fortnoxEmployeeId String?         @map("fortnox_employee_id")
-  status            EmployeeStatus  @default(ACTIVE)
-  createdAt         DateTime        @default(now()) @map("created_at")
-  updatedAt         DateTime        @updatedAt @map("updated_at")
-  deletedAt         DateTime?       @map("deleted_at")
+  id                  Int            @id @default(autoincrement())
+  clerkUserId         String?        @unique @map("clerk_user_id")
+  firstName           String         @map("first_name")
+  lastName            String         @map("last_name")
+  email               String?        @unique
+  phone               String?
+  personalNumber      String?        @map("personal_number") // encrypted at app layer
+  employmentType      EmploymentType @default(HOURLY) @map("employment_type")
+  baseHourlyRateCents Int            @default(0) @map("base_hourly_rate_cents")
+  obMultiplier        Float          @default(1.0) @map("ob_multiplier")
+  primaryTeamId       Int?           @map("primary_team_id")
+  homeLat             Float?         @map("home_lat")
+  homeLng             Float?         @map("home_lng")
+  tags                String[]       @default([])
+  fortnoxEmployeeId   String?        @map("fortnox_employee_id")
+  status              EmployeeStatus @default(ACTIVE)
+  createdAt           DateTime       @default(now()) @map("created_at")
+  updatedAt           DateTime       @updatedAt @map("updated_at")
+  deletedAt           DateTime?      @map("deleted_at")
 
-  teams             EmployeeTeam[]
-  assignments       MissionAssignment[]
-  timeEntries       TimeEntry[]
-  absences          Absence[]
-  payrollLines      PayrollLine[]
-  ticketsAssigned   Ticket[]         @relation("TicketAssignee")
+  teams           EmployeeTeam[]
+  assignments     MissionAssignment[]
+  timeEntries     TimeEntry[]
+  absences        Absence[]
+  payrollLines    PayrollLine[]
+  ticketsAssigned Ticket[]            @relation("TicketAssignee")
+  contractPersons ContractPerson[]
 
   @@index([status])
   @@map("employees")
 }
 
 model EmployeeTeam {
-  employeeId Int  @map("employee_id")
-  teamId     Int  @map("team_id")
+  employeeId Int     @map("employee_id")
+  teamId     Int     @map("team_id")
   isPrimary  Boolean @default(false) @map("is_primary")
 
   employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
@@ -258,34 +259,34 @@ model EmployeeTeam {
 }
 
 model Client {
-  id                   Int           @id @default(autoincrement())
-  clientNumber         String        @unique @map("client_number")
-  type                 ClientType    @default(PRIVATE)
-  name                 String
-  orgNumber            String?       @map("org_number")
-  personalNumber       String?       @map("personal_number") // encrypted
-  phone                String?
-  email                String?
-  preferredCommunication String?     @map("preferred_communication")
-  rutEligible          Boolean       @default(false) @map("rut_eligible")
-  rutShare             Float?        @map("rut_share")
-  rutPersonalNumber    String?       @map("rut_personal_number")
-  priceModel           PriceModel    @default(HOURLY) @map("price_model")
-  fortnoxCustomerId    String?       @map("fortnox_customer_id")
-  invoiceMethod        InvoiceMethod @default(EMAIL) @map("invoice_method")
-  paymentTermsDays     Int           @default(30) @map("payment_terms_days")
-  status               ClientStatus  @default(ACTIVE)
-  source               String?
-  createdAt            DateTime      @default(now()) @map("created_at")
-  updatedAt            DateTime      @updatedAt @map("updated_at")
-  deletedAt            DateTime?     @map("deleted_at")
+  id                     Int           @id @default(autoincrement())
+  clientNumber           String        @unique @map("client_number")
+  type                   ClientType    @default(PRIVATE)
+  name                   String
+  orgNumber              String?       @map("org_number")
+  personalNumber         String?       @map("personal_number") // encrypted
+  phone                  String?
+  email                  String?
+  preferredCommunication String?       @map("preferred_communication")
+  rutEligible            Boolean       @default(false) @map("rut_eligible")
+  rutShare               Float?        @map("rut_share")
+  rutPersonalNumber      String?       @map("rut_personal_number")
+  priceModel             PriceModel    @default(HOURLY) @map("price_model")
+  fortnoxCustomerId      String?       @map("fortnox_customer_id")
+  invoiceMethod          InvoiceMethod @default(EMAIL) @map("invoice_method")
+  paymentTermsDays       Int           @default(30) @map("payment_terms_days")
+  status                 ClientStatus  @default(ACTIVE)
+  source                 String?
+  createdAt              DateTime      @default(now()) @map("created_at")
+  updatedAt              DateTime      @updatedAt @map("updated_at")
+  deletedAt              DateTime?     @map("deleted_at")
 
-  addresses   ClientAddress[]
-  alerts      ClientAlert[]
-  agreements  Agreement[]
-  missions    Mission[]
-  invoices    Invoice[]
-  tickets     Ticket[]
+  addresses  ClientAddress[]
+  alerts     ClientAlert[]
+  agreements Agreement[]
+  missions   Mission[]
+  invoices   Invoice[]
+  tickets    Ticket[]
 
   @@index([status])
   @@index([name])
@@ -305,9 +306,9 @@ model ClientAddress {
   lng         Float?
   isDefault   Boolean     @default(false) @map("is_default")
 
-  client                      Client     @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  agreementsInvoice           Agreement[] @relation("InvoiceAddress")
-  agreementsService           Agreement[] @relation("ServiceAddress")
+  client            Client      @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  agreementsInvoice Agreement[] @relation("InvoiceAddress")
+  agreementsService Agreement[] @relation("ServiceAddress")
 
   @@index([clientId])
   @@map("client_addresses")
@@ -315,18 +316,18 @@ model ClientAddress {
 
 // Blocker/warning notes that require acknowledgement when opening the client.
 model ClientAlert {
-  id          Int           @id @default(autoincrement())
-  clientId    Int           @map("client_id")
-  severity    AlertSeverity @default(WARNING)
-  category    AlertCategory
-  title       String
-  body        String
-  active      Boolean       @default(true)
-  createdBy   String        @map("created_by") // clerk user id
-  createdAt   DateTime      @default(now()) @map("created_at")
-  updatedAt   DateTime      @updatedAt @map("updated_at")
+  id        Int           @id @default(autoincrement())
+  clientId  Int           @map("client_id")
+  severity  AlertSeverity @default(WARNING)
+  category  AlertCategory
+  title     String
+  body      String
+  active    Boolean       @default(true)
+  createdBy String        @map("created_by") // clerk user id
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
 
-  client           Client                         @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  client           Client                       @relation(fields: [clientId], references: [id], onDelete: Cascade)
   acknowledgements ClientAlertAcknowledgement[]
 
   @@index([clientId, active])
@@ -374,30 +375,30 @@ model Service {
 // ============================================================================
 
 model Agreement {
-  id                  Int             @id @default(autoincrement())
-  agreementNumber     String          @unique @map("agreement_number")
-  clientId            Int             @map("client_id")
-  teamId              Int?            @map("team_id")
-  status              AgreementStatus @default(DRAFT)
-  validFrom           DateTime?       @map("valid_from") @db.Date
-  validTo             DateTime?       @map("valid_to") @db.Date
-  invoiceAddressId    Int?            @map("invoice_address_id")
-  serviceAddressId    Int?            @map("service_address_id")
-  paymentTermsDays    Int?            @map("payment_terms_days")
-  cancellationPolicyHours Int         @default(24) @map("cancellation_policy_hours")
-  cancellationFeePercent Int          @default(50) @map("cancellation_fee_percent")
-  internalNotes       String?         @map("internal_notes")
-  createdAt           DateTime        @default(now()) @map("created_at")
-  updatedAt           DateTime        @updatedAt @map("updated_at")
-  closedAt            DateTime?       @map("closed_at")
+  id                      Int             @id @default(autoincrement())
+  agreementNumber         String          @unique @map("agreement_number")
+  clientId                Int             @map("client_id")
+  teamId                  Int?            @map("team_id")
+  status                  AgreementStatus @default(DRAFT)
+  validFrom               DateTime?       @map("valid_from") @db.Date
+  validTo                 DateTime?       @map("valid_to") @db.Date
+  invoiceAddressId        Int?            @map("invoice_address_id")
+  serviceAddressId        Int?            @map("service_address_id")
+  paymentTermsDays        Int?            @map("payment_terms_days")
+  cancellationPolicyHours Int             @default(24) @map("cancellation_policy_hours")
+  cancellationFeePercent  Int             @default(50) @map("cancellation_fee_percent")
+  internalNotes           String?         @map("internal_notes")
+  createdAt               DateTime        @default(now()) @map("created_at")
+  updatedAt               DateTime        @updatedAt @map("updated_at")
+  closedAt                DateTime?       @map("closed_at")
 
-  client          Client          @relation(fields: [clientId], references: [id])
-  team            Team?           @relation(fields: [teamId], references: [id])
-  invoiceAddress  ClientAddress?  @relation("InvoiceAddress", fields: [invoiceAddressId], references: [id])
-  serviceAddress  ClientAddress?  @relation("ServiceAddress", fields: [serviceAddressId], references: [id])
-  lines           AgreementLine[]
-  invoices        Invoice[]
-  tickets         Ticket[]
+  client         Client          @relation(fields: [clientId], references: [id])
+  team           Team?           @relation(fields: [teamId], references: [id])
+  invoiceAddress ClientAddress?  @relation("InvoiceAddress", fields: [invoiceAddressId], references: [id])
+  serviceAddress ClientAddress?  @relation("ServiceAddress", fields: [serviceAddressId], references: [id])
+  lines          AgreementLine[]
+  invoices       Invoice[]
+  tickets        Ticket[]
 
   @@index([clientId])
   @@index([status])
@@ -405,23 +406,23 @@ model Agreement {
 }
 
 model AgreementLine {
-  id                      Int                 @id @default(autoincrement())
-  agreementId             Int                 @map("agreement_id")
-  serviceId               Int                 @map("service_id")
-  rrule                   String              // iCal RRULE string
-  defaultStartTime        String              @map("default_start_time") // "HH:MM"
-  defaultDurationMinutes  Int                 @map("default_duration_minutes")
-  plannedCrewSize         Int                 @default(1) @map("planned_crew_size")
-  preferredEmployeeIds    Int[]               @default([]) @map("preferred_employee_ids")
-  priceRule               PriceRule           @default(HOURLY) @map("price_rule")
-  hourlyRateCents         Int?                @map("hourly_rate_cents")
-  fixedPriceCents         Int?                @map("fixed_price_cents")
-  status                  AgreementLineStatus @default(ACTIVE)
-  validFrom               DateTime?           @map("valid_from") @db.Date
-  validTo                 DateTime?           @map("valid_to") @db.Date
-  customerInstructions    String?             @map("customer_instructions")
-  createdAt               DateTime            @default(now()) @map("created_at")
-  updatedAt               DateTime            @updatedAt @map("updated_at")
+  id                     Int                 @id @default(autoincrement())
+  agreementId            Int                 @map("agreement_id")
+  serviceId              Int                 @map("service_id")
+  rrule                  String // iCal RRULE string
+  defaultStartTime       String              @map("default_start_time") // "HH:MM"
+  defaultDurationMinutes Int                 @map("default_duration_minutes")
+  plannedCrewSize        Int                 @default(1) @map("planned_crew_size")
+  preferredEmployeeIds   Int[]               @default([]) @map("preferred_employee_ids")
+  priceRule              PriceRule           @default(HOURLY) @map("price_rule")
+  hourlyRateCents        Int?                @map("hourly_rate_cents")
+  fixedPriceCents        Int?                @map("fixed_price_cents")
+  status                 AgreementLineStatus @default(ACTIVE)
+  validFrom              DateTime?           @map("valid_from") @db.Date
+  validTo                DateTime?           @map("valid_to") @db.Date
+  customerInstructions   String?             @map("customer_instructions")
+  createdAt              DateTime            @default(now()) @map("created_at")
+  updatedAt              DateTime            @updatedAt @map("updated_at")
 
   agreement Agreement @relation(fields: [agreementId], references: [id], onDelete: Cascade)
   service   Service   @relation(fields: [serviceId], references: [id])
@@ -437,27 +438,27 @@ model AgreementLine {
 // ============================================================================
 
 model Mission {
-  id                       Int           @id @default(autoincrement())
-  agreementLineId          Int?          @map("agreement_line_id")
-  clientId                 Int           @map("client_id")
-  serviceId                Int           @map("service_id")
-  teamId                   Int?          @map("team_id")
-  date                     DateTime      @db.Date
-  plannedStart             DateTime      @map("planned_start")
-  plannedEnd               DateTime      @map("planned_end")
-  plannedCrewSize          Int           @default(1) @map("planned_crew_size")
-  plannedDurationMinutes   Int           @map("planned_duration_minutes")
-  status                   MissionStatus @default(PLANNED)
-  cancellationReason       String?       @map("cancellation_reason")
-  cancelledAt              DateTime?     @map("cancelled_at")
-  cancelledBy              String?       @map("cancelled_by")
-  billableCancellation     Boolean       @default(false) @map("billable_cancellation")
-  customerInstructions     String?       @map("customer_instructions")
-  internalNotes            String?       @map("internal_notes")
-  rruleInstanceDate        DateTime?     @map("rrule_instance_date") @db.Date
-  version                  Int           @default(1)
-  createdAt                DateTime      @default(now()) @map("created_at")
-  updatedAt                DateTime      @updatedAt @map("updated_at")
+  id                     Int           @id @default(autoincrement())
+  agreementLineId        Int?          @map("agreement_line_id")
+  clientId               Int           @map("client_id")
+  serviceId              Int           @map("service_id")
+  teamId                 Int?          @map("team_id")
+  date                   DateTime      @db.Date
+  plannedStart           DateTime      @map("planned_start")
+  plannedEnd             DateTime      @map("planned_end")
+  plannedCrewSize        Int           @default(1) @map("planned_crew_size")
+  plannedDurationMinutes Int           @map("planned_duration_minutes")
+  status                 MissionStatus @default(PLANNED)
+  cancellationReason     String?       @map("cancellation_reason")
+  cancelledAt            DateTime?     @map("cancelled_at")
+  cancelledBy            String?       @map("cancelled_by")
+  billableCancellation   Boolean       @default(false) @map("billable_cancellation")
+  customerInstructions   String?       @map("customer_instructions")
+  internalNotes          String?       @map("internal_notes")
+  rruleInstanceDate      DateTime?     @map("rrule_instance_date") @db.Date
+  version                Int           @default(1)
+  createdAt              DateTime      @default(now()) @map("created_at")
+  updatedAt              DateTime      @updatedAt @map("updated_at")
 
   agreementLine AgreementLine?      @relation(fields: [agreementLineId], references: [id])
   client        Client              @relation(fields: [clientId], references: [id])
@@ -477,13 +478,13 @@ model Mission {
 }
 
 model MissionAssignment {
-  id            Int            @id @default(autoincrement())
-  missionId     Int            @map("mission_id")
-  employeeId    Int            @map("employee_id")
-  role          AssignmentRole @default(MEMBER)
-  plannedStart  DateTime       @map("planned_start")
-  plannedEnd    DateTime       @map("planned_end")
-  createdAt     DateTime       @default(now()) @map("created_at")
+  id           Int            @id @default(autoincrement())
+  missionId    Int            @map("mission_id")
+  employeeId   Int            @map("employee_id")
+  role         AssignmentRole @default(MEMBER)
+  plannedStart DateTime       @map("planned_start")
+  plannedEnd   DateTime       @map("planned_end")
+  createdAt    DateTime       @default(now()) @map("created_at")
 
   mission  Mission  @relation(fields: [missionId], references: [id], onDelete: Cascade)
   employee Employee @relation(fields: [employeeId], references: [id])
@@ -494,24 +495,24 @@ model MissionAssignment {
 }
 
 model TimeEntry {
-  id                   Int           @id @default(autoincrement())
-  missionId            Int           @map("mission_id")
-  employeeId           Int           @map("employee_id")
-  checkInAt            DateTime?     @map("check_in_at")
-  checkOutAt           DateTime?     @map("check_out_at")
-  checkInLat           Float?        @map("check_in_lat")
-  checkInLng           Float?        @map("check_in_lng")
-  checkOutLat          Float?        @map("check_out_lat")
-  checkOutLng          Float?        @map("check_out_lng")
-  breakMinutes         Int           @default(0) @map("break_minutes")
-  actualMinutes        Int?          @map("actual_minutes")
-  deviationType        DeviationType @default(NONE) @map("deviation_type")
-  deviationNote        String?       @map("deviation_note")
-  employeeApprovedAt   DateTime?     @map("employee_approved_at")
-  adminApprovedAt      DateTime?     @map("admin_approved_at")
-  adminApprovedBy      String?       @map("admin_approved_by")
-  createdAt            DateTime      @default(now()) @map("created_at")
-  updatedAt            DateTime      @updatedAt @map("updated_at")
+  id                 Int           @id @default(autoincrement())
+  missionId          Int           @map("mission_id")
+  employeeId         Int           @map("employee_id")
+  checkInAt          DateTime?     @map("check_in_at")
+  checkOutAt         DateTime?     @map("check_out_at")
+  checkInLat         Float?        @map("check_in_lat")
+  checkInLng         Float?        @map("check_in_lng")
+  checkOutLat        Float?        @map("check_out_lat")
+  checkOutLng        Float?        @map("check_out_lng")
+  breakMinutes       Int           @default(0) @map("break_minutes")
+  actualMinutes      Int?          @map("actual_minutes")
+  deviationType      DeviationType @default(NONE) @map("deviation_type")
+  deviationNote      String?       @map("deviation_note")
+  employeeApprovedAt DateTime?     @map("employee_approved_at")
+  adminApprovedAt    DateTime?     @map("admin_approved_at")
+  adminApprovedBy    String?       @map("admin_approved_by")
+  createdAt          DateTime      @default(now()) @map("created_at")
+  updatedAt          DateTime      @updatedAt @map("updated_at")
 
   mission  Mission        @relation(fields: [missionId], references: [id], onDelete: Cascade)
   employee Employee       @relation(fields: [employeeId], references: [id])
@@ -548,17 +549,17 @@ model MissionExtra {
 }
 
 model Absence {
-  id               Int         @id @default(autoincrement())
-  employeeId       Int         @map("employee_id")
-  fromDate         DateTime    @map("from_date") @db.Date
-  toDate           DateTime    @map("to_date") @db.Date
-  type             AbsenceType
-  affectsMissions  Boolean     @default(true) @map("affects_missions")
-  note             String?
-  approved         Boolean     @default(false)
-  approvedBy       String?     @map("approved_by")
-  approvedAt       DateTime?   @map("approved_at")
-  createdAt        DateTime    @default(now()) @map("created_at")
+  id              Int         @id @default(autoincrement())
+  employeeId      Int         @map("employee_id")
+  fromDate        DateTime    @map("from_date") @db.Date
+  toDate          DateTime    @map("to_date") @db.Date
+  type            AbsenceType
+  affectsMissions Boolean     @default(true) @map("affects_missions")
+  note            String?
+  approved        Boolean     @default(false)
+  approvedBy      String?     @map("approved_by")
+  approvedAt      DateTime?   @map("approved_at")
+  createdAt       DateTime    @default(now()) @map("created_at")
 
   employee Employee @relation(fields: [employeeId], references: [id])
 
@@ -602,20 +603,20 @@ model Invoice {
 }
 
 model InvoiceLine {
-  id                 Int               @id @default(autoincrement())
-  invoiceId          Int               @map("invoice_id")
-  sourceType         InvoiceLineSource @map("source_type")
-  missionId          Int?              @map("mission_id")
-  missionExtraId     Int?              @map("mission_extra_id")
-  description        String
-  quantity           Float
-  unit               String            // "HOUR" | "PIECE" | "MONTH"
-  unitPriceCents     Int               @map("unit_price_cents")
-  lineTotalCents     Int               @map("line_total_cents")
-  rutEligible        Boolean           @default(false) @map("rut_eligible")
-  rutAmountCents     Int               @default(0) @map("rut_amount_cents")
-  vatRate            Float             @default(25) @map("vat_rate")
-  fortnoxArticleId   String?           @map("fortnox_article_id")
+  id               Int               @id @default(autoincrement())
+  invoiceId        Int               @map("invoice_id")
+  sourceType       InvoiceLineSource @map("source_type")
+  missionId        Int?              @map("mission_id")
+  missionExtraId   Int?              @map("mission_extra_id")
+  description      String
+  quantity         Float
+  unit             String // "HOUR" | "PIECE" | "MONTH"
+  unitPriceCents   Int               @map("unit_price_cents")
+  lineTotalCents   Int               @map("line_total_cents")
+  rutEligible      Boolean           @default(false) @map("rut_eligible")
+  rutAmountCents   Int               @default(0) @map("rut_amount_cents")
+  vatRate          Float             @default(25) @map("vat_rate")
+  fortnoxArticleId String?           @map("fortnox_article_id")
 
   invoice      Invoice       @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   mission      Mission?      @relation(fields: [missionId], references: [id])
@@ -630,19 +631,19 @@ model InvoiceLine {
 // ============================================================================
 
 model PayrollLine {
-  id             Int             @id @default(autoincrement())
-  employeeId     Int             @map("employee_id")
-  periodStart    DateTime        @map("period_start") @db.Date
-  periodEnd      DateTime        @map("period_end") @db.Date
-  type           PayrollLineType
-  minutes        Int             @default(0)
-  rateCents      Int             @default(0) @map("rate_cents")
-  amountCents    Int             @default(0) @map("amount_cents")
-  sourceTimeEntryId Int?         @map("source_time_entry_id")
-  description    String?
-  sentToFortnoxAt DateTime?      @map("sent_to_fortnox_at")
-  fortnoxPayrollId String?       @map("fortnox_payroll_id")
-  createdAt      DateTime        @default(now()) @map("created_at")
+  id                Int             @id @default(autoincrement())
+  employeeId        Int             @map("employee_id")
+  periodStart       DateTime        @map("period_start") @db.Date
+  periodEnd         DateTime        @map("period_end") @db.Date
+  type              PayrollLineType
+  minutes           Int             @default(0)
+  rateCents         Int             @default(0) @map("rate_cents")
+  amountCents       Int             @default(0) @map("amount_cents")
+  sourceTimeEntryId Int?            @map("source_time_entry_id")
+  description       String?
+  sentToFortnoxAt   DateTime?       @map("sent_to_fortnox_at")
+  fortnoxPayrollId  String?         @map("fortnox_payroll_id")
+  createdAt         DateTime        @default(now()) @map("created_at")
 
   employee Employee @relation(fields: [employeeId], references: [id])
 
@@ -655,24 +656,24 @@ model PayrollLine {
 // ============================================================================
 
 model Ticket {
-  id          Int          @id @default(autoincrement())
-  clientId    Int?         @map("client_id")
-  agreementId Int?         @map("agreement_id")
-  missionId   Int?         @map("mission_id")
-  type        TicketType   @default(COMPLAINT)
-  subject     String
-  content     String
-  status      TicketStatus @default(OPEN)
-  priority    Int          @default(3)
-  assigneeEmployeeId Int?  @map("assignee_employee_id")
-  reporter    String?
-  createdAt   DateTime     @default(now()) @map("created_at")
-  resolvedAt  DateTime?    @map("resolved_at")
+  id                 Int          @id @default(autoincrement())
+  clientId           Int?         @map("client_id")
+  agreementId        Int?         @map("agreement_id")
+  missionId          Int?         @map("mission_id")
+  type               TicketType   @default(COMPLAINT)
+  subject            String
+  content            String
+  status             TicketStatus @default(OPEN)
+  priority           Int          @default(3)
+  assigneeEmployeeId Int?         @map("assignee_employee_id")
+  reporter           String?
+  createdAt          DateTime     @default(now()) @map("created_at")
+  resolvedAt         DateTime?    @map("resolved_at")
 
-  client    Client?          @relation(fields: [clientId], references: [id])
-  agreement Agreement?       @relation(fields: [agreementId], references: [id])
-  mission   Mission?         @relation(fields: [missionId], references: [id])
-  assignee  Employee?        @relation("TicketAssignee", fields: [assigneeEmployeeId], references: [id])
+  client    Client?         @relation(fields: [clientId], references: [id])
+  agreement Agreement?      @relation(fields: [agreementId], references: [id])
+  mission   Mission?        @relation(fields: [missionId], references: [id])
+  assignee  Employee?       @relation("TicketAssignee", fields: [assigneeEmployeeId], references: [id])
   comments  TicketComment[]
 
   @@index([status])
@@ -711,30 +712,30 @@ model Note {
 // ============================================================================
 
 model FortnoxSyncLog {
-  id          Int           @id @default(autoincrement())
-  entityType  String        @map("entity_type")
-  entityId    String        @map("entity_id")
-  direction   SyncDirection
-  attempt     Int           @default(1)
-  httpStatus  Int?          @map("http_status")
-  payload     Json?
-  response    Json?
-  error       String?
-  createdAt   DateTime      @default(now()) @map("created_at")
+  id         Int           @id @default(autoincrement())
+  entityType String        @map("entity_type")
+  entityId   String        @map("entity_id")
+  direction  SyncDirection
+  attempt    Int           @default(1)
+  httpStatus Int?          @map("http_status")
+  payload    Json?
+  response   Json?
+  error      String?
+  createdAt  DateTime      @default(now()) @map("created_at")
 
   @@index([entityType, entityId, createdAt(sort: Desc)])
   @@map("fortnox_sync_log")
 }
 
 model AuditLog {
-  id          Int      @id @default(autoincrement())
-  actorClerkId String? @map("actor_clerk_id")
-  action      String
-  entityType  String   @map("entity_type")
-  entityId    String   @map("entity_id")
-  before      Json?
-  after       Json?
-  at          DateTime @default(now())
+  id           Int      @id @default(autoincrement())
+  actorClerkId String?  @map("actor_clerk_id")
+  action       String
+  entityType   String   @map("entity_type")
+  entityId     String   @map("entity_id")
+  before       Json?
+  after        Json?
+  at           DateTime @default(now())
 
   @@index([entityType, entityId, at(sort: Desc)])
   @@map("audit_log")
@@ -745,41 +746,41 @@ model AuditLog {
 // ============================================================================
 
 model Newsletter {
-  id              String   @id @default(cuid())
-  subject         String
-  category        String   @default("Allmänt")
-  sentAt          DateTime @default(now())
-  status          String   @default("sent") // sent | scheduled | sending | partial | failed | cancelled
-  successCount    Int      @default(0)
-  failedCount     Int      @default(0)
-  recipients      Json     @default("[]")
-  pendingRecipients Json   @default("[]")  // kö för bakgrundskörning
-  failedRecipients Json    @default("[]")
-  openedBy        Json     @default("[]")
-  clickedBy       Json     @default("[]")
-  introText       String?
-  imageData       String?  @db.Text
-  embedUrl        String?
-  htmlContent     String?  @db.Text
-  blocks          Json?    // Editor blocks snapshot — enables "use as template"
+  id                String   @id @default(cuid())
+  subject           String
+  category          String   @default("Allmänt")
+  sentAt            DateTime @default(now())
+  status            String   @default("sent") // sent | scheduled | sending | partial | failed | cancelled
+  successCount      Int      @default(0)
+  failedCount       Int      @default(0)
+  recipients        Json     @default("[]")
+  pendingRecipients Json     @default("[]") // kö för bakgrundskörning
+  failedRecipients  Json     @default("[]")
+  openedBy          Json     @default("[]")
+  clickedBy         Json     @default("[]")
+  introText         String?
+  imageData         String?  @db.Text
+  embedUrl          String?
+  htmlContent       String?  @db.Text
+  blocks            Json? // Editor blocks snapshot — enables "use as template"
 
   // Scheduling
-  scheduledFor    DateTime?
+  scheduledFor DateTime?
 
   // Open-reminder (auto resend to recipients who didn't open the original)
-  reminderEnabled       Boolean   @default(false)
-  reminderScheduledFor  DateTime?
-  reminderSentAt        DateTime?
-  reminderSubject       String?
-  parentNewsletterId    String?   // if set, this row is itself a reminder for parent
+  reminderEnabled      Boolean   @default(false)
+  reminderScheduledFor DateTime?
+  reminderSentAt       DateTime?
+  reminderSubject      String?
+  parentNewsletterId   String? // if set, this row is itself a reminder for parent
 
   // Daily-reminder loop — skicka samma nyhetsbrev en gång per dygn till de
   // som inte öppnat tills antingen alla har öppnat eller until-datumet passerar.
-  dailyReminderEnabled      Boolean   @default(false)
-  dailyReminderUntil        DateTime?
-  dailyReminderLastSentAt   DateTime?
-  parent                Newsletter?  @relation("NewsletterReminders", fields: [parentNewsletterId], references: [id])
-  reminders             Newsletter[] @relation("NewsletterReminders")
+  dailyReminderEnabled    Boolean      @default(false)
+  dailyReminderUntil      DateTime?
+  dailyReminderLastSentAt DateTime?
+  parent                  Newsletter?  @relation("NewsletterReminders", fields: [parentNewsletterId], references: [id])
+  reminders               Newsletter[] @relation("NewsletterReminders")
 }
 
 model AutomatedTemplate {
@@ -813,9 +814,9 @@ enum OpsPeriodType {
 }
 
 enum OpsTaskSection {
-  PIPELINE      // Kunder & anställda i pipen
-  ACTION        // Företagsövergripande actions
-  PERSONAL      // Per-person todo (Mikaela, Tenita, Ella, Erik, etc)
+  PIPELINE // Kunder & anställda i pipen
+  ACTION // Företagsövergripande actions
+  PERSONAL // Per-person todo (Mikaela, Tenita, Ella, Erik, etc)
 }
 
 enum OpsTaskStatus {
@@ -831,11 +832,11 @@ model OpsGoal {
   periodType     OpsPeriodType @map("period_type")
   periodStart    DateTime      @map("period_start") @db.Date
   periodEnd      DateTime      @map("period_end") @db.Date
-  metricKey      String        @map("metric_key")    // revenue | online_bookings | avg_price | recurring_clients | staff_count | churn | custom
-  metricLabel    String        @map("metric_label")  // "Fakturerad försäljning"
+  metricKey      String        @map("metric_key") // revenue | online_bookings | avg_price | recurring_clients | staff_count | churn | custom
+  metricLabel    String        @map("metric_label") // "Fakturerad försäljning"
   targetValue    Float         @map("target_value")
   actualOverride Float?        @map("actual_override") // null = compute from data
-  unit           String?       // "kr", "st", "%"
+  unit           String? // "kr", "st", "%"
   notes          String?
   sortOrder      Int           @default(0) @map("sort_order")
   createdAt      DateTime      @default(now()) @map("created_at")
@@ -847,19 +848,19 @@ model OpsGoal {
 }
 
 model OpsTask {
-  id          Int            @id @default(autoincrement())
-  section     OpsTaskSection
-  owner       String?        // free-text or clerk user id
-  title       String
-  nextStep    String?        @map("next_step")
-  relatedTo   String?        @map("related_to") // e.g. "Victoria", "Tandläkarhuset Solna"
-  status      OpsTaskStatus  @default(OPEN)
-  deadline    DateTime?      @db.Date
-  notes       String?
-  sortOrder   Int            @default(0) @map("sort_order")
-  createdAt   DateTime       @default(now()) @map("created_at")
-  updatedAt   DateTime       @updatedAt @map("updated_at")
-  deletedAt   DateTime?      @map("deleted_at")
+  id        Int            @id @default(autoincrement())
+  section   OpsTaskSection
+  owner     String? // free-text or clerk user id
+  title     String
+  nextStep  String?        @map("next_step")
+  relatedTo String?        @map("related_to") // e.g. "Victoria", "Tandläkarhuset Solna"
+  status    OpsTaskStatus  @default(OPEN)
+  deadline  DateTime?      @db.Date
+  notes     String?
+  sortOrder Int            @default(0) @map("sort_order")
+  createdAt DateTime       @default(now()) @map("created_at")
+  updatedAt DateTime       @updatedAt @map("updated_at")
+  deletedAt DateTime?      @map("deleted_at")
 
   @@index([section, status])
   @@index([owner])
@@ -869,10 +870,10 @@ model OpsTask {
 // Cached dashboard snapshots (so the heavy Timewave aggregations don't run
 // every time someone opens ÖVERSIKT). Singleton-per-key row.
 model DashboardSnapshot {
-  key         String   @id
-  computedAt  DateTime @default(now()) @map("computed_at")
-  data        Json
-  refreshing  Boolean  @default(false)
+  key        String   @id
+  computedAt DateTime @default(now()) @map("computed_at")
+  data       Json
+  refreshing Boolean  @default(false)
 
   @@map("dashboard_snapshots")
 }
@@ -887,4 +888,253 @@ model NewsletterImage {
   createdAt DateTime @default(now()) @map("created_at")
 
   @@map("newsletter_images")
+}
+
+// ============================================================================
+// AVTALSHANTERING — Contract management module (avtal.stodona.se)
+// Se full spec i sessionen. MVP: datamodell + permissions + upload + create.
+// ============================================================================
+
+enum ContractStatus {
+  DRAFT
+  PENDING_APPROVAL
+  READY_FOR_SIGNING
+  SENT
+  PARTIALLY_SIGNED
+  SIGNED
+  ACTIVE
+  EXPIRING_SOON
+  EXPIRED
+  TERMINATED
+  ARCHIVED
+}
+
+enum ContractCategory {
+  // Personal
+  ANSTALLNINGSAVTAL
+  PROVANSTALLNING
+  TILLSVIDAREANSTALLNING
+  VISSTIDSANSTALLNING
+  TIMANSTALLNING
+  ANDRING_ANSTALLNINGSVILLKOR
+  LONEANDRING
+  SEKRETESSAVTAL
+  KONKURRENSAVTAL
+  OVERENSKOMMELSE
+  AVSLUT_ANSTALLNING
+  // Företag
+  KUNDAVTAL
+  LEVERANTORSAVTAL
+  KONSULTAVTAL
+  SAMARBETSAVTAL
+  HYRESAVTAL
+  LEASINGAVTAL
+  LICENSAVTAL
+  PUB_AVTAL
+  OVRIGT_AVTAL
+}
+
+enum ContractPermissionLevel {
+  READ
+  COMMENT
+  EDIT
+  ADMIN
+}
+
+enum SignerStatus {
+  PENDING
+  VIEWED
+  SIGNED
+  DECLINED
+  CANCELLED
+}
+
+enum ReminderType {
+  START_DATE
+  END_DATE_APPROACHING
+  NOTICE_DEADLINE
+  PROBATION_END
+  RENEWAL
+  CUSTOM
+}
+
+/// Stodonas egna bolag (Stodona AB, Stodona Services, framtida).
+/// Varje avtal kopplas till exakt EN OwnCompany som arbetsgivare/vår part.
+model OwnCompany {
+  id                 Int      @id @default(autoincrement())
+  name               String
+  organizationNumber String   @unique @map("organization_number")
+  address            String?
+  postalCode         String?  @map("postal_code")
+  city               String?
+  logoUrl            String?  @map("logo_url")
+  signatoryName      String?  @map("signatory_name")
+  signatoryEmail     String?  @map("signatory_email")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  contracts Contract[]
+  templates ContractTemplate[]
+
+  @@map("own_companies")
+}
+
+/// Natural persons: anställda, konsulter, hyresvärdar etc.
+/// Överlappar med Employee när det är en aktiv Stodona-anställd — då sätts linkedEmployeeId.
+model ContractPerson {
+  id               Int       @id @default(autoincrement())
+  firstName        String    @map("first_name")
+  lastName         String    @map("last_name")
+  personalNumber   String?   @map("personal_number") // krypteras på applager
+  email            String?
+  phone            String?
+  address          String?
+  postalCode       String?   @map("postal_code")
+  city             String?
+  linkedEmployeeId Int?      @map("linked_employee_id")
+  linkedEmployee   Employee? @relation(fields: [linkedEmployeeId], references: [id])
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  contracts Contract[]
+
+  @@index([lastName, firstName])
+  @@map("contract_persons")
+}
+
+model Contract {
+  id       Int              @id @default(autoincrement())
+  title    String
+  category ContractCategory
+  status   ContractStatus   @default(DRAFT)
+
+  ownCompanyId Int        @map("own_company_id")
+  ownCompany   OwnCompany @relation(fields: [ownCompanyId], references: [id])
+
+  personId Int?            @map("person_id")
+  person   ContractPerson? @relation(fields: [personId], references: [id])
+
+  externalCompanyName  String? @map("external_company_name")
+  externalCompanyOrgNr String? @map("external_company_org_nr")
+
+  startDate        DateTime? @map("start_date")
+  endDate          DateTime? @map("end_date")
+  noticeDate       DateTime? @map("notice_date")
+  probationEndDate DateTime? @map("probation_end_date")
+  automaticRenewal Boolean   @default(false) @map("automatic_renewal")
+
+  ownerClerkId String @map("owner_clerk_id")
+
+  templateId Int?              @map("template_id")
+  template   ContractTemplate? @relation(fields: [templateId], references: [id])
+
+  metadata Json?
+
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+  archivedAt DateTime? @map("archived_at")
+
+  versions    ContractVersion[]
+  signers     Signer[]
+  permissions ContractPermission[]
+  reminders   ContractReminder[]
+  attachments ContractAttachment[]
+
+  @@index([status, endDate])
+  @@index([category])
+  @@index([ownerClerkId])
+  @@map("contracts")
+}
+
+model ContractVersion {
+  id               Int      @id @default(autoincrement())
+  contractId       Int      @map("contract_id")
+  contract         Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  version          Int
+  content          String   @db.Text // HTML/rich text
+  pdfUrl           String?  @map("pdf_url")
+  locked           Boolean  @default(false)
+  createdByClerkId String   @map("created_by_clerk_id")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  @@unique([contractId, version])
+  @@map("contract_versions")
+}
+
+model ContractTemplate {
+  id           Int              @id @default(autoincrement())
+  name         String
+  category     ContractCategory
+  ownCompanyId Int?             @map("own_company_id")
+  ownCompany   OwnCompany?      @relation(fields: [ownCompanyId], references: [id])
+  content      String           @db.Text
+  variables    Json?
+  version      Int              @default(1)
+  archivedAt   DateTime?        @map("archived_at")
+  createdAt    DateTime         @default(now()) @map("created_at")
+  updatedAt    DateTime         @updatedAt @map("updated_at")
+
+  contracts Contract[]
+
+  @@map("contract_templates")
+}
+
+model ContractPermission {
+  id               Int                     @id @default(autoincrement())
+  contractId       Int                     @map("contract_id")
+  contract         Contract                @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  clerkUserId      String                  @map("clerk_user_id")
+  level            ContractPermissionLevel
+  grantedByClerkId String                  @map("granted_by_clerk_id")
+  grantedAt        DateTime                @default(now()) @map("granted_at")
+  expiresAt        DateTime?               @map("expires_at")
+
+  @@unique([contractId, clerkUserId])
+  @@map("contract_permissions")
+}
+
+model Signer {
+  id                 Int          @id @default(autoincrement())
+  contractId         Int          @map("contract_id")
+  contract           Contract     @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  name               String
+  email              String
+  signingOrder       Int          @default(1) @map("signing_order")
+  status             SignerStatus @default(PENDING)
+  signedAt           DateTime?    @map("signed_at")
+  externalProviderId String?      @map("external_provider_id") // Visma Sign etc.
+  auditData          Json?        @map("audit_data")
+  createdAt          DateTime     @default(now()) @map("created_at")
+
+  @@index([contractId, signingOrder])
+  @@map("contract_signers")
+}
+
+model ContractReminder {
+  id              Int          @id @default(autoincrement())
+  contractId      Int          @map("contract_id")
+  contract        Contract     @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  reminderDate    DateTime     @map("reminder_date")
+  reminderType    ReminderType @map("reminder_type")
+  message         String?      @db.Text
+  recipientEmails String       @map("recipient_emails") // comma-separated
+  sentAt          DateTime?    @map("sent_at")
+  handledAt       DateTime?    @map("handled_at")
+  createdAt       DateTime     @default(now()) @map("created_at")
+
+  @@index([reminderDate, sentAt])
+  @@map("contract_reminders")
+}
+
+model ContractAttachment {
+  id                Int      @id @default(autoincrement())
+  contractId        Int      @map("contract_id")
+  contract          Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  filename          String
+  contentType       String   @map("content_type")
+  fileUrl           String   @map("file_url")
+  uploadedByClerkId String   @map("uploaded_by_clerk_id")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  @@map("contract_attachments")
 }

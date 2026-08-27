@@ -38,7 +38,8 @@ import {
   BrainCircuit,
   CalendarSearch,
   Target,
-  ListChecks
+  ListChecks,
+  FileText
 } from 'lucide-react';
 import {
   BarChart,
@@ -62,6 +63,7 @@ import ClientsView from './ClientsView';
 import TimewaveScheduleGrid from './TimewaveScheduleGrid';
 import ImportView from './ImportView';
 import OpsView from './OpsView';
+import ContractsView from './ContractsView';
 
 // Utility for Tailwind classes
 function cn(...inputs: ClassValue[]) {
@@ -1965,6 +1967,7 @@ export default function App() {
     { id: 'overview', label: 'ÖVERSIKT', icon: LayoutDashboard },
     { id: 'schedule2', label: 'SCHEMA', icon: CalendarDays },
     { id: 'ops', label: 'VECKOUPPFÖLJNING', icon: ListChecks },
+    { id: 'contracts', label: 'AVTAL', icon: FileText },
     { id: 'email', label: 'E-POST UTSKICK', icon: Mail },
     { id: 'import', label: 'IMPORTERA FRÅN TIMEWAVE', icon: RefreshCw },
     // Dolda flikar — KUNDER / PERSONAL / ACTIONLISTA / ÄRENDEHANTERING / MAIL.
@@ -2050,6 +2053,7 @@ export default function App() {
               {activeTab === 'schedule2' && <div className="h-[calc(100vh-140px)] -mx-8 -my-8"><TimewaveScheduleGrid /></div>}
               {activeTab === 'clients' && <ClientsView />}
               {activeTab === 'ops' && <OpsView />}
+              {activeTab === 'contracts' && <ContractsView />}
               {activeTab === 'import' && <ImportView />}
             </div>
           </main>
