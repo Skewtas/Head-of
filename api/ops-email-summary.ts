@@ -135,18 +135,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return { ...g, actualOverride: src[field] as number, actualIsAuto: true };
   });
 
-  // Deduplicera: samma etikett + samma period bara en gång (behåll den med
-  // riktigt targetValue framför den med target=0).
+  // Deduplicera: samma etikett + samma period ska bara visas en gång.
+  // Prioritetsordning: manuellt utfall > auto-utfall > tomt.
+  // Inom samma nivå: behåll högre target.
   const dedupKey = (g: any) => `${g.periodType}|${g.periodStart}|${(g.metricLabel || '').toLowerCase().trim()}`;
+  const rank = (g: any) => {
+    if (g.actualOverride != null && !g.actualIsAuto) return 3; // manuellt
+    if (g.actualOverride != null && g.actualIsAuto) return 2;  // auto
+    return 1; // tomt
+  };
   const byKey = new Map<string, any>();
   for (const g of enriched) {
     const k = dedupKey(g);
     const existing = byKey.get(k);
     if (!existing) { byKey.set(k, g); continue; }
-    // Ta den med högre target (target=0 = platshållare)
-    if ((g.targetValue || 0) > (existing.targetValue || 0)) byKey.set(k, g);
+    const rNew = rank(g), rOld = rank(existing);
+    if (rNew > rOld) { byKey.set(k, g); continue; }
+    if (rNew === rOld && (g.targetValue || 0) > (existing.targetValue || 0)) byKey.set(k, g);
   }
-  const goalsWithActuals = Array.from(byKey.values());
+
+  // Filtrera bort platshållar-rader utan riktig mätning (target=0 & inget utfall)
+  const goalsWithActuals = Array.from(byKey.values()).filter(
+    (g: any) => !((g.targetValue || 0) === 0 && g.actualOverride == null)
+  );
 
   const fromAddress = process.env.SMTP_FROM || process.env.SMTP_USER || 'info@stodona.se';
   const subject = `HeadOf — Veckouppföljning ${new Date().toLocaleDateString('sv-SE', {
