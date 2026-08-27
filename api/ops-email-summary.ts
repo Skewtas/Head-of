@@ -59,6 +59,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   })}`;
   const html = buildHtml(goals as any[], tasks as any[]);
 
+  // ?preview=1 returnerar HTML:en direkt så man kan inspektera mailet
+  // i browsern utan att trigga något utskick.
+  if (req.query.preview === '1') {
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    return res.send(html);
+  }
+
   if (!process.env.RESEND_API_KEY) {
     return res.json({
       ok: true,
