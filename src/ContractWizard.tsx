@@ -7,8 +7,25 @@
  * Steg 4 — Signerare + spara (signering kommer i Fas 4)
  */
 import React, { useEffect, useMemo, useState } from 'react';
-import { X, Loader, ChevronLeft, ChevronRight, Check, FileText } from 'lucide-react';
+import { X, Loader, ChevronLeft, ChevronRight, Check, FileText, UserSearch, Users } from 'lucide-react';
 import { api } from './lib/api';
+
+type TimewaveEmployee = {
+  id: number;
+  first_name?: string;
+  last_name?: string;
+  personal_number?: string;
+  email?: string;
+  mobile?: string;
+  phone?: string;
+  address?: string;
+  postal_code?: string;
+  city?: string;
+  employee_startdate?: string | null;
+  base_contract?: { occupation?: number } | null;
+  status?: string;
+  deleted?: boolean;
+};
 
 type Template = {
   id: number;
@@ -69,9 +86,50 @@ export default function ContractWizard({
   const [previewLoading, setPreviewLoading] = useState(false);
   const [title, setTitle] = useState('');
 
+  // Timewave-anställda för autofyll av person
+  const [twEmployees, setTwEmployees] = useState<TimewaveEmployee[]>([]);
+  const [empSearch, setEmpSearch] = useState('');
+  const [empSearchOpen, setEmpSearchOpen] = useState(false);
+  const [twId, setTwId] = useState<number | null>(null);
+
   useEffect(() => {
     api<Template[]>('/api/contracts/templates').then(setTemplates).catch(() => setTemplates([]));
+    // Timewave-listan är oftast ~40 anställda — hämta hela och filtrera lokalt
+    fetch('/api/timewave/employees?page[size]=200')
+      .then((r) => (r.ok ? r.json() : { data: [] }))
+      .then((d: { data?: TimewaveEmployee[] }) => {
+        setTwEmployees((d.data || []).filter((e) => !e.deleted && e.status === 'active'));
+      })
+      .catch(() => setTwEmployees([]));
   }, []);
+
+  const filteredEmployees = useMemo(() => {
+    if (!empSearch.trim()) return twEmployees.slice(0, 20);
+    const q = empSearch.toLowerCase();
+    return twEmployees
+      .filter((e) => {
+        const name = `${e.first_name || ''} ${e.last_name || ''}`.toLowerCase();
+        const pnr = (e.personal_number || '').toLowerCase();
+        return name.includes(q) || pnr.includes(q);
+      })
+      .slice(0, 20);
+  }, [twEmployees, empSearch]);
+
+  const pickTimewaveEmployee = (e: TimewaveEmployee) => {
+    setTwId(e.id);
+    setFirstName(e.first_name || '');
+    setLastName(e.last_name || '');
+    setPersonalNumber(e.personal_number || '');
+    setPersonEmail(e.email || '');
+    setPersonPhone(e.mobile || e.phone || '');
+    setPersonAddress(e.address || '');
+    setPersonZip(e.postal_code || '');
+    setPersonCity(e.city || '');
+    if (e.employee_startdate) setStartDate(String(e.employee_startdate).slice(0, 10));
+    if (e.base_contract?.occupation) setOccupationPct(String(e.base_contract.occupation));
+    setEmpSearchOpen(false);
+    setEmpSearch(`${e.first_name || ''} ${e.last_name || ''}`.trim());
+  };
 
   const selectedTemplate = templates.find((t) => t.id === templateId) || null;
 
@@ -96,7 +154,8 @@ export default function ContractWizard({
     firstName, lastName, personalNumber,
     email: personEmail, phone: personPhone,
     address: personAddress, postalCode: personZip, city: personCity,
-  }), [firstName, lastName, personalNumber, personEmail, personPhone, personAddress, personZip, personCity]);
+    timewaveEmployeeId: twId,
+  }), [firstName, lastName, personalNumber, personEmail, personPhone, personAddress, personZip, personCity, twId]);
 
   // När vi går in på Preview-steget → hämta HTML från servern
   useEffect(() => {
@@ -191,6 +250,54 @@ export default function ContractWizard({
 
               <section>
                 <h4 className="text-[10px] font-bold uppercase tracking-wider text-brand-muted mb-3">Motpart (anställd)</h4>
+
+                {/* Timewave-autofyll */}
+                <div className="mb-4 relative">
+                  <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-brand-accent mb-1">
+                    <Users className="w-3 h-3" /> Hämta från Timewave
+                  </div>
+                  <div className="relative">
+                    <UserSearch className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      value={empSearch}
+                      onChange={(e) => { setEmpSearch(e.target.value); setEmpSearchOpen(true); }}
+                      onFocus={() => setEmpSearchOpen(true)}
+                      onBlur={() => setTimeout(() => setEmpSearchOpen(false), 200)}
+                      placeholder={twEmployees.length ? `Sök bland ${twEmployees.length} aktiva anställda…` : 'Laddar Timewave-anställda…'}
+                      className={`${inp} pl-9`}
+                    />
+                    {twId && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">TW-id {twId}</span>}
+                  </div>
+                  {empSearchOpen && filteredEmployees.length > 0 && (
+                    <div className="absolute z-10 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-72 overflow-y-auto">
+                      {filteredEmployees.map((e) => (
+                        <button
+                          key={e.id}
+                          type="button"
+                          onMouseDown={(ev) => ev.preventDefault()}
+                          onClick={() => pickTimewaveEmployee(e)}
+                          className="w-full px-3 py-2 text-left hover:bg-brand-accent/5 border-b border-gray-100 last:border-b-0 flex justify-between items-center"
+                        >
+                          <div>
+                            <div className="text-sm font-medium text-brand-dark">
+                              {e.first_name} {e.last_name}
+                            </div>
+                            <div className="text-[11px] text-brand-muted">
+                              {e.personal_number || 'saknar personnr'} · {e.email || 'saknar e-post'}
+                            </div>
+                          </div>
+                          {e.base_contract?.occupation && (
+                            <span className="text-[10px] text-brand-muted">{e.base_contract.occupation}%</span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <div className="text-[11px] text-brand-muted mt-1 italic">
+                    Väljer du en anställd fylls personnr, kontakt, adress, startdatum och anställningsgrad i automatiskt.
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-2 gap-3">
                   <Field label="Förnamn *"><input value={firstName} onChange={(e) => setFirstName(e.target.value)} className={inp} /></Field>
                   <Field label="Efternamn *"><input value={lastName} onChange={(e) => setLastName(e.target.value)} className={inp} /></Field>

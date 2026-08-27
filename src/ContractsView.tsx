@@ -38,7 +38,8 @@ type Contract = {
   person: { firstName: string; lastName: string } | null;
   externalCompanyName: string | null;
   ownCompany: { name: string };
-  _count: { signers: number; versions: number; reminders: number };
+  attachments: { id: number; filename: string; contentType: string; fileUrl: string }[];
+  _count: { signers: number; versions: number; reminders: number; attachments: number };
 };
 
 const CATEGORY_LABEL: Record<string, string> = {
@@ -263,7 +264,8 @@ export default function ContractsView() {
                   <th className="text-left pb-2">Företag</th>
                   <th className="text-left pb-2">Slutdatum</th>
                   <th className="text-left pb-2">Status</th>
-                  <th className="text-right pb-2 pr-2">Signerare</th>
+                  <th className="text-right pb-2">Signerare</th>
+                  <th className="text-right pb-2 pr-2">Dokument</th>
                 </tr>
               </thead>
               <tbody>
@@ -273,8 +275,9 @@ export default function ContractsView() {
                   const counterparty = c.person
                     ? `${c.person.firstName} ${c.person.lastName}`
                     : c.externalCompanyName || '—';
+                  const firstAttachment = c.attachments?.[0];
                   return (
-                    <tr key={c.id} className="border-t border-gray-100 hover:bg-gray-50/50 cursor-pointer">
+                    <tr key={c.id} className="border-t border-gray-100 hover:bg-gray-50/50">
                       <td className="py-3 pl-2 font-medium text-brand-dark">{c.title}</td>
                       <td className="py-3 text-brand-dark">{counterparty}</td>
                       <td className="py-3 text-brand-muted">{cat}</td>
@@ -287,8 +290,24 @@ export default function ContractsView() {
                           {st.label}
                         </span>
                       </td>
-                      <td className="py-3 pr-2 text-right text-brand-muted text-xs">
+                      <td className="py-3 text-right text-brand-muted text-xs">
                         {c._count.signers > 0 ? `${c._count.signers} st` : '—'}
+                      </td>
+                      <td className="py-3 pr-2 text-right">
+                        {firstAttachment ? (
+                          <a
+                            href={firstAttachment.fileUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-xs text-brand-accent hover:text-brand-dark font-medium"
+                            title={firstAttachment.filename}
+                          >
+                            <FileText className="w-3.5 h-3.5" /> PDF
+                            {c._count.attachments > 1 && <span className="text-brand-muted">+{c._count.attachments - 1}</span>}
+                          </a>
+                        ) : (
+                          <span className="text-gray-300">—</span>
+                        )}
                       </td>
                     </tr>
                   );

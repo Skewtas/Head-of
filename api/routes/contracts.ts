@@ -97,7 +97,11 @@ router.get('/', async (req, res) => {
     include: {
       person: true,
       ownCompany: true,
-      _count: { select: { signers: true, versions: true, reminders: true } },
+      attachments: {
+        select: { id: true, filename: true, contentType: true, fileUrl: true },
+        orderBy: { createdAt: 'asc' },
+      },
+      _count: { select: { signers: true, versions: true, reminders: true, attachments: true } },
     },
     orderBy: [{ updatedAt: 'desc' }],
     take: 200,
@@ -510,6 +514,7 @@ router.post('/upload', async (req, res) => {
             postalCode: b.person.postalCode || null,
             city: b.person.city || null,
             linkedEmployeeId: b.person.linkedEmployeeId || null,
+            timewaveEmployeeId: b.person.timewaveEmployeeId || null,
           },
         });
         personId = p.id;
@@ -779,6 +784,7 @@ router.post('/from-template', async (req, res) => {
         postalCode: z.string().optional().nullable(),
         city: z.string().optional().nullable(),
         linkedEmployeeId: z.number().optional().nullable(),
+        timewaveEmployeeId: z.number().optional().nullable(),
       })
       .optional(),
     personId: z.number().optional().nullable(),
@@ -811,6 +817,7 @@ router.post('/from-template', async (req, res) => {
           postalCode: body.person.postalCode ?? null,
           city: body.person.city ?? null,
           linkedEmployeeId: body.person.linkedEmployeeId ?? null,
+          timewaveEmployeeId: body.person.timewaveEmployeeId ?? null,
         },
       });
       personId = personRow.id;
