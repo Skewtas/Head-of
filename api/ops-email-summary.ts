@@ -154,9 +154,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (rNew === rOld && (g.targetValue || 0) > (existing.targetValue || 0)) byKey.set(k, g);
   }
 
-  // Filtrera bort platshållar-rader utan riktig mätning (target=0 & inget utfall)
+  // Bara mål med ett riktigt target — 0/0-rader blir förvirrande i mailet
   const goalsWithActuals = Array.from(byKey.values()).filter(
-    (g: any) => !((g.targetValue || 0) === 0 && g.actualOverride == null)
+    (g: any) => (g.targetValue || 0) > 0
   );
 
   const fromAddress = process.env.SMTP_FROM || process.env.SMTP_USER || 'info@stodona.se';
