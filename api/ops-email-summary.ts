@@ -120,13 +120,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     online_bookings_month: 'onlineBookings',
     new_recurring_clients: 'newRecurringClients',
   };
-  const goalsWithActuals = (goals as any[]).map((g) => {
+  // Fallback: matcha på etikett för gamla mål med metricKey='custom' etc.
+  const labelToActual: Record<string, keyof typeof monthActuals> = {
+    'fakturerad försäljning': 'totalInvoicedNet',
+    'bokad försäljning': 'totalRevenueExVat',
+    'bokningar online': 'onlineBookings',
+    'nya återkommande kunder': 'newRecurringClients',
+  };
+  const enriched = (goals as any[]).map((g) => {
     if (g.actualOverride != null) return g;
     const src = g.periodType === 'WEEK' ? weekActuals : g.periodType === 'MONTH' ? monthActuals : null;
-    const field = metricToActual[g.metricKey];
+    const field = metricToActual[g.metricKey] ?? labelToActual[(g.metricLabel || '').toLowerCase().trim()];
     if (!src || !field || src[field] == null) return g;
     return { ...g, actualOverride: src[field] as number, actualIsAuto: true };
   });
+
+  // Deduplicera: samma etikett + samma period bara en gång (behåll den med
+  // riktigt targetValue framför den med target=0).
+  const dedupKey = (g: any) => `${g.periodType}|${g.periodStart}|${(g.metricLabel || '').toLowerCase().trim()}`;
+  const byKey = new Map<string, any>();
+  for (const g of enriched) {
+    const k = dedupKey(g);
+    const existing = byKey.get(k);
+    if (!existing) { byKey.set(k, g); continue; }
+    // Ta den med högre target (target=0 = platshållare)
+    if ((g.targetValue || 0) > (existing.targetValue || 0)) byKey.set(k, g);
+  }
+  const goalsWithActuals = Array.from(byKey.values());
 
   const fromAddress = process.env.SMTP_FROM || process.env.SMTP_USER || 'info@stodona.se';
   const subject = `HeadOf — Veckouppföljning ${new Date().toLocaleDateString('sv-SE', {
