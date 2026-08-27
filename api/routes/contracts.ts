@@ -322,6 +322,209 @@ router.get('/companies', async (_req, res) => {
   res.json(list);
 });
 
+// ─── TEMPLATES ──────────────────────────────────────────────────────────
+router.get('/templates', async (req, res) => {
+  const category = typeof req.query.category === 'string' ? req.query.category : undefined;
+  const where: any = { archivedAt: null };
+  if (category) where.category = category;
+  const list = await prisma.contractTemplate.findMany({
+    where,
+    orderBy: [{ category: 'asc' }, { name: 'asc' }],
+    include: { ownCompany: { select: { name: true } } },
+  });
+  res.json(list);
+});
+
+router.get('/templates/:id(\\d+)', async (req, res) => {
+  const id = Number(req.params.id);
+  const t = await prisma.contractTemplate.findUnique({ where: { id } });
+  if (!t) return res.status(404).json({ error: 'Not found' });
+  res.json(t);
+});
+
+// ─── SUBSTITUTE VARIABLES + CREATE FROM TEMPLATE ────────────────────────
+/** Ersätter {{path.to.value}} med värden från context. Tomma vid saknad path. */
+function substituteVariables(template: string, ctx: Record<string, any>): string {
+  return template.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_, path: string) => {
+    const parts = path.split('.');
+    let cur: any = ctx;
+    for (const p of parts) {
+      if (cur == null || typeof cur !== 'object') return '';
+      cur = cur[p];
+    }
+    if (cur == null) return '';
+    return escapeHtmlText(String(cur));
+  });
+}
+
+function escapeHtmlText(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/** POST /preview-template — kör substitutionen utan att skapa något, för wizardens preview-steg. */
+router.post('/preview-template', async (req, res) => {
+  const body = z.object({
+    templateId: z.number(),
+    ownCompanyId: z.number(),
+    person: z.record(z.any()).optional(),
+    employment: z.record(z.any()).optional(),
+  }).parse(req.body);
+
+  const template = await prisma.contractTemplate.findUnique({ where: { id: body.templateId } });
+  if (!template) return res.status(404).json({ error: 'Mall hittades inte' });
+  const company = await prisma.ownCompany.findUnique({ where: { id: body.ownCompanyId } });
+  if (!company) return res.status(404).json({ error: 'Företag hittades inte' });
+
+  const p = body.person || {};
+  const ctx = {
+    today: new Date().toLocaleDateString('sv-SE'),
+    employee: {
+      firstName: p.firstName || '',
+      lastName: p.lastName || '',
+      personalNumber: p.personalNumber || '',
+      email: p.email || '',
+      address: [p.address, p.postalCode, p.city].filter(Boolean).join(', '),
+    },
+    company: {
+      name: company.name,
+      organizationNumber: company.organizationNumber,
+      address: [company.address, company.postalCode, company.city].filter(Boolean).join(', '),
+      signatoryName: company.signatoryName || '',
+    },
+    employment: body.employment || {},
+  };
+  res.json({ content: substituteVariables(template.content, ctx), templateName: template.name });
+});
+
+router.post('/from-template', async (req, res) => {
+  const userId = getUserId(req)!;
+
+  const body = z.object({
+    templateId: z.number(),
+    title: z.string().optional(),
+    ownCompanyId: z.number(),
+    person: z
+      .object({
+        firstName: z.string(),
+        lastName: z.string(),
+        personalNumber: z.string().optional().nullable(),
+        email: z.string().optional().nullable(),
+        phone: z.string().optional().nullable(),
+        address: z.string().optional().nullable(),
+        postalCode: z.string().optional().nullable(),
+        city: z.string().optional().nullable(),
+        linkedEmployeeId: z.number().optional().nullable(),
+      })
+      .optional(),
+    personId: z.number().optional().nullable(),
+    employment: z.record(z.any()).optional(),        // fri metadata — förs in i {{employment.*}}
+    startDate: z.string().optional().nullable(),
+    endDate: z.string().optional().nullable(),
+    probationEndDate: z.string().optional().nullable(),
+  }).parse(req.body);
+
+  const template = await prisma.contractTemplate.findUnique({ where: { id: body.templateId } });
+  if (!template) return res.status(404).json({ error: 'Mall hittades inte' });
+  const company = await prisma.ownCompany.findUnique({ where: { id: body.ownCompanyId } });
+  if (!company) return res.status(404).json({ error: 'Företag hittades inte' });
+
+  const result = await prisma.$transaction(async (tx) => {
+    // Skapa/koppla person
+    let personId: number | null = body.personId ?? null;
+    let personRow: any = null;
+    if (personId) {
+      personRow = await tx.contractPerson.findUnique({ where: { id: personId } });
+    } else if (body.person) {
+      personRow = await tx.contractPerson.create({
+        data: {
+          firstName: body.person.firstName,
+          lastName: body.person.lastName,
+          personalNumber: body.person.personalNumber ?? null,
+          email: body.person.email ?? null,
+          phone: body.person.phone ?? null,
+          address: body.person.address ?? null,
+          postalCode: body.person.postalCode ?? null,
+          city: body.person.city ?? null,
+          linkedEmployeeId: body.person.linkedEmployeeId ?? null,
+        },
+      });
+      personId = personRow.id;
+    }
+
+    // Bygg context för variabelsubstitution
+    const ctx = {
+      today: new Date().toLocaleDateString('sv-SE'),
+      employee: personRow
+        ? {
+            firstName: personRow.firstName,
+            lastName: personRow.lastName,
+            personalNumber: personRow.personalNumber || '',
+            email: personRow.email || '',
+            address: [personRow.address, personRow.postalCode, personRow.city].filter(Boolean).join(', '),
+          }
+        : {},
+      company: {
+        name: company.name,
+        organizationNumber: company.organizationNumber,
+        address: [company.address, company.postalCode, company.city].filter(Boolean).join(', '),
+        signatoryName: company.signatoryName || '',
+      },
+      employment: body.employment ?? {},
+    };
+    const content = substituteVariables(template.content, ctx);
+
+    // Titel-fallback: "<Mall> — <Namn>" eller mall-namnet
+    const title = body.title
+      || (personRow ? `${template.name} — ${personRow.firstName} ${personRow.lastName}` : template.name);
+
+    // Skapa Contract
+    const contract = await tx.contract.create({
+      data: {
+        title,
+        category: template.category,
+        status: 'DRAFT',
+        ownCompanyId: body.ownCompanyId,
+        personId,
+        startDate: body.startDate ? new Date(body.startDate) : null,
+        endDate: body.endDate ? new Date(body.endDate) : null,
+        probationEndDate: body.probationEndDate ? new Date(body.probationEndDate) : null,
+        ownerClerkId: userId,
+        templateId: template.id,
+        metadata: { employment: body.employment ?? {} } as any,
+      },
+    });
+
+    // Skapa Version 1 med det ifyllda innehållet
+    const version = await tx.contractVersion.create({
+      data: {
+        contractId: contract.id,
+        version: 1,
+        content,
+        createdByClerkId: userId,
+      },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        actorClerkId: userId,
+        action: 'created_from_template',
+        entityType: 'Contract',
+        entityId: String(contract.id),
+        after: { templateId: template.id, templateName: template.name, title },
+      },
+    });
+
+    return { contract, version };
+  });
+
+  res.status(201).json(result);
+});
+
 // ─── AUDIT-LOG-hjälpare ─────────────────────────────────────────────────
 async function logAudit(userId: string, action: string, contractId: number, after: any) {
   try {

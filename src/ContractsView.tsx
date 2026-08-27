@@ -9,6 +9,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { FileText, AlertTriangle, CheckCircle, Send, Clock, Plus, Search, Upload, X, Loader } from 'lucide-react';
 import { api } from './lib/api';
+import ContractWizard from './ContractWizard';
 
 type Stats = {
   total: number;
@@ -79,6 +80,7 @@ export default function ContractsView() {
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('');
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [wizardOpen, setWizardOpen] = useState(false);
 
   const reload = async () => {
     const [s, list, cos] = await Promise.all([
@@ -134,9 +136,10 @@ export default function ContractsView() {
             <Upload className="w-4 h-4" /> Ladda upp befintligt
           </button>
           <button
-            className="flex items-center gap-2 px-4 py-2 bg-brand-dark text-white rounded-lg text-sm font-semibold hover:bg-brand-accent opacity-50"
-            disabled
-            title="Kommer i Fas 3"
+            onClick={() => setWizardOpen(true)}
+            disabled={companies.length === 0}
+            className="flex items-center gap-2 px-4 py-2 bg-brand-dark text-white rounded-lg text-sm font-semibold hover:bg-brand-accent disabled:opacity-50"
+            title={companies.length === 0 ? 'Kör migrationen först — behöver ett företag' : ''}
           >
             <Plus className="w-4 h-4" /> Nytt anställningsavtal
           </button>
@@ -149,6 +152,17 @@ export default function ContractsView() {
           onClose={() => setUploadOpen(false)}
           onDone={async () => {
             setUploadOpen(false);
+            await reload();
+          }}
+        />
+      )}
+
+      {wizardOpen && (
+        <ContractWizard
+          companies={companies}
+          onClose={() => setWizardOpen(false)}
+          onDone={async () => {
+            setWizardOpen(false);
             await reload();
           }}
         />

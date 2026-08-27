@@ -23,6 +23,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const migrations = [
       '20260827_contracts_module',
       '20260827_contracts_files',
+      '20260827_contracts_templates_seed',
     ];
     const applied: string[] = [];
     for (const m of migrations) {
