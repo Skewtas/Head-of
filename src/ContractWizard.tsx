@@ -64,7 +64,24 @@ export default function ContractWizard({
 
   const [role, setRole] = useState('');
   const [occupationPct, setOccupationPct] = useState('100');
-  const [employmentForm, setEmploymentForm] = useState<'TILLSVIDARE' | 'PROV' | 'VISSTID' | 'TIM'>('TILLSVIDARE');
+  const [employmentForm, setEmploymentForm] = useState<'TILLSVIDARE' | 'PROV' | 'VISSTID' | 'TIM'>('TIM');
+
+  // Timanställning: MAX 1 år, slutdatum auto-räknas från tillträde (start + 1 år − 1 dag)
+  const autoTimEnd = (isoStart: string): string => {
+    if (!isoStart) return '';
+    const d = new Date(isoStart);
+    if (isNaN(d.getTime())) return '';
+    d.setFullYear(d.getFullYear() + 1);
+    d.setDate(d.getDate() - 1);
+    return d.toISOString().slice(0, 10);
+  };
+
+  // Byter man till TIM efter man satt startdatum → fyll i slutdatum automatiskt
+  useEffect(() => {
+    if (employmentForm === 'TIM' && startDate && !endDate) {
+      setEndDate(autoTimEnd(startDate));
+    }
+  }, [employmentForm, startDate]);
   const [workArea, setWorkArea] = useState('Stockholm med omnejd');
   const [employmentNumber, setEmploymentNumber] = useState('');
   const [bankAccount, setBankAccount] = useState('');
@@ -331,9 +348,26 @@ export default function ContractWizard({
                   </Field>
                   <Field label="Befattning *"><input value={role} onChange={(e) => setRole(e.target.value)} placeholder="Städare, Teamledare…" className={inp} /></Field>
                   <Field label="Anställningsgrad (%)"><input value={occupationPct} onChange={(e) => setOccupationPct(e.target.value)} type="number" className={inp} /></Field>
-                  <Field label="Tillträdesdag *"><input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className={inp} /></Field>
+                  <Field label="Tillträdesdag *">
+                    <input
+                      type="date"
+                      value={startDate}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setStartDate(v);
+                        // Auto-sätt slutdatum för TIM (start + 1 år − 1 dag)
+                        if (employmentForm === 'TIM' && v) setEndDate(autoTimEnd(v));
+                      }}
+                      className={inp}
+                    />
+                  </Field>
                   {employmentForm === 'VISSTID' && (
                     <Field label="Slutdatum *"><input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className={inp} /></Field>
+                  )}
+                  {employmentForm === 'TIM' && (
+                    <Field label="Slutdatum * (max 1 år från tillträde)">
+                      <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className={inp} />
+                    </Field>
                   )}
                   {employmentForm === 'PROV' && (
                     <Field label="Provanställning t.o.m. *"><input type="date" value={probationEndDate} onChange={(e) => setProbationEndDate(e.target.value)} className={inp} /></Field>

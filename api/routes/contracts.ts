@@ -737,7 +737,7 @@ function buildSubstitutionContext(
   } else if (form === 'VISSTID') {
     formParagraph = `<p>Anställningen är en visstidsanställning enligt gällande arbetsrättsliga regler. Anställningen gäller från och med <strong>${escapeHtmlText(startDate)}</strong> till och med <strong>${escapeHtmlText(endDate)}</strong>, då den upphör utan uppsägning. Anställningen kan inte avbrytas i förtid annat än enligt gällande lag.</p>`;
   } else if (form === 'TIM') {
-    formParagraph = `<p>Anställningen är en timanställning (intermittent). Arbete utförs efter överenskommelse i varje enskilt fall. Arbetstagaren är inte skyldig att stå till Arbetsgivarens förfogande utanför de arbetstillfällen som överenskommits. Tillträdesdag är <strong>${escapeHtmlText(startDate)}</strong>.</p>`;
+    formParagraph = `<p>Anställningen är en timanställning. Anställningen gäller från och med <strong>${escapeHtmlText(startDate)}</strong> till och med <strong>${escapeHtmlText(endDate)}</strong> (maximalt ett år). Arbete utförs efter överenskommelse i varje enskilt fall. Uppsägning i förtid kan ske enligt uppsägningstiderna nedan.</p>`;
   } else {
     formParagraph = `<p>Anställningen är en tillsvidareanställning enligt lagen om anställningsskydd (LAS). Tillträdesdag är <strong>${escapeHtmlText(startDate)}</strong>.</p>`;
   }
@@ -747,7 +747,7 @@ function buildSubstitutionContext(
   const hourly = emp.hourly_rate || emp.hourlyRate || '';
   let salaryParagraph = '';
   if (form === 'TIM' || (!salary && hourly)) {
-    salaryParagraph = `Timlön uppgår till <strong>${escapeHtmlText(String(hourly || ''))} kronor per timme</strong>. Semesterersättning om 12 % utgår utöver timlönen.`;
+    salaryParagraph = `Timlön uppgår till <strong>${escapeHtmlText(String(hourly || ''))} kronor per timme inklusive semesterersättning</strong> (12 % är inräknat i timlönen). Ingen ytterligare semesterersättning utgår.`;
   } else {
     salaryParagraph = `Månadslön uppgår till <strong>${escapeHtmlText(String(salary || ''))} kronor</strong>.`;
   }
@@ -759,7 +759,7 @@ function buildSubstitutionContext(
   const labelEnStyle = 'display:block;font-size:10px;color:#8b8578;font-weight:500;margin-top:2px;text-transform:none;font-style:italic;';
   const valStyle = 'font-size:14px;color:#1a1a2e;font-weight:500;';
   if (form === 'TIM' || (!salary && hourly)) {
-    salaryRow = `<div style="${rowStyle}"><div style="${labelStyle}">Timlön<span style="${labelEnStyle}">Hourly rate</span></div><div style="${valStyle}"><strong>${escapeHtmlText(String(hourly || ''))} kr/tim</strong> · Semesterersättning 12 % utgår utöver timlönen<span style="display:block;font-size:12.5px;color:#8b8578;margin-top:3px;font-style:italic;font-weight:400;"><strong>${escapeHtmlText(String(hourly || ''))} kr/hour</strong> · 12 % vacation compensation added on top</span></div></div>`;
+    salaryRow = `<div style="${rowStyle}"><div style="${labelStyle}">Timlön<span style="${labelEnStyle}">Hourly rate</span></div><div style="${valStyle}"><strong>${escapeHtmlText(String(hourly || ''))} kr/tim inkl. semesterersättning</strong> (12 % inräknat i timlönen — ingen ytterligare semesterlön utgår)<span style="display:block;font-size:12.5px;color:#8b8578;margin-top:3px;font-style:italic;font-weight:400;"><strong>${escapeHtmlText(String(hourly || ''))} kr/hour incl. vacation pay</strong> (12 % included in hourly rate — no additional vacation pay)</span></div></div>`;
   } else {
     salaryRow = `<div style="${rowStyle}"><div style="${labelStyle}">Månadslön<span style="${labelEnStyle}">Monthly salary</span></div><div style="${valStyle}"><strong>${escapeHtmlText(String(salary || ''))} kr</strong></div></div>`;
   }
