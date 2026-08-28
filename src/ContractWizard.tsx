@@ -65,6 +65,11 @@ export default function ContractWizard({
   const [role, setRole] = useState('');
   const [occupationPct, setOccupationPct] = useState('100');
   const [employmentForm, setEmploymentForm] = useState<'TILLSVIDARE' | 'PROV' | 'VISSTID' | 'TIM'>('TIM');
+  const [workArea, setWorkArea] = useState('Stockholm med omnejd');
+  const [employmentNumber, setEmploymentNumber] = useState('');
+  const [bankAccount, setBankAccount] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
 
   // Timanställning: MAX 1 år, slutdatum auto-räknas från tillträde (start + 1 år − 1 dag)
   const autoTimEnd = (isoStart: string): string => {
@@ -81,12 +86,7 @@ export default function ContractWizard({
     if (employmentForm === 'TIM' && startDate && !endDate) {
       setEndDate(autoTimEnd(startDate));
     }
-  }, [employmentForm, startDate]);
-  const [workArea, setWorkArea] = useState('Stockholm med omnejd');
-  const [employmentNumber, setEmploymentNumber] = useState('');
-  const [bankAccount, setBankAccount] = useState('');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  }, [employmentForm, startDate, endDate]);
   const [probationEndDate, setProbationEndDate] = useState('');
   const [salary, setSalary] = useState('');
   const [hourlyRate, setHourlyRate] = useState('');
