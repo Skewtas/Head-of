@@ -27,6 +27,7 @@ import jobsRouter from '../routes/jobs.js';
 import importRouter from '../routes/import.js';
 import opsRouter from '../routes/ops.js';
 import contractsRouter from '../routes/contracts.js';
+import hrRouter from '../routes/hr.js';
 import { errorMiddleware } from './errors.js';
 
 export function buildHeadofApp(): Express {
@@ -50,6 +51,7 @@ export function buildHeadofApp(): Express {
   app.use('/api/import', importRouter);
   app.use('/api/ops', opsRouter);
   app.use('/api/contracts', contractsRouter);
+  app.use('/api/hr', hrRouter);
 
   app.use('/api', errorMiddleware);
   return app;

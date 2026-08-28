@@ -31,6 +31,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       '20260828_stodona_standard_v4',
       '20260828_stodona_standard_v8',
       '20260828_stodona_standard_v9',
+      '20260828_sick_leave_cases',
     ];
     const applied: string[] = [];
     for (const m of migrations) {

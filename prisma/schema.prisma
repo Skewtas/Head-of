@@ -1158,3 +1158,60 @@ model ContractFile {
 
   @@map("contract_files")
 }
+
+// ============================================================================
+// SJUKFRÅNVARO-UPPFÖLJNING — HR-ärenden vid ovanligt hög eller återkommande
+// sjukfrånvaro. Sensitivt: åtkomst endast för HR/chef/superadmin.
+// ============================================================================
+
+enum SickCaseStatus {
+  NEW                // Just triggad, väntar på HR-granskning
+  UNDER_REVIEW       // HR har öppnat, jobbar med
+  EMAIL1_DRAFTED     // Utkast till omtankesmejl klart
+  EMAIL1_SENT        // Omtankesmejl skickat
+  MEETING_SCHEDULED  // Uppföljningssamtal bokat
+  MEETING_HELD       // Samtal genomfört och dokumenterat
+  EMAIL2_DRAFTED     // Beslut om förstadagsintyg — utkast
+  EMAIL2_SENT        // Beslut skickat, förstadagsintyg aktiverat
+  RESOLVED           // Ärendet avslutat — utveckling positiv
+  DISMISSED          // Ärendet avfärdat (ingen åtgärd behövs)
+}
+
+model SickLeaveCase {
+  id                   Int      @id @default(autoincrement())
+  timewaveEmployeeId   Int      @map("timewave_employee_id")
+  employeeName         String   @map("employee_name")      // denormaliserat för läsvänlighet
+  episodesCount        Int      @map("episodes_count")
+  daysCount            Int      @map("days_count")
+  windowStartDate      DateTime @map("window_start_date")
+  windowEndDate        DateTime @map("window_end_date")
+  status               SickCaseStatus @default(NEW)
+  assignedToClerkId    String?  @map("assigned_to_clerk_id")
+  dismissReason        String?  @map("dismiss_reason") @db.Text
+  notes                String?  @db.Text                    // fri anteckning för HR
+  meetingDate          DateTime? @map("meeting_date")
+  intygStartDate       DateTime? @map("intyg_start_date")   // om beslut om förstadagsintyg
+  intygEndDate         DateTime? @map("intyg_end_date")
+  metadata             Json?                                 // rå data från scanningen
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  events               SickLeaveCaseEvent[]
+
+  @@index([status, createdAt(sort: Desc)])
+  @@index([timewaveEmployeeId, createdAt(sort: Desc)])
+  @@map("sick_leave_cases")
+}
+
+model SickLeaveCaseEvent {
+  id            Int      @id @default(autoincrement())
+  caseId        Int      @map("case_id")
+  case          SickLeaveCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  actorClerkId  String?  @map("actor_clerk_id")
+  action        String                                       // "created" | "opened" | "email1_sent" | "meeting_held" | "intyg_beslut" | ...
+  metadata      Json?
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([caseId, createdAt(sort: Desc)])
+  @@map("sick_leave_case_events")
+}
