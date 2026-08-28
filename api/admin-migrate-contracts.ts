@@ -29,6 +29,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       '20260828_stodona_standard_avtal',
       '20260828_stodona_services_address',
       '20260828_stodona_standard_v4',
+      '20260828_stodona_standard_v8',
     ];
     const applied: string[] = [];
     for (const m of migrations) {

@@ -716,8 +716,15 @@ function buildSubstitutionContext(
     VISSTID: 'Visstidsanställning',
     TIM: 'Timanställning',
   };
+  const formLabelsEn: Record<string, string> = {
+    TILLSVIDARE: 'Permanent employment',
+    PROV: 'Probationary employment',
+    VISSTID: 'Fixed-term employment',
+    TIM: 'Hourly employment',
+  };
   const form = String(emp.employment_form || emp.employmentForm || 'TILLSVIDARE').toUpperCase();
   const employmentFormLabel = formLabels[form] || 'Tillsvidareanställning';
+  const employmentFormLabelEn = formLabelsEn[form] || 'Permanent employment';
 
   const startDate = emp.start_date || emp.startDate || '';
   const endDate = emp.end_date || emp.endDate || '';
@@ -735,7 +742,7 @@ function buildSubstitutionContext(
     formParagraph = `<p>Anställningen är en tillsvidareanställning enligt lagen om anställningsskydd (LAS). Tillträdesdag är <strong>${escapeHtmlText(startDate)}</strong>.</p>`;
   }
 
-  // §10 Lön
+  // §10 Lön (paragraf-varianten för äldre mallar)
   const salary = emp.salary || emp.monthlySalary || '';
   const hourly = emp.hourly_rate || emp.hourlyRate || '';
   let salaryParagraph = '';
@@ -743,6 +750,18 @@ function buildSubstitutionContext(
     salaryParagraph = `Timlön uppgår till <strong>${escapeHtmlText(String(hourly || ''))} kronor per timme</strong>. Semesterersättning om 12 % samt eventuellt OB-tillägg utgår enligt tillämpligt kollektivavtal utöver timlönen.`;
   } else {
     salaryParagraph = `Månadslön uppgår till <strong>${escapeHtmlText(String(salary || ''))} kronor</strong>.`;
+  }
+
+  // Fakta-rad för v8-mallen (helhetsrad — månadslön eller timlön)
+  let salaryRow = '';
+  const rowStyle = 'display:grid;grid-template-columns:210px 1fr;column-gap:24px;padding:10px 0;';
+  const labelStyle = 'font-size:10.5px;letter-spacing:0.1em;text-transform:uppercase;color:#8b8578;font-weight:600;padding-top:3px;';
+  const labelEnStyle = 'display:block;font-size:10px;color:#8b8578;font-weight:500;margin-top:2px;text-transform:none;font-style:italic;';
+  const valStyle = 'font-size:14px;color:#1a1a2e;font-weight:500;';
+  if (form === 'TIM' || (!salary && hourly)) {
+    salaryRow = `<div style="${rowStyle}"><div style="${labelStyle}">Timlön<span style="${labelEnStyle}">Hourly rate</span></div><div style="${valStyle}"><strong>${escapeHtmlText(String(hourly || ''))} kr/tim</strong> · Semesterersättning 12 % utgår utöver timlönen<span style="display:block;font-size:12.5px;color:#8b8578;margin-top:3px;font-style:italic;font-weight:400;"><strong>${escapeHtmlText(String(hourly || ''))} kr/hour</strong> · 12 % vacation compensation added on top</span></div></div>`;
+  } else {
+    salaryRow = `<div style="${rowStyle}"><div style="${labelStyle}">Månadslön<span style="${labelEnStyle}">Monthly salary</span></div><div style="${valStyle}"><strong>${escapeHtmlText(String(salary || ''))} kr</strong></div></div>`;
   }
 
   // §23 Kollektivavtal
@@ -791,10 +810,17 @@ function buildSubstitutionContext(
       noticePeriod: emp.noticePeriod || emp.notice_period || '',
       employment_form: form,
       employment_form_label: employmentFormLabel,
+      employment_form_label_en: employmentFormLabelEn,
+      employment_number: emp.employment_number || emp.employmentNumber || '',
+      bank_account: emp.bank_account || emp.bankAccount || '',
       // Derived HTML — prefix __HTML__ så substitutionen inte escaper
       form_paragraph: '__HTML__' + formParagraph,
       salary_paragraph: '__HTML__' + salaryParagraph,
+      salary_row: '__HTML__' + salaryRow,
       collective_agreement_paragraph: '__HTML__' + collectiveParagraph,
+    },
+    contract: {
+      number: emp.contract_number || 'A-2026-XXXX',
     },
   };
 }

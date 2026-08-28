@@ -66,6 +66,8 @@ export default function ContractWizard({
   const [occupationPct, setOccupationPct] = useState('100');
   const [employmentForm, setEmploymentForm] = useState<'TILLSVIDARE' | 'PROV' | 'VISSTID' | 'TIM'>('TILLSVIDARE');
   const [workArea, setWorkArea] = useState('Stockholm med omnejd');
+  const [employmentNumber, setEmploymentNumber] = useState('');
+  const [bankAccount, setBankAccount] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [probationEndDate, setProbationEndDate] = useState('');
@@ -148,7 +150,11 @@ export default function ContractWizard({
     otherTerms,
     employment_form: employmentForm,
     employmentForm,
-  }), [role, occupationPct, startDate, endDate, probationEndDate, salary, hourlyRate, workplace, workArea, workHours, vacation, noticePeriod, collectiveAgreement, otherTerms, employmentForm]);
+    employment_number: employmentNumber,
+    employmentNumber,
+    bank_account: bankAccount,
+    bankAccount,
+  }), [role, occupationPct, startDate, endDate, probationEndDate, salary, hourlyRate, workplace, workArea, workHours, vacation, noticePeriod, collectiveAgreement, otherTerms, employmentForm, employmentNumber, bankAccount]);
 
   const personCtx = useMemo(() => ({
     firstName, lastName, personalNumber,
@@ -316,6 +322,7 @@ export default function ContractWizard({
               <section>
                 <h4 className="text-[10px] font-bold uppercase tracking-wider text-brand-muted mb-3">Anställningsvillkor</h4>
                 <div className="grid grid-cols-2 gap-3">
+                  <Field label="Anställningsnummer"><input value={employmentNumber} onChange={(e) => setEmploymentNumber(e.target.value)} placeholder="Ex: S-2026-0047" className={inp} /></Field>
                   <Field label="Anställningsform *">
                     <select value={employmentForm} onChange={(e) => setEmploymentForm(e.target.value as any)} className={inp}>
                       <option value="TILLSVIDARE">Tillsvidareanställning</option>
@@ -341,6 +348,7 @@ export default function ContractWizard({
                   {employmentForm === 'TIM' && (
                     <Field label="Timlön (kr) *"><input value={hourlyRate} onChange={(e) => setHourlyRate(e.target.value)} type="number" className={inp} /></Field>
                   )}
+                  <Field label="Bankkonto för lön"><input value={bankAccount} onChange={(e) => setBankAccount(e.target.value)} placeholder="Ex: Nordea 3300 · 12 34 567 890 1" className={inp} /></Field>
                 </div>
                 <Field label="Arbetstid"><input value={workHours} onChange={(e) => setWorkHours(e.target.value)} className={inp} /></Field>
                 <div className="grid grid-cols-2 gap-3 mt-3">
