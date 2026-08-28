@@ -77,7 +77,6 @@ export default function ContractWizard({
   const [workHours, setWorkHours] = useState('Enligt schema, i genomsnitt 40 timmar per helgfri vecka.');
   const [vacation, setVacation] = useState('25 dagar per år enligt semesterlagen.');
   const [noticePeriod, setNoticePeriod] = useState('Enligt LAS.');
-  const [collectiveAgreement, setCollectiveAgreement] = useState('Kollektivavtal Almega Serviceföretagen/Fastighets.');
   const [otherTerms, setOtherTerms] = useState('');
 
   // Steg 2 — mall
@@ -146,7 +145,6 @@ export default function ContractWizard({
     workplace, work_area: workArea || workplace,
     workHours, vacation,
     noticePeriod, notice_period: noticePeriod,
-    collectiveAgreement, collective_agreement: collectiveAgreement,
     otherTerms,
     employment_form: employmentForm,
     employmentForm,
@@ -154,7 +152,7 @@ export default function ContractWizard({
     employmentNumber,
     bank_account: bankAccount,
     bankAccount,
-  }), [role, occupationPct, startDate, endDate, probationEndDate, salary, hourlyRate, workplace, workArea, workHours, vacation, noticePeriod, collectiveAgreement, otherTerms, employmentForm, employmentNumber, bankAccount]);
+  }), [role, occupationPct, startDate, endDate, probationEndDate, salary, hourlyRate, workplace, workArea, workHours, vacation, noticePeriod, otherTerms, employmentForm, employmentNumber, bankAccount]);
 
   const personCtx = useMemo(() => ({
     firstName, lastName, personalNumber,
@@ -351,11 +349,7 @@ export default function ContractWizard({
                   <Field label="Bankkonto för lön"><input value={bankAccount} onChange={(e) => setBankAccount(e.target.value)} placeholder="Ex: Nordea 3300 · 12 34 567 890 1" className={inp} /></Field>
                 </div>
                 <Field label="Arbetstid"><input value={workHours} onChange={(e) => setWorkHours(e.target.value)} className={inp} /></Field>
-                <div className="grid grid-cols-2 gap-3 mt-3">
-                  <Field label="Semester"><input value={vacation} onChange={(e) => setVacation(e.target.value)} className={inp} /></Field>
-                  <Field label="Uppsägningstid"><input value={noticePeriod} onChange={(e) => setNoticePeriod(e.target.value)} className={inp} /></Field>
-                </div>
-                <Field label="Kollektivavtal"><input value={collectiveAgreement} onChange={(e) => setCollectiveAgreement(e.target.value)} className={inp} /></Field>
+                <Field label="Semester"><input value={vacation} onChange={(e) => setVacation(e.target.value)} className={inp} /></Field>
                 <Field label="Övriga villkor"><textarea value={otherTerms} onChange={(e) => setOtherTerms(e.target.value)} rows={3} className={`${inp} resize-none`} /></Field>
               </section>
             </div>

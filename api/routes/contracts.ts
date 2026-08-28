@@ -735,7 +735,7 @@ function buildSubstitutionContext(
   if (form === 'PROV') {
     formParagraph = `<p>Anställningen är en provanställning enligt 6 § lagen om anställningsskydd (LAS). Provanställningen gäller från och med <strong>${escapeHtmlText(startDate)}</strong> till och med <strong>${escapeHtmlText(probEnd)}</strong>. Om provanställningen inte avbryts senast två veckor före provperiodens utgång övergår anställningen automatiskt i en tillsvidareanställning. Både Arbetsgivaren och Arbetstagaren har rätt att avbryta provanställningen utan angivande av skäl med tillämpning av gällande varselregler.</p>`;
   } else if (form === 'VISSTID') {
-    formParagraph = `<p>Anställningen är en visstidsanställning enligt gällande arbetsrättsliga regler. Anställningen gäller från och med <strong>${escapeHtmlText(startDate)}</strong> till och med <strong>${escapeHtmlText(endDate)}</strong>, då den upphör utan uppsägning. Anställningen kan inte avbrytas i förtid annat än enligt gällande lag och kollektivavtal.</p>`;
+    formParagraph = `<p>Anställningen är en visstidsanställning enligt gällande arbetsrättsliga regler. Anställningen gäller från och med <strong>${escapeHtmlText(startDate)}</strong> till och med <strong>${escapeHtmlText(endDate)}</strong>, då den upphör utan uppsägning. Anställningen kan inte avbrytas i förtid annat än enligt gällande lag.</p>`;
   } else if (form === 'TIM') {
     formParagraph = `<p>Anställningen är en timanställning (intermittent). Arbete utförs efter överenskommelse i varje enskilt fall. Arbetstagaren är inte skyldig att stå till Arbetsgivarens förfogande utanför de arbetstillfällen som överenskommits. Tillträdesdag är <strong>${escapeHtmlText(startDate)}</strong>.</p>`;
   } else {
@@ -747,7 +747,7 @@ function buildSubstitutionContext(
   const hourly = emp.hourly_rate || emp.hourlyRate || '';
   let salaryParagraph = '';
   if (form === 'TIM' || (!salary && hourly)) {
-    salaryParagraph = `Timlön uppgår till <strong>${escapeHtmlText(String(hourly || ''))} kronor per timme</strong>. Semesterersättning om 12 % samt eventuellt OB-tillägg utgår enligt tillämpligt kollektivavtal utöver timlönen.`;
+    salaryParagraph = `Timlön uppgår till <strong>${escapeHtmlText(String(hourly || ''))} kronor per timme</strong>. Semesterersättning om 12 % utgår utöver timlönen.`;
   } else {
     salaryParagraph = `Månadslön uppgår till <strong>${escapeHtmlText(String(salary || ''))} kronor</strong>.`;
   }
@@ -764,11 +764,8 @@ function buildSubstitutionContext(
     salaryRow = `<div style="${rowStyle}"><div style="${labelStyle}">Månadslön<span style="${labelEnStyle}">Monthly salary</span></div><div style="${valStyle}"><strong>${escapeHtmlText(String(salary || ''))} kr</strong></div></div>`;
   }
 
-  // §23 Kollektivavtal
-  const collective = String(emp.collective_agreement || emp.collectiveAgreement || '').trim();
-  const collectiveParagraph = collective
-    ? `Följande kollektivavtal tillämpas på anställningen: <strong>${escapeHtmlText(collective)}</strong>. Vid motstridighet mellan detta avtal och kollektivavtalet har kollektivavtalet företräde i den utsträckning kollektivavtalets bestämmelser är tvingande.`
-    : `Något kollektivavtal tillämpas för närvarande inte på anställningen.`;
+  // (Tidigare § om kollektivavtal — Stodona har inget kollektivavtal.)
+  const collectiveParagraph = '';
 
   return {
     today: new Date().toLocaleDateString('sv-SE'),
