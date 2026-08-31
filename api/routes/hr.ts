@@ -16,6 +16,7 @@ import { z } from 'zod';
 import { prisma } from '../_lib/prisma.js';
 import { requireAuth, getUserId } from '../_lib/auth.js';
 import { getTimewaveToken, forceRefreshTimewaveToken } from '../_lib/timewaveAuth.js';
+import { clerkClient } from '@clerk/express';
 
 const router = express.Router();
 router.use(requireAuth);
@@ -36,21 +37,58 @@ const SUPERADMIN_EMAILS = (
   .map((s) => s.trim().toLowerCase())
   .filter(Boolean);
 
-function getUserEmail(req: Request): string | null {
-  const email =
-    (req as any).auth?.sessionClaims?.email ??
-    (req as any).auth?.user?.emailAddresses?.[0]?.emailAddress ??
-    (req as any).userEmail;
-  return email ? String(email).toLowerCase() : null;
+/**
+ * Clerk-express: req.auth kan vara en funktion (nyare versioner) ELLER ett
+ * objekt (äldre). Hämta sessionClaims robust.
+ */
+function getSessionClaims(req: Request): any {
+  const a = (req as any).auth;
+  if (!a) return null;
+  if (typeof a === 'function') {
+    try { return a().sessionClaims ?? null; } catch { return null; }
+  }
+  return a.sessionClaims ?? null;
 }
-function requireHR(req: Request, res: Response): boolean {
-  const email = getUserEmail(req);
+
+/**
+ * Email hämtas i denna ordning:
+ * 1. sessionClaims.email (om JWT-templaten inkluderar den)
+ * 2. sessionClaims.primary_email_address / primaryEmailAddress
+ * 3. Slå upp användaren via Clerk API (kostar 1 request men alltid rätt)
+ */
+async function getUserEmail(req: Request): Promise<string | null> {
+  const claims = getSessionClaims(req);
+  const claimEmail =
+    claims?.email ??
+    claims?.primary_email_address ??
+    claims?.primaryEmailAddress ??
+    (req as any).userEmail;
+  if (claimEmail) return String(claimEmail).toLowerCase();
+
+  const userId = getUserId(req);
+  if (!userId) return null;
+  try {
+    const u = await clerkClient.users.getUser(userId);
+    const primary =
+      u.emailAddresses?.find((e: any) => e.id === u.primaryEmailAddressId)?.emailAddress ??
+      u.emailAddresses?.[0]?.emailAddress ??
+      null;
+    return primary ? String(primary).toLowerCase() : null;
+  } catch {
+    return null;
+  }
+}
+
+async function requireHR(req: Request, res: Response): Promise<boolean> {
+  const email = await getUserEmail(req);
   if (email && (HR_EMAILS.includes(email) || SUPERADMIN_EMAILS.includes(email))) {
     return true;
   }
   res.status(403).json({
     error: 'Åtkomst nekad — endast HR.',
-    debug: email ? `Din email (${email}) finns inte i HR_ADMIN_EMAILS.` : 'Ingen email hittades i din session.',
+    debug: email
+      ? `Din email (${email}) finns inte i HR_ADMIN_EMAILS-listan.`
+      : 'Ingen email kunde hämtas från din Clerk-session.',
   });
   return false;
 }
@@ -73,7 +111,7 @@ const SICK_SERVICE_ID = 3;
  * Returnerar sammanställning inklusive alla anställda under tröskel.
  */
 router.post('/sick-leave/scan', async (req, res) => {
-  if (!requireHR(req, res)) return;
+  if (!(await requireHR(req, res))) return;
 
   const pad = (n: number) => String(n).padStart(2, '0');
   const today = new Date();
@@ -256,7 +294,7 @@ router.post('/sick-leave/scan', async (req, res) => {
 
 // ─── LISTA CASES ───────────────────────────────────────────────────────
 router.get('/sick-leave/cases', async (req, res) => {
-  if (!requireHR(req, res)) return;
+  if (!(await requireHR(req, res))) return;
   const q = z
     .object({
       status: z.string().optional(),
@@ -273,7 +311,7 @@ router.get('/sick-leave/cases', async (req, res) => {
 
 // ─── HÄMTA CASE + HÄNDELSER ────────────────────────────────────────────
 router.get('/sick-leave/cases/:id', async (req, res) => {
-  if (!requireHR(req, res)) return;
+  if (!(await requireHR(req, res))) return;
   const id = Number(req.params.id);
   const c = await prisma.sickLeaveCase.findUnique({
     where: { id },
@@ -285,7 +323,7 @@ router.get('/sick-leave/cases/:id', async (req, res) => {
 
 // ─── UPPDATERA CASE (avfärda / anteckning / status) ────────────────────
 router.put('/sick-leave/cases/:id', async (req, res) => {
-  if (!requireHR(req, res)) return;
+  if (!(await requireHR(req, res))) return;
   const id = Number(req.params.id);
   const body = z
     .object({
@@ -332,7 +370,7 @@ router.put('/sick-leave/cases/:id', async (req, res) => {
 
 // ─── EMAIL-FÖRHANDSVISNING (Fas 1: bara visa, inte skicka) ─────────────
 router.get('/sick-leave/cases/:id/email-preview', async (req, res) => {
-  if (!requireHR(req, res)) return;
+  if (!(await requireHR(req, res))) return;
   const id = Number(req.params.id);
   const which = String(req.query.which || 'email1');
   const c = await prisma.sickLeaveCase.findUnique({ where: { id } });
