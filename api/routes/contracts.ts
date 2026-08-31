@@ -420,34 +420,120 @@ router.get('/companies', async (_req, res) => {
 
 // ─── ANSTÄLLDA UTAN AKTIVT ANSTÄLLNINGSAVTAL ───────────────────────────
 /**
- * Hämtar aktiva Timewave-anställda och korsreferar mot ContractPersons +
- * aktiva avtal. Returnerar dem som saknar ett aktivt/signerat anställnings-
- * kontrakt.
+ * En anställd räknas som täckt om det finns MINST ETT anställningsavtal
+ * som är kopplat till hen OCH aktivt enligt Stodona-reglerna:
+ *
+ *   Kopplingsordning (starkaste först):
+ *     1. ContractPerson.timewaveEmployeeId === employee.id
+ *     2. Personnummer (normaliserat, 10-12 siffror)
+ *     3. Email (case-insensitive)
+ *     4. Normaliserat för- + efternamn
+ *
+ *   Aktivt = status ∈ AKTIVA_STATUSAR OCH startdatum-passerat (eller null)
+ *            OCH slutdatum-ej-passerat (eller null). Datumjämförelse sker
+ *            på DATUM-nivå (Europe/Stockholm) för att slippa tid/tidszon.
+ *
+ * Endpointen returnerar per anställd:
+ *   - hasActiveContract: bool
+ *   - reason: NO_CONTRACT | NOT_YET_STARTED | EXPIRED | DRAFT_ONLY | OTHER
+ *   - matchedBy: TIMEWAVE_ID | PNR | EMAIL | NAME | null
+ *   - candidates[]: alla kontrakt vi hittade (även ej-aktiva) med orsak
+ *
+ * Extra: ?debug=1 returnerar samma struktur för ALLA anställda (även täckta),
+ * så man kan se hela kopplingsanalysen.
  */
+
+const EMPLOYMENT_CATEGORIES = [
+  'ANSTALLNINGSAVTAL',
+  'PROVANSTALLNING',
+  'TILLSVIDAREANSTALLNING',
+  'VISSTIDSANSTALLNING',
+  'TIMANSTALLNING',
+] as const;
+
+// Statusar som räknas som "avtal på plats" (om datumen stämmer).
+// SIGNED + ACTIVE = klart och giltigt.
+// EXPIRING_SOON = fortfarande giltigt, bara flaggat för snart utgång.
+// SENT + PARTIALLY_SIGNED = utskickat för signering (räknas som "kontrakt finns").
+const ACTIVE_STATUSES = new Set([
+  'SIGNED',
+  'ACTIVE',
+  'EXPIRING_SOON',
+  'SENT',
+  'PARTIALLY_SIGNED',
+]);
+// Draft/pre-signing — kontrakt finns men är inte klart att räkna som täckning.
+const DRAFT_STATUSES = new Set(['DRAFT', 'PENDING_APPROVAL', 'READY_FOR_SIGNING']);
+// Räknas som avslutade (visas inte som "väntande" utan som "expired").
+const CLOSED_STATUSES = new Set(['EXPIRED', 'TERMINATED', 'ARCHIVED']);
+
+/** YYYY-MM-DD-sträng i Europe/Stockholm — undviker tid + tidszon-bugs. */
+function ymdSthlm(d: Date | string | null | undefined): string | null {
+  if (!d) return null;
+  const dt = d instanceof Date ? d : new Date(d);
+  if (isNaN(dt.getTime())) return null;
+  // sv-SE ger "YYYY-MM-DD" med Europe/Stockholm när tz sätts explicit
+  const parts = new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'Europe/Stockholm',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(dt);
+  const y = parts.find((p) => p.type === 'year')?.value;
+  const m = parts.find((p) => p.type === 'month')?.value;
+  const day = parts.find((p) => p.type === 'day')?.value;
+  return y && m && day ? `${y}-${m}-${day}` : null;
+}
+
+type ContractCandidate = {
+  id: number;
+  title: string;
+  category: string;
+  status: string;
+  startDate: string | null;
+  endDate: string | null;
+  matchMethod: 'TIMEWAVE_ID' | 'PNR' | 'EMAIL' | 'NAME';
+  isActive: boolean;
+  activeReason?: string; // varför aktiv / inte aktiv
+};
+
+function assessContract(
+  c: { status: string; startDate: Date | null; endDate: Date | null },
+  todayYmd: string,
+): { isActive: boolean; reason: string } {
+  if (CLOSED_STATUSES.has(c.status)) return { isActive: false, reason: `Status ${c.status}` };
+  if (DRAFT_STATUSES.has(c.status)) return { isActive: false, reason: `Ej färdigsignerat (${c.status})` };
+  if (!ACTIVE_STATUSES.has(c.status)) return { isActive: false, reason: `Okänd status: ${c.status}` };
+
+  const startYmd = ymdSthlm(c.startDate);
+  const endYmd = ymdSthlm(c.endDate);
+  if (startYmd && startYmd > todayYmd) return { isActive: false, reason: `Startar ${startYmd} (ej börjat)` };
+  if (endYmd && endYmd < todayYmd) return { isActive: false, reason: `Löpte ut ${endYmd}` };
+  return { isActive: true, reason: 'Signerat + giltiga datum' };
+}
+
 router.get('/missing-employees', async (req, res) => {
   try {
+    const debug = req.query.debug === '1';
     const baseUrl = process.env.APP_URL || `https://${req.headers.host}`;
-    // Fetcha via vår Timewave-proxy — går genom befintlig token-refresh
+
     const r = await fetch(`${baseUrl}/api/timewave/employees?page[size]=200`);
     if (!r.ok) return res.status(502).json({ error: 'Kunde inte hämta anställda från Timewave' });
     const data = await r.json();
-    const employees: any[] = (data.data || []).filter((e: any) => !e.deleted && e.status === 'active');
+    const employees: any[] = (data.data || []).filter(
+      (e: any) => !e.deleted && e.status === 'active',
+    );
 
-    // Hämta alla aktiva anställningsavtal + linked person
-    const EMPLOYMENT_CATEGORIES = [
-      'ANSTALLNINGSAVTAL',
-      'PROVANSTALLNING',
-      'TILLSVIDAREANSTALLNING',
-      'VISSTIDSANSTALLNING',
-      'TIMANSTALLNING',
-    ];
-    const activeContracts = await prisma.contract.findMany({
-      where: {
-        status: { in: ['ACTIVE', 'SIGNED', 'SENT', 'PARTIALLY_SIGNED'] },
-        category: { in: EMPLOYMENT_CATEGORIES as any },
-      },
+    // Hämta alla anställningsavtal — INTE bara "aktiva" — så vi kan visa
+    // utgångna/kommande som "vi hittade men diskvalificerade" per person.
+    const allContracts = await prisma.contract.findMany({
+      where: { category: { in: EMPLOYMENT_CATEGORIES as any } },
       select: {
         id: true,
+        title: true,
+        category: true,
+        status: true,
+        startDate: true,
         endDate: true,
         person: {
           select: {
@@ -460,34 +546,87 @@ router.get('/missing-employees', async (req, res) => {
           },
         },
       },
+      orderBy: { startDate: 'desc' },
     });
 
-    const now = Date.now();
-    const covered = new Set<number>();
-    const nameKeys = new Map<string, number>();  // normalized name → contract count
-    const emailKeys = new Map<string, number>();
-    const personalKeys = new Map<string, number>();
-    for (const c of activeContracts) {
-      // Räknas bara som "aktivt" om det inte är utgånget
-      if (c.endDate && c.endDate.getTime() < now) continue;
+    // Bygg lookup-tabeller på ContractPerson så vi kan matcha snabbt.
+    // Ett kontrakt utan person kan inte matchas på personens fält.
+    type ContractRow = (typeof allContracts)[number];
+    const byTimewaveId = new Map<number, ContractRow[]>();
+    const byPnr = new Map<string, ContractRow[]>();
+    const byEmail = new Map<string, ContractRow[]>();
+    const byName = new Map<string, ContractRow[]>();
+    for (const c of allContracts) {
       if (!c.person) continue;
-      if (c.person.timewaveEmployeeId) covered.add(c.person.timewaveEmployeeId);
-      const nk = normalizeName(c.person.firstName, c.person.lastName);
-      if (nk) nameKeys.set(nk, (nameKeys.get(nk) ?? 0) + 1);
-      if (c.person.email) emailKeys.set(c.person.email.toLowerCase(), (emailKeys.get(c.person.email.toLowerCase()) ?? 0) + 1);
-      if (c.person.personalNumber) personalKeys.set(normalizePnr(c.person.personalNumber), 1);
+      const p = c.person;
+      if (p.timewaveEmployeeId) {
+        const arr = byTimewaveId.get(p.timewaveEmployeeId) ?? [];
+        arr.push(c); byTimewaveId.set(p.timewaveEmployeeId, arr);
+      }
+      if (p.personalNumber) {
+        const k = normalizePnr(p.personalNumber);
+        if (k) {
+          const arr = byPnr.get(k) ?? [];
+          arr.push(c); byPnr.set(k, arr);
+        }
+      }
+      if (p.email) {
+        const k = p.email.toLowerCase().trim();
+        const arr = byEmail.get(k) ?? [];
+        arr.push(c); byEmail.set(k, arr);
+      }
+      const nk = normalizeName(p.firstName, p.lastName);
+      if (nk) {
+        const arr = byName.get(nk) ?? [];
+        arr.push(c); byName.set(nk, arr);
+      }
     }
 
-    const missing = employees
-      .filter((e) => {
-        if (covered.has(e.id)) return false;
-        const nk = normalizeName(e.first_name || '', e.last_name || '');
-        if (nk && nameKeys.get(nk)) return false;
-        if (e.email && emailKeys.get(String(e.email).toLowerCase())) return false;
-        if (e.personal_number && personalKeys.get(normalizePnr(String(e.personal_number)))) return false;
-        return true;
-      })
-      .map((e) => ({
+    const todayYmd = ymdSthlm(new Date())!;
+
+    const analyses = employees.map((e) => {
+      // Samla kandidat-kontrakt via kopplingsordningen — starkast först.
+      // Ett kontrakt kan matchas flera vägar; behåll starkaste matchMethod.
+      const seen = new Map<number, ContractCandidate>();
+      const addCandidate = (c: ContractRow, method: ContractCandidate['matchMethod']) => {
+        if (seen.has(c.id)) return; // starkare metod redan registrerad
+        const a = assessContract(c, todayYmd);
+        seen.set(c.id, {
+          id: c.id,
+          title: c.title,
+          category: c.category,
+          status: c.status,
+          startDate: ymdSthlm(c.startDate),
+          endDate: ymdSthlm(c.endDate),
+          matchMethod: method,
+          isActive: a.isActive,
+          activeReason: a.reason,
+        });
+      };
+      for (const c of byTimewaveId.get(e.id) ?? []) addCandidate(c, 'TIMEWAVE_ID');
+      if (e.personal_number) {
+        for (const c of byPnr.get(normalizePnr(String(e.personal_number))) ?? []) addCandidate(c, 'PNR');
+      }
+      if (e.email) {
+        for (const c of byEmail.get(String(e.email).toLowerCase().trim()) ?? []) addCandidate(c, 'EMAIL');
+      }
+      const nk = normalizeName(e.first_name || '', e.last_name || '');
+      if (nk) for (const c of byName.get(nk) ?? []) addCandidate(c, 'NAME');
+
+      const candidates = Array.from(seen.values());
+      const activeOnes = candidates.filter((c) => c.isActive);
+      const hasActive = activeOnes.length > 0;
+      const matchedBy: string | null = hasActive ? activeOnes[0].matchMethod : null;
+
+      let reason: string;
+      if (hasActive) reason = 'OK';
+      else if (candidates.length === 0) reason = 'NO_CONTRACT';
+      else if (candidates.some((c) => c.startDate && c.startDate > todayYmd && !CLOSED_STATUSES.has(c.status))) reason = 'NOT_YET_STARTED';
+      else if (candidates.every((c) => c.endDate && c.endDate < todayYmd)) reason = 'EXPIRED';
+      else if (candidates.some((c) => DRAFT_STATUSES.has(c.status))) reason = 'DRAFT_ONLY';
+      else reason = 'OTHER';
+
+      return {
         timewaveEmployeeId: e.id,
         firstName: e.first_name || '',
         lastName: e.last_name || '',
@@ -496,13 +635,24 @@ router.get('/missing-employees', async (req, res) => {
         personalNumber: e.personal_number || null,
         startDate: e.employee_startdate || null,
         occupation: e.base_contract?.occupation ?? null,
-      }))
+        hasActiveContract: hasActive,
+        matchedBy,
+        reason,
+        candidates: candidates.sort((a, b) => (b.startDate || '').localeCompare(a.startDate || '')),
+      };
+    });
+
+    const missing = analyses
+      .filter((a) => !a.hasActiveContract)
       .sort((a, b) => (a.lastName + a.firstName).localeCompare(b.lastName + b.firstName));
 
     res.json({
+      todayYmd,
       totalActive: employees.length,
-      missing,
+      withActive: analyses.length - missing.length,
       missingCount: missing.length,
+      missing,
+      ...(debug ? { all: analyses } : {}),
     });
   } catch (err: any) {
     console.error('[missing-employees] failed:', err.message);
@@ -511,13 +661,22 @@ router.get('/missing-employees', async (req, res) => {
 });
 
 function normalizeName(first: string, last: string): string {
-  const n = `${first} ${last}`.toLowerCase().trim()
+  const n = `${first || ''} ${last || ''}`.toLowerCase().trim()
     .replace(/[åä]/g, 'a').replace(/ö/g, 'o').replace(/[éè]/g, 'e')
+    .replace(/[^a-z\s-]/g, '')  // ta bort specialtecken utom mellanslag/bindestreck
     .replace(/\s+/g, ' ');
   return n;
 }
 function normalizePnr(s: string): string {
-  return s.replace(/[^0-9]/g, '');
+  const digits = s.replace(/[^0-9]/g, '');
+  // 10-siffrigt (YYMMDDXXXX) → gör om till 12 (antagen 19/20-prefix) för konsekvens
+  if (digits.length === 10) {
+    const yy = parseInt(digits.slice(0, 2), 10);
+    // Enkel heuristik: >30 → 19xx, annars 20xx. Stodona har vuxna anställda.
+    const century = yy > 30 ? '19' : '20';
+    return century + digits;
+  }
+  return digits;
 }
 
 // ─── UPLOAD EXISTING CONTRACT (PDF/DOCX) ───────────────────────────────
