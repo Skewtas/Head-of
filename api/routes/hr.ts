@@ -20,7 +20,18 @@ import { getTimewaveToken, forceRefreshTimewaveToken } from '../_lib/timewaveAut
 const router = express.Router();
 router.use(requireAuth);
 
-const HR_EMAILS = (process.env.HR_ADMIN_EMAILS || 'mikaela.wigert@stodona.se')
+const HR_EMAILS = (
+  process.env.HR_ADMIN_EMAILS ||
+  'mikaela.wigert@stodona.se,mikaela.wigert@gmail.com,mikaela@stodona.se'
+)
+  .split(',')
+  .map((s) => s.trim().toLowerCase())
+  .filter(Boolean);
+
+// Contracts-superadmin faller alltid tillbaka på HR-access (samma personer).
+const SUPERADMIN_EMAILS = (
+  process.env.CONTRACT_SUPERADMIN_EMAILS || 'mikaela.wigert@stodona.se'
+)
   .split(',')
   .map((s) => s.trim().toLowerCase())
   .filter(Boolean);
@@ -34,11 +45,14 @@ function getUserEmail(req: Request): string | null {
 }
 function requireHR(req: Request, res: Response): boolean {
   const email = getUserEmail(req);
-  if (!email || !HR_EMAILS.includes(email)) {
-    res.status(403).json({ error: 'Åtkomst nekad — endast HR.' });
-    return false;
+  if (email && (HR_EMAILS.includes(email) || SUPERADMIN_EMAILS.includes(email))) {
+    return true;
   }
-  return true;
+  res.status(403).json({
+    error: 'Åtkomst nekad — endast HR.',
+    debug: email ? `Din email (${email}) finns inte i HR_ADMIN_EMAILS.` : 'Ingen email hittades i din session.',
+  });
+  return false;
 }
 
 // ─── TRÖSKLAR ───────────────────────────────────────────────────────────

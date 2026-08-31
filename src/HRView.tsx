@@ -91,7 +91,7 @@ export default function HRView() {
       const r = await api<{ cases: Case[] }>('/api/hr/sick-leave/cases');
       setCases(r.cases || []);
     } catch (e: any) {
-      if (String(e?.message || '').includes('403')) setAccessDenied(true);
+      if (e?.status === 403) setAccessDenied(true);
     } finally {
       setLoading(false);
     }
@@ -115,7 +115,9 @@ export default function HRView() {
       setScanResult(r);
       await load();
     } catch (e: any) {
-      alert('Skanning misslyckades: ' + (e?.message || 'okänt fel'));
+      const debug = e?.body?.debug ? `\n\n(${e.body.debug})` : '';
+      alert('Skanning misslyckades: ' + (e?.message || 'okänt fel') + debug);
+      if (e?.status === 403) setAccessDenied(true);
     } finally {
       setScanning(false);
     }
