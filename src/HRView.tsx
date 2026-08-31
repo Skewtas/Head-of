@@ -132,6 +132,19 @@ export default function HRView() {
           Sjukfrånvaro är känsligt och begränsat till HR-behöriga. Kontakta systemadministratör
           för att lägga till din e-postadress i <code className="bg-gray-100 px-1 rounded">HR_ADMIN_EMAILS</code>.
         </p>
+        <button
+          onClick={async () => {
+            try {
+              const r = await api<any>('/api/hr/whoami');
+              alert(JSON.stringify(r, null, 2));
+            } catch (e: any) {
+              alert('Whoami misslyckades: ' + (e?.message || e));
+            }
+          }}
+          className="mt-6 text-xs px-3 py-1.5 rounded border border-gray-300 text-brand-muted hover:bg-gray-50"
+        >
+          Debug — vad ser servern om mig?
+        </button>
       </div>
     );
   }

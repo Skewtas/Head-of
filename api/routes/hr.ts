@@ -93,6 +93,43 @@ async function requireHR(req: Request, res: Response): Promise<boolean> {
   return false;
 }
 
+// ─── DEBUG (visar vad backend hämtar om användaren) ────────────────────
+// Kräver bara att man är inloggad — INTE HR. Så man kan felsöka access.
+router.get('/whoami', async (req, res) => {
+  const userId = getUserId(req);
+  const claims = getSessionClaims(req);
+  let clerkUser: any = null;
+  let clerkError: string | null = null;
+  if (userId) {
+    try {
+      const u = await clerkClient.users.getUser(userId);
+      clerkUser = {
+        id: u.id,
+        primaryEmailAddressId: u.primaryEmailAddressId,
+        emailAddresses: u.emailAddresses?.map((e: any) => ({ id: e.id, email: e.emailAddress })),
+      };
+    } catch (e: any) {
+      clerkError = e?.message || String(e);
+    }
+  }
+  const resolvedEmail = await getUserEmail(req);
+  res.json({
+    userId,
+    resolvedEmail,
+    isInHrList: !!(resolvedEmail && (HR_EMAILS.includes(resolvedEmail) || SUPERADMIN_EMAILS.includes(resolvedEmail))),
+    hrEmails: HR_EMAILS,
+    superadminEmails: SUPERADMIN_EMAILS,
+    sessionClaims: claims,
+    clerkUser,
+    clerkError,
+    envSet: {
+      HR_ADMIN_EMAILS: !!process.env.HR_ADMIN_EMAILS,
+      CONTRACT_SUPERADMIN_EMAILS: !!process.env.CONTRACT_SUPERADMIN_EMAILS,
+      CLERK_SECRET_KEY: !!process.env.CLERK_SECRET_KEY,
+    },
+  });
+});
+
 // ─── TRÖSKLAR ───────────────────────────────────────────────────────────
 // Rehabregeln: 6 sjuktillfällen på 12 månader → arbetsgivare måste utreda.
 // Vi flaggar även 4-5 tillfällen på 12 mån (varning) och >21 dagar totalt.
