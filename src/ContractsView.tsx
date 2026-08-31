@@ -91,6 +91,9 @@ export default function ContractsView() {
   const [wizardOpen, setWizardOpen] = useState(false);
   const [missing, setMissing] = useState<{
     totalActive: number;
+    totalRaw?: number;
+    excludedCount?: number;
+    excludedNames?: string[];
     withActive: number;
     missing: any[];
     missingCount: number;
@@ -103,7 +106,7 @@ export default function ContractsView() {
       api<Stats>('/api/contracts/stats').catch(() => null),
       api<{ data: Contract[]; isSuperadmin: boolean }>('/api/contracts').catch(() => ({ data: [], isSuperadmin: false })),
       api<{ id: number; name: string }[]>('/api/contracts/companies').catch(() => []),
-      api<{ totalActive: number; withActive: number; missing: any[]; missingCount: number; todayYmd: string }>('/api/contracts/missing-employees').catch(() => null),
+      api<{ totalActive: number; totalRaw?: number; excludedCount?: number; excludedNames?: string[]; withActive: number; missing: any[]; missingCount: number; todayYmd: string }>('/api/contracts/missing-employees').catch(() => null),
     ]);
     if (s) setStats(s);
     setContracts(list.data);
@@ -202,11 +205,15 @@ export default function ContractsView() {
             <AlertTriangle className="w-5 h-5 text-red-700 flex-shrink-0 mt-0.5" />
             <div className="flex-1">
               <h3 className="text-sm font-semibold text-red-900">
-                {missing.missingCount} anställd{missing.missingCount === 1 ? '' : 'a'} utan aktivt anställningsavtal
+                {missing.missingCount} anställd{missing.missingCount === 1 ? '' : 'a'} saknar registrerat avtal i systemet
               </h3>
               <p className="text-xs text-red-700/80 mt-0.5">
-                {missing.withActive} av {missing.totalActive} aktiva Timewave-anställda har giltigt avtal per {missing.todayYmd}.
-                Klicka på en rad för att se varför den flaggas.
+                {missing.withActive} av {missing.totalActive} aktiva Timewave-anställda har giltigt avtal registrerat i systemet per {missing.todayYmd}.
+                {missing.excludedCount ? ` ${missing.excludedCount} filtrerad${missing.excludedCount === 1 ? '' : 'e'} bort (dummies + slutat: ${missing.excludedNames?.join(', ')}).` : ''}
+                {' '}Klicka på en rad för att se detaljer.
+              </p>
+              <p className="text-[11px] text-red-700/60 mt-1 italic">
+                Har personen ett pappersavtal? Klicka <strong>Ladda upp befintligt</strong> uppe till höger för att lägga in en scan.
               </p>
             </div>
           </div>
@@ -281,7 +288,13 @@ export default function ContractsView() {
                         </div>
                       )}
 
-                      <div className="pt-1">
+                      <div className="pt-1 flex gap-2">
+                        <button
+                          onClick={() => setUploadOpen(true)}
+                          className="text-xs px-3 py-1 bg-white border border-red-300 text-red-700 rounded hover:bg-red-50"
+                        >
+                          Ladda upp befintligt
+                        </button>
                         <button
                           onClick={() => setWizardOpen(true)}
                           className="text-xs px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700"

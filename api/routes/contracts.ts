@@ -451,6 +451,19 @@ const EMPLOYMENT_CATEGORIES = [
   'TIMANSTALLNING',
 ] as const;
 
+// Timewave-poster som INTE är riktiga anställda: dummies för avbokning,
+// tidigare anställda som lever kvar i systemet, och användaren själv.
+// Samma lista som staff-underfilled + extra dummies.
+const EXCLUDE_NAME_SUBSTRINGS = [
+  'tenita',
+  'laila',
+  'erik näf',
+  'luisa fernanda',
+  'mikaela wigert',
+  'aa -',              // "AA - Avbok som debiteras"
+  'avbok som',
+];
+
 // Statusar som räknas som "avtal på plats" (om datumen stämmer).
 // SIGNED + ACTIVE = klart och giltigt.
 // EXPIRING_SOON = fortfarande giltigt, bara flaggat för snart utgång.
@@ -571,9 +584,20 @@ router.get('/missing-employees', async (req, res) => {
     const r = await fetch(`${baseUrl}/api/timewave/employees?page[size]=200`);
     if (!r.ok) return res.status(502).json({ error: 'Kunde inte hämta anställda från Timewave' });
     const data = await r.json();
-    const employees: any[] = (data.data || []).filter(
+    const rawEmployees: any[] = (data.data || []).filter(
       (e: any) => !e.deleted && e.status === 'active',
     );
+    // Exkludera dummies + tidigare anställda (samma logik som staff-underfilled).
+    const excluded: any[] = [];
+    const employees: any[] = [];
+    for (const e of rawEmployees) {
+      const name = `${e.first_name || ''} ${e.last_name || ''}`.toLowerCase();
+      if (EXCLUDE_NAME_SUBSTRINGS.some((s) => name.includes(s))) {
+        excluded.push({ id: e.id, name: `${e.first_name} ${e.last_name}`.trim() });
+        continue;
+      }
+      employees.push(e);
+    }
 
     // Hämta alla anställningsavtal — INTE bara "aktiva" — så vi kan visa
     // utgångna/kommande som "vi hittade men diskvalificerade" per person.
@@ -700,6 +724,9 @@ router.get('/missing-employees', async (req, res) => {
     res.json({
       todayYmd,
       totalActive: employees.length,
+      totalRaw: rawEmployees.length,
+      excludedCount: excluded.length,
+      excludedNames: excluded.map((e) => e.name),
       withActive: analyses.length - missing.length,
       missingCount: missing.length,
       missing,
