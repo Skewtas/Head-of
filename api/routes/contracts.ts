@@ -512,6 +512,57 @@ function assessContract(
   return { isActive: true, reason: 'Signerat + giltiga datum' };
 }
 
+// ─── DIAGNOS-endpoint — se datakvalitet på ContractPersons ─────────────
+router.get('/missing-employees/diagnose', async (_req, res) => {
+  try {
+    const persons = await prisma.contractPerson.findMany({
+      select: {
+        id: true, firstName: true, lastName: true, email: true,
+        personalNumber: true, timewaveEmployeeId: true,
+        contracts: { select: { id: true, status: true, category: true } },
+      },
+    });
+    const totalPersons = persons.length;
+    const withTimewaveId = persons.filter((p) => p.timewaveEmployeeId != null).length;
+    const withPnr = persons.filter((p) => !!p.personalNumber && p.personalNumber.length >= 10).length;
+    const withEmail = persons.filter((p) => !!p.email).length;
+    const withName = persons.filter((p) => !!p.firstName && !!p.lastName).length;
+    const withEmploymentContract = persons.filter((p) =>
+      p.contracts.some((c) => EMPLOYMENT_CATEGORIES.includes(c.category as any)),
+    ).length;
+
+    // Sample: första 5 personerna med anställningsavtal
+    const sample = persons
+      .filter((p) => p.contracts.some((c) => EMPLOYMENT_CATEGORIES.includes(c.category as any)))
+      .slice(0, 5)
+      .map((p) => ({
+        id: p.id,
+        name: `${p.firstName} ${p.lastName}`,
+        hasTimewaveId: p.timewaveEmployeeId != null,
+        timewaveEmployeeId: p.timewaveEmployeeId,
+        hasEmail: !!p.email,
+        email: p.email,
+        hasPnr: !!p.personalNumber,
+        pnrLength: p.personalNumber?.length,
+        contractCount: p.contracts.length,
+        contractStatuses: p.contracts.map((c) => c.status),
+      }));
+
+    res.json({
+      totalContractPersons: totalPersons,
+      withTimewaveId,
+      withPersonalNumber: withPnr,
+      withEmail,
+      withName,
+      withEmploymentContract,
+      note: 'Om withTimewaveId << withEmploymentContract så matchas nästan inget via ID. Om withEmail/withPersonalNumber också är låga → matchning måste falla på namn (osäkert).',
+      sample,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.get('/missing-employees', async (req, res) => {
   try {
     const debug = req.query.debug === '1';
