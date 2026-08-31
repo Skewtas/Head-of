@@ -329,6 +329,51 @@ router.post('/sick-leave/scan', async (req, res) => {
   });
 });
 
+// ─── SKAPA CASE MANUELLT (från översikten) ─────────────────────────────
+router.post('/sick-leave/cases', async (req, res) => {
+  if (!(await requireHR(req, res))) return;
+  const body = z
+    .object({
+      timewaveEmployeeId: z.number(),
+      employeeName: z.string(),
+    })
+    .parse(req.body);
+
+  // Om öppet case redan finns, återanvänd det
+  const existing = await prisma.sickLeaveCase.findFirst({
+    where: {
+      timewaveEmployeeId: body.timewaveEmployeeId,
+      status: { notIn: ['RESOLVED', 'DISMISSED'] },
+    },
+  });
+  if (existing) return res.json({ case: existing, reused: true });
+
+  const today = new Date();
+  const start = new Date(today);
+  start.setMonth(start.getMonth() - 12);
+
+  const c = await prisma.sickLeaveCase.create({
+    data: {
+      timewaveEmployeeId: body.timewaveEmployeeId,
+      employeeName: body.employeeName,
+      episodesCount: 0,
+      daysCount: 0,
+      windowStartDate: start,
+      windowEndDate: today,
+      status: 'UNDER_REVIEW',
+      metadata: { createdManually: true },
+    },
+  });
+  await prisma.sickLeaveCaseEvent.create({
+    data: {
+      caseId: c.id,
+      actorClerkId: getUserId(req),
+      action: 'created_manually',
+    },
+  });
+  res.json({ case: c });
+});
+
 // ─── LISTA CASES ───────────────────────────────────────────────────────
 router.get('/sick-leave/cases', async (req, res) => {
   if (!(await requireHR(req, res))) return;

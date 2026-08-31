@@ -76,52 +76,69 @@ function TriggerBadge({ trigger }: { trigger: 'STRONG' | 'WARNING' | 'DAYS' | nu
   );
 }
 
+type SummaryRow = {
+  timewaveEmployeeId: number;
+  name: string;
+  email: string | null;
+  episodes: number;
+  days: number;
+  latest: string;
+  triggeredThreshold: 'STRONG' | 'WARNING' | 'DAYS' | null;
+};
+
 export default function HRView() {
   const [cases, setCases] = useState<Case[]>([]);
+  const [summary, setSummary] = useState<SummaryRow[]>([]);
+  const [windowLabel, setWindowLabel] = useState<string>('');
   const [loading, setLoading] = useState(true);
-  const [scanning, setScanning] = useState(false);
-  const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [statusFilter, setStatusFilter] = useState<Status | 'OPEN' | 'ALL'>('OPEN');
-  const [scanResult, setScanResult] = useState<any>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [selectedEmp, setSelectedEmp] = useState<{ empId: number; name: string; caseId: number | null } | null>(null);
+  const [filter, setFilter] = useState<'FLAGGED' | 'ALL' | 'CASES'>('FLAGGED');
   const [accessDenied, setAccessDenied] = useState(false);
 
-  const load = async () => {
-    setLoading(true);
+  const fetchAll = async () => {
     try {
-      const r = await api<{ cases: Case[] }>('/api/hr/sick-leave/cases');
-      setCases(r.cases || []);
+      const [scan, list] = await Promise.all([
+        api<any>('/api/hr/sick-leave/scan', { method: 'POST', body: '{}' }),
+        api<{ cases: Case[] }>('/api/hr/sick-leave/cases'),
+      ]);
+      setSummary(scan.summary || []);
+      setWindowLabel(`${scan.windowStart} → ${scan.windowEnd}`);
+      setCases(list.cases || []);
     } catch (e: any) {
       if (e?.status === 403) setAccessDenied(true);
-    } finally {
+      else console.error('HR fetch failed', e);
+    }
+  };
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      await fetchAll();
       setLoading(false);
-    }
+    })();
+  }, []);
+
+  const refresh = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    await fetchAll();
+    setRefreshing(false);
   };
 
-  useEffect(() => { load(); }, []);
+  // Map anställd → case (om finns)
+  const caseByEmp = useMemo(() => {
+    const m = new Map<number, Case>();
+    for (const c of cases) m.set(c.timewaveEmployeeId, c);
+    return m;
+  }, [cases]);
 
-  const filtered = useMemo(() => {
-    if (statusFilter === 'ALL') return cases;
-    if (statusFilter === 'OPEN') return cases.filter((c) => c.status !== 'RESOLVED' && c.status !== 'DISMISSED');
-    return cases.filter((c) => c.status === statusFilter);
-  }, [cases, statusFilter]);
-
-  const runScan = async () => {
-    if (scanning) return;
-    if (!confirm('Skanna Timewave för sjukfrånvaro senaste 12 månaderna? Nya case skapas för anställda över tröskel.')) return;
-    setScanning(true);
-    setScanResult(null);
-    try {
-      const r = await api<any>('/api/hr/sick-leave/scan', { method: 'POST', body: '{}' });
-      setScanResult(r);
-      await load();
-    } catch (e: any) {
-      const debug = e?.body?.debug ? `\n\n(${e.body.debug})` : '';
-      alert('Skanning misslyckades: ' + (e?.message || 'okänt fel') + debug);
-      if (e?.status === 403) setAccessDenied(true);
-    } finally {
-      setScanning(false);
-    }
-  };
+  const rows = useMemo(() => {
+    let filtered = summary;
+    if (filter === 'FLAGGED') filtered = summary.filter((s) => s.triggeredThreshold);
+    else if (filter === 'CASES') filtered = summary.filter((s) => caseByEmp.has(s.timewaveEmployeeId));
+    return filtered.sort((a, b) => b.episodes - a.episodes || b.days - a.days);
+  }, [summary, filter, caseByEmp]);
 
   if (accessDenied) {
     return (
@@ -162,44 +179,45 @@ export default function HRView() {
             </span>
           </div>
           <p className="mt-1 text-sm text-brand-muted max-w-2xl">
-            Uppföljning av ovanlig eller upprepad sjukfrånvaro. Alla mail granskas manuellt av HR
-            innan de skickas — inga automatiska utskick. Frågar aldrig om diagnos.
+            Sjukfrånvaro senaste 12 månaderna, hämtat live från Timewave.
+            Alla mail granskas manuellt av HR — inga automatiska utskick. Frågar aldrig om diagnos.
           </p>
+          {windowLabel && (
+            <div className="mt-1 text-[11px] text-brand-muted tabular-nums">
+              Fönster: {windowLabel}
+            </div>
+          )}
         </div>
         <button
-          onClick={runScan}
-          disabled={scanning}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-brand-dark text-white text-sm font-medium hover:bg-brand-dark/90 disabled:opacity-50"
+          onClick={refresh}
+          disabled={refreshing || loading}
+          className="inline-flex items-center gap-2 px-3 py-1.5 rounded border border-gray-200 text-brand-muted hover:bg-gray-50 text-xs disabled:opacity-50"
+          title="Hämta senaste från Timewave igen"
         >
-          {scanning ? <Loader size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-          {scanning ? 'Skannar…' : 'Skanna Timewave nu'}
+          {refreshing ? <Loader size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+          Uppdatera
         </button>
       </div>
 
-      {/* Scan-resultat */}
-      {scanResult && (
-        <div className="mb-6 p-4 rounded-lg border border-emerald-200 bg-emerald-50">
-          <div className="text-sm">
-            <strong>Skanning klar.</strong>{' '}
-            {scanResult.triggered} anställda över tröskel · {scanResult.created} nya case skapade ·{' '}
-            {scanResult.skipped} hoppade över (redan öppna) · fönster {scanResult.windowStart} → {scanResult.windowEnd}
-          </div>
-        </div>
-      )}
-
       {/* Filter */}
       <div className="flex items-center gap-2 mb-4 text-xs">
-        {(['OPEN', 'NEW', 'UNDER_REVIEW', 'EMAIL1_SENT', 'MEETING_HELD', 'RESOLVED', 'DISMISSED', 'ALL'] as const).map((f) => (
+        {(
+          [
+            { k: 'FLAGGED', label: `Över tröskel (${summary.filter((s) => s.triggeredThreshold).length})` },
+            { k: 'CASES', label: `Öppna ärenden (${cases.filter((c) => c.status !== 'RESOLVED' && c.status !== 'DISMISSED').length})` },
+            { k: 'ALL', label: `Alla med frånvaro (${summary.length})` },
+          ] as const
+        ).map((f) => (
           <button
-            key={f}
-            onClick={() => setStatusFilter(f)}
+            key={f.k}
+            onClick={() => setFilter(f.k)}
             className={`px-2.5 py-1 rounded ${
-              statusFilter === f
+              filter === f.k
                 ? 'bg-brand-dark text-white'
                 : 'bg-white border border-gray-200 text-brand-muted hover:bg-gray-50'
             }`}
           >
-            {f === 'OPEN' ? 'Öppna' : f === 'ALL' ? 'Alla' : STATUS_META[f as Status].label}
+            {f.label}
           </button>
         ))}
       </div>
@@ -208,14 +226,16 @@ export default function HRView() {
       {loading ? (
         <div className="py-16 text-center text-brand-muted">
           <Loader className="animate-spin mx-auto" size={24} />
-          <div className="mt-2 text-sm">Laddar…</div>
+          <div className="mt-2 text-sm">Hämtar från Timewave…</div>
+          <div className="mt-1 text-[11px] text-brand-muted">Kan ta 10-30 sekunder första gången.</div>
         </div>
-      ) : filtered.length === 0 ? (
+      ) : rows.length === 0 ? (
         <div className="py-16 text-center border border-dashed border-gray-300 rounded-lg">
           <Heart className="mx-auto text-gray-300" size={40} />
-          <div className="mt-3 text-sm text-brand-muted">Inga ärenden att visa.</div>
-          <div className="mt-1 text-xs text-brand-muted">
-            Kör en skanning för att hitta anställda med hög sjukfrånvaro senaste 12 månaderna.
+          <div className="mt-3 text-sm text-brand-muted">
+            {filter === 'FLAGGED' && 'Ingen anställd över tröskel just nu. 🎉'}
+            {filter === 'CASES' && 'Inga öppna ärenden.'}
+            {filter === 'ALL' && 'Ingen registrerad sjukfrånvaro senaste 12 månaderna.'}
           </div>
         </div>
       ) : (
@@ -226,51 +246,69 @@ export default function HRView() {
                 <th className="px-4 py-3 text-left">Anställd</th>
                 <th className="px-4 py-3 text-center">Tillfällen</th>
                 <th className="px-4 py-3 text-center">Dagar</th>
+                <th className="px-4 py-3 text-left">Senaste</th>
                 <th className="px-4 py-3 text-left">Trigger</th>
-                <th className="px-4 py-3 text-left">Status</th>
-                <th className="px-4 py-3 text-left">Uppdaterad</th>
+                <th className="px-4 py-3 text-left">Ärende</th>
                 <th className="px-4 py-3"></th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((c) => (
-                <tr key={c.id} className="border-t border-gray-100 hover:bg-gray-50/50">
-                  <td className="px-4 py-3 font-medium text-brand-dark">{c.employeeName}</td>
-                  <td className="px-4 py-3 text-center tabular-nums">{c.episodesCount}</td>
-                  <td className="px-4 py-3 text-center tabular-nums">{c.daysCount}</td>
+              {rows.map((s) => {
+                const c = caseByEmp.get(s.timewaveEmployeeId);
+                return (
+                <tr key={s.timewaveEmployeeId} className="border-t border-gray-100 hover:bg-gray-50/50">
+                  <td className="px-4 py-3 font-medium text-brand-dark">{s.name}</td>
+                  <td className="px-4 py-3 text-center tabular-nums">{s.episodes}</td>
+                  <td className="px-4 py-3 text-center tabular-nums">{s.days}</td>
+                  <td className="px-4 py-3 text-xs text-brand-muted tabular-nums">{s.latest || '—'}</td>
+                  <td className="px-4 py-3"><TriggerBadge trigger={s.triggeredThreshold} /></td>
                   <td className="px-4 py-3">
-                    <TriggerBadge trigger={c.metadata?.triggeredThreshold ?? null} />
-                  </td>
-                  <td className="px-4 py-3">
-                    <StatusBadge status={c.status} />
-                  </td>
-                  <td className="px-4 py-3 text-xs text-brand-muted tabular-nums">
-                    {new Date(c.updatedAt).toLocaleDateString('sv-SE')}
+                    {c ? <StatusBadge status={c.status} /> : <span className="text-[11px] text-brand-muted">—</span>}
                   </td>
                   <td className="px-4 py-3 text-right">
                     <button
-                      onClick={() => setSelectedId(c.id)}
+                      onClick={() => setSelectedEmp({ empId: s.timewaveEmployeeId, name: s.name, caseId: c?.id ?? null })}
                       className="text-xs px-2 py-1 rounded border border-gray-200 text-brand-dark hover:bg-gray-100"
                     >
                       Öppna
                     </button>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
       )}
 
-      {selectedId != null && (
-        <CaseDrawer id={selectedId} onClose={() => setSelectedId(null)} onChanged={load} />
+      {selectedEmp && (
+        <CaseDrawer
+          empId={selectedEmp.empId}
+          empName={selectedEmp.name}
+          caseId={selectedEmp.caseId}
+          onClose={() => setSelectedEmp(null)}
+          onChanged={refresh}
+        />
       )}
     </div>
   );
 }
 
 // ─── DRAWER ────────────────────────────────────────────────────────────
-function CaseDrawer({ id, onClose, onChanged }: { id: number; onClose: () => void; onChanged: () => void }) {
+function CaseDrawer({
+  empId,
+  empName,
+  caseId,
+  onClose,
+  onChanged,
+}: {
+  empId: number;
+  empName: string;
+  caseId: number | null;
+  onClose: () => void;
+  onChanged: () => void;
+}) {
+  const [id, setId] = useState<number | null>(caseId);
   const [data, setData] = useState<{ case: Case; events: any[] } | null>(null);
   const [saving, setSaving] = useState(false);
   const [notes, setNotes] = useState('');
@@ -278,6 +316,7 @@ function CaseDrawer({ id, onClose, onChanged }: { id: number; onClose: () => voi
   const [preview, setPreview] = useState<any>(null);
 
   useEffect(() => {
+    if (id == null) return;
     (async () => {
       const r = await api<{ case: Case & { events: any[] } }>(`/api/hr/sick-leave/cases/${id}`);
       setData({ case: r.case, events: r.case.events || [] });
@@ -286,6 +325,7 @@ function CaseDrawer({ id, onClose, onChanged }: { id: number; onClose: () => voi
   }, [id]);
 
   const patch = async (body: any) => {
+    if (id == null) return;
     setSaving(true);
     try {
       const r = await api<{ case: Case }>(`/api/hr/sick-leave/cases/${id}`, {
@@ -312,6 +352,48 @@ function CaseDrawer({ id, onClose, onChanged }: { id: number; onClose: () => voi
     const r = await api<any>(`/api/hr/sick-leave/cases/${id}/email-preview?which=${which}`);
     setPreview(r);
   };
+
+  // Ingen case-rad ännu — visa "skapa"-vy
+  if (id == null) {
+    return (
+      <div className="fixed inset-0 z-50 flex">
+        <div className="flex-1 bg-black/30" onClick={onClose} />
+        <div className="w-full max-w-2xl bg-white shadow-xl overflow-y-auto">
+          <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+            <div className="text-lg font-semibold text-brand-dark">{empName}</div>
+            <button onClick={onClose} className="text-brand-muted hover:text-brand-dark"><X size={20} /></button>
+          </div>
+          <div className="p-8 text-center">
+            <Heart className="mx-auto text-gray-300" size={40} />
+            <p className="mt-4 text-sm text-brand-muted">
+              Inget ärende registrerat för denna anställd ännu.<br />
+              Skapa ett ärende för att börja dokumentera HR-uppföljningen (anteckningar, samtal, beslut).
+            </p>
+            <button
+              disabled={saving}
+              onClick={async () => {
+                setSaving(true);
+                try {
+                  const r = await api<any>('/api/hr/sick-leave/cases', {
+                    method: 'POST',
+                    body: JSON.stringify({ timewaveEmployeeId: empId, employeeName: empName }),
+                  });
+                  setId(r.case.id);
+                  onChanged();
+                } finally {
+                  setSaving(false);
+                }
+              }}
+              className="mt-6 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-brand-dark text-white text-sm font-medium hover:bg-brand-dark/90 disabled:opacity-50"
+            >
+              {saving ? <Loader size={14} className="animate-spin" /> : null}
+              Skapa ärende för {empName.split(' ')[0]}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!data) {
     return (
