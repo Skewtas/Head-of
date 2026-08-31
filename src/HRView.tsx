@@ -125,7 +125,7 @@ export default function HRView() {
     return (
       <div className="max-w-2xl mx-auto py-16 text-center">
         <ShieldAlert className="mx-auto text-rose-400" size={48} />
-        <h1 className="mt-4 text-xl font-semibold text-brand-fg">HR-modul — åtkomst nekad</h1>
+        <h1 className="mt-4 text-xl font-semibold text-brand-dark">HR-modul — åtkomst nekad</h1>
         <p className="mt-2 text-sm text-brand-muted">
           Sjukfrånvaro är känsligt och begränsat till HR-behöriga. Kontakta systemadministratör
           för att lägga till din e-postadress i <code className="bg-gray-100 px-1 rounded">HR_ADMIN_EMAILS</code>.
@@ -135,13 +135,13 @@ export default function HRView() {
   }
 
   return (
-    <div>
+    <div className="p-8 bg-brand-bg min-h-[calc(100vh-64px)]">
       {/* Header */}
       <div className="flex items-start justify-between gap-4 mb-6">
         <div>
           <div className="flex items-center gap-2">
             <Heart size={20} className="text-rose-500" />
-            <h1 className="text-2xl font-semibold text-brand-fg">HR — Sjukfrånvaro</h1>
+            <h1 className="text-2xl font-semibold text-brand-dark">HR — Sjukfrånvaro</h1>
             <span className="text-[10px] px-2 py-0.5 rounded bg-rose-100 text-rose-700 uppercase tracking-wide font-semibold">
               Sensitivt · HR only
             </span>
@@ -154,7 +154,7 @@ export default function HRView() {
         <button
           onClick={runScan}
           disabled={scanning}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-brand-fg text-white text-sm font-medium hover:bg-brand-fg/90 disabled:opacity-50"
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-brand-dark text-white text-sm font-medium hover:bg-brand-dark/90 disabled:opacity-50"
         >
           {scanning ? <Loader size={14} className="animate-spin" /> : <RefreshCw size={14} />}
           {scanning ? 'Skannar…' : 'Skanna Timewave nu'}
@@ -180,7 +180,7 @@ export default function HRView() {
             onClick={() => setStatusFilter(f)}
             className={`px-2.5 py-1 rounded ${
               statusFilter === f
-                ? 'bg-brand-fg text-white'
+                ? 'bg-brand-dark text-white'
                 : 'bg-white border border-gray-200 text-brand-muted hover:bg-gray-50'
             }`}
           >
@@ -220,7 +220,7 @@ export default function HRView() {
             <tbody>
               {filtered.map((c) => (
                 <tr key={c.id} className="border-t border-gray-100 hover:bg-gray-50/50">
-                  <td className="px-4 py-3 font-medium text-brand-fg">{c.employeeName}</td>
+                  <td className="px-4 py-3 font-medium text-brand-dark">{c.employeeName}</td>
                   <td className="px-4 py-3 text-center tabular-nums">{c.episodesCount}</td>
                   <td className="px-4 py-3 text-center tabular-nums">{c.daysCount}</td>
                   <td className="px-4 py-3">
@@ -235,7 +235,7 @@ export default function HRView() {
                   <td className="px-4 py-3 text-right">
                     <button
                       onClick={() => setSelectedId(c.id)}
-                      className="text-xs px-2 py-1 rounded border border-gray-200 text-brand-fg hover:bg-gray-100"
+                      className="text-xs px-2 py-1 rounded border border-gray-200 text-brand-dark hover:bg-gray-100"
                     >
                       Öppna
                     </button>
@@ -317,10 +317,10 @@ function CaseDrawer({ id, onClose, onChanged }: { id: number; onClose: () => voi
       <div className="w-full max-w-2xl bg-white shadow-xl overflow-y-auto">
         <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
           <div>
-            <div className="text-lg font-semibold text-brand-fg">{c.employeeName}</div>
+            <div className="text-lg font-semibold text-brand-dark">{c.employeeName}</div>
             <div className="mt-1"><StatusBadge status={c.status} /></div>
           </div>
-          <button onClick={onClose} className="text-brand-muted hover:text-brand-fg">
+          <button onClick={onClose} className="text-brand-muted hover:text-brand-dark">
             <X size={20} />
           </button>
         </div>
@@ -330,11 +330,11 @@ function CaseDrawer({ id, onClose, onChanged }: { id: number; onClose: () => voi
           <div className="grid grid-cols-3 gap-4 text-sm">
             <div>
               <div className="text-[10px] uppercase tracking-wide text-brand-muted">Tillfällen</div>
-              <div className="mt-1 text-2xl font-semibold tabular-nums text-brand-fg">{c.episodesCount}</div>
+              <div className="mt-1 text-2xl font-semibold tabular-nums text-brand-dark">{c.episodesCount}</div>
             </div>
             <div>
               <div className="text-[10px] uppercase tracking-wide text-brand-muted">Dagar totalt</div>
-              <div className="mt-1 text-2xl font-semibold tabular-nums text-brand-fg">{c.daysCount}</div>
+              <div className="mt-1 text-2xl font-semibold tabular-nums text-brand-dark">{c.daysCount}</div>
             </div>
             <div>
               <div className="text-[10px] uppercase tracking-wide text-brand-muted">Fönster</div>
@@ -351,16 +351,16 @@ function CaseDrawer({ id, onClose, onChanged }: { id: number; onClose: () => voi
             <div className="grid grid-cols-2 gap-2">
               <button
                 onClick={() => openPreview('email1')}
-                className="text-left px-4 py-3 rounded-lg border border-gray-200 hover:border-brand-fg hover:bg-gray-50"
+                className="text-left px-4 py-3 rounded-lg border border-gray-200 hover:border-brand-dark hover:bg-gray-50"
               >
-                <div className="text-sm font-medium text-brand-fg">1. Omtankesmejl</div>
+                <div className="text-sm font-medium text-brand-dark">1. Omtankesmejl</div>
                 <div className="text-xs text-brand-muted mt-0.5">Vänlig fråga, ingen diagnos</div>
               </button>
               <button
                 onClick={() => openPreview('email2')}
-                className="text-left px-4 py-3 rounded-lg border border-gray-200 hover:border-brand-fg hover:bg-gray-50"
+                className="text-left px-4 py-3 rounded-lg border border-gray-200 hover:border-brand-dark hover:bg-gray-50"
               >
-                <div className="text-sm font-medium text-brand-fg">2. Beslut om förstadagsintyg</div>
+                <div className="text-sm font-medium text-brand-dark">2. Beslut om förstadagsintyg</div>
                 <div className="text-xs text-brand-muted mt-0.5">Formellt · efter möte</div>
               </button>
             </div>
@@ -375,7 +375,7 @@ function CaseDrawer({ id, onClose, onChanged }: { id: number; onClose: () => voi
                 <div className="text-xs uppercase tracking-wide text-brand-muted">
                   {previewEmail === 'email1' ? 'Omtankesmejl' : 'Beslut om förstadagsintyg'}
                 </div>
-                <button onClick={() => setPreviewEmail(null)} className="text-brand-muted hover:text-brand-fg">
+                <button onClick={() => setPreviewEmail(null)} className="text-brand-muted hover:text-brand-dark">
                   <X size={14} />
                 </button>
               </div>
@@ -384,7 +384,7 @@ function CaseDrawer({ id, onClose, onChanged }: { id: number; onClose: () => voi
               ) : (
                 <div className="p-4 space-y-2 text-sm">
                   <div><span className="text-[10px] uppercase tracking-wide text-brand-muted">Ämne</span><br />{preview.subject}</div>
-                  <pre className="mt-2 whitespace-pre-wrap font-sans text-sm text-brand-fg bg-white p-3 rounded border border-gray-200">
+                  <pre className="mt-2 whitespace-pre-wrap font-sans text-sm text-brand-dark bg-white p-3 rounded border border-gray-200">
 {preview.body}
                   </pre>
                   <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded p-2">
@@ -408,7 +408,7 @@ function CaseDrawer({ id, onClose, onChanged }: { id: number; onClose: () => voi
             <button
               onClick={() => patch({ notes })}
               disabled={saving}
-              className="mt-2 text-xs px-3 py-1.5 rounded bg-brand-fg text-white hover:bg-brand-fg/90 disabled:opacity-50"
+              className="mt-2 text-xs px-3 py-1.5 rounded bg-brand-dark text-white hover:bg-brand-dark/90 disabled:opacity-50"
             >
               Spara anteckning
             </button>
@@ -425,8 +425,8 @@ function CaseDrawer({ id, onClose, onChanged }: { id: number; onClose: () => voi
                   disabled={saving || c.status === s}
                   className={`text-xs px-2.5 py-1 rounded border ${
                     c.status === s
-                      ? 'border-brand-fg bg-brand-fg text-white'
-                      : 'border-gray-200 text-brand-fg hover:bg-gray-50'
+                      ? 'border-brand-dark bg-brand-dark text-white'
+                      : 'border-gray-200 text-brand-dark hover:bg-gray-50'
                   } disabled:opacity-50`}
                 >
                   {STATUS_META[s].label}
@@ -449,7 +449,7 @@ function CaseDrawer({ id, onClose, onChanged }: { id: number; onClose: () => voi
               {data.events.map((e: any) => (
                 <li key={e.id} className="text-xs text-brand-muted flex items-baseline gap-2">
                   <span className="tabular-nums">{new Date(e.createdAt).toLocaleString('sv-SE')}</span>
-                  <span className="text-brand-fg font-medium">{e.action}</span>
+                  <span className="text-brand-dark font-medium">{e.action}</span>
                   {e.metadata && (
                     <span className="text-[11px] text-brand-muted">{JSON.stringify(e.metadata)}</span>
                   )}
