@@ -299,31 +299,28 @@ export default function ContractsView() {
 
 function SigningActions({ contract, onReload }: { contract: Contract; onReload: () => Promise<void> }) {
   const [busy, setBusy] = React.useState(false);
+  const [result, setResult] = React.useState<{ ok: boolean; text: string } | null>(null);
 
   const sendForSigning = async () => {
     if (!confirm(`Skicka avtalet till ${contract.person?.firstName || 'anställd'} för signering?`)) return;
     setBusy(true);
+    setResult(null);
     try {
       const r = await api<{ note: string; signUrl?: string; employeeEmail?: string }>(`/api/contracts/${contract.id}/send-for-signing`, { method: 'POST' });
-      // Tydlig alert med all info — så du säkert ser vart det gick
-      alert(
-        `✓ SKICKAT!\n\n` +
-        `Till: ${r.employeeEmail}\n` +
-        `Kopia till: mikaela.wigert@stodona.se\n` +
-        `Från: info@stodona.se\n\n` +
-        `Mailet kommer inom några minuter. Kolla också spam-mappen om det inte dyker upp.\n\n` +
-        `Direktlänk för signering (om du vill testa själv):\n${r.signUrl || '(saknas)'}`
-      );
+      setResult({
+        ok: true,
+        text: `✓ SKICKAT!\nTill: ${r.employeeEmail}\nKopia: mikaela.wigert@stodona.se\nFrån: info@stodona.se\n\nSigneringslänk:\n${r.signUrl || '(saknas)'}`,
+      });
       await onReload();
     } catch (e: any) {
       const body = e?.body || {};
       const parts = [
-        '❌ Kunde inte skicka: ' + (body.error || e?.message || 'okänt fel'),
+        '❌ ' + (body.error || e?.message || 'okänt fel'),
       ];
       if (body.debug) {
         parts.push('', '--- DEBUG ---', JSON.stringify(body.debug, null, 2));
       }
-      alert(parts.join('\n'));
+      setResult({ ok: false, text: parts.join('\n') });
     } finally { setBusy(false); }
   };
 
@@ -342,30 +339,50 @@ function SigningActions({ contract, onReload }: { contract: Contract; onReload: 
   const isEmployment = ['ANSTALLNINGSAVTAL', 'PROVANSTALLNING', 'TILLSVIDAREANSTALLNING', 'VISSTIDSANSTALLNING', 'TIMANSTALLNING'].includes(contract.category);
   if (!isEmployment) return <span className="text-gray-300 text-xs">—</span>;
 
+  const resultBox = result && (
+    <div
+      className={`mt-2 p-2 border rounded text-[10px] max-w-xs whitespace-pre-wrap text-left ${
+        result.ok ? 'bg-emerald-50 border-emerald-200 text-emerald-900' : 'bg-red-50 border-red-200 text-red-900'
+      }`}
+    >
+      {result.text}
+      <button
+        onClick={() => setResult(null)}
+        className="mt-2 block text-[10px] underline hover:no-underline"
+      >
+        Stäng
+      </button>
+    </div>
+  );
+
   if (contract.status === 'SIGNED' || contract.status === 'ACTIVE') {
     return <span className="text-emerald-600 text-xs font-semibold">✓ Signerat</span>;
   }
   if (contract.status === 'DRAFT' || contract.status === 'READY_FOR_SIGNING') {
     return (
-      <button
-        onClick={sendForSigning}
-        disabled={busy}
-        className="text-xs px-2 py-1 bg-brand-dark text-white rounded hover:bg-brand-dark/90 disabled:opacity-50"
-      >
-        Skicka för signering
-      </button>
+      <div className="flex flex-col items-end gap-1">
+        <button
+          onClick={sendForSigning}
+          disabled={busy}
+          className="text-xs px-2 py-1 bg-brand-dark text-white rounded hover:bg-brand-dark/90 disabled:opacity-50"
+        >
+          {busy ? 'Skickar…' : 'Skicka för signering'}
+        </button>
+        {resultBox}
+      </div>
     );
   }
   if (contract.status === 'SENT' || contract.status === 'PARTIALLY_SIGNED') {
     return (
-      <div className="flex gap-1 justify-end">
+      <div className="flex flex-col items-end gap-1">
         <button
           onClick={signAsEmployer}
           disabled={busy}
           className="text-xs px-2 py-1 bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:opacity-50"
         >
-          Signera som arbetsgivare
+          {busy ? 'Signerar…' : 'Signera som arbetsgivare'}
         </button>
+        {resultBox}
       </div>
     );
   }
