@@ -385,8 +385,6 @@ function TaskRow({ task, onReload }: { task: OpsTask; onReload: () => void }) {
   const [draftTitle, setDraftTitle] = useState(task.title);
   const [editingOwner, setEditingOwner] = useState(false);
   const [draftOwner, setDraftOwner] = useState(task.owner ?? '');
-  const [editingDeadline, setEditingDeadline] = useState(false);
-  const [draftDeadline, setDraftDeadline] = useState(task.deadline ? task.deadline.slice(0, 10) : '');
   const [justCompleted, setJustCompleted] = useState(false);
 
   const isDone = task.status === 'DONE' || task.status === 'CANCELLED';
@@ -424,11 +422,9 @@ function TaskRow({ task, onReload }: { task: OpsTask; onReload: () => void }) {
     if (value !== (task.owner ?? '')) patch({ owner: value || null });
     setEditingOwner(false);
   };
-  const saveDeadline = () => {
-    const value = draftDeadline.trim() || null;
+  const setDeadline = (value: string | null) => {
     const current = task.deadline ? task.deadline.slice(0, 10) : null;
-    if (value !== current) patch({ deadline: value });
-    setEditingDeadline(false);
+    if ((value || null) !== current) patch({ deadline: value || null });
   };
   const remove = async () => {
     if (!confirm(`Ta bort "${task.title}"?`)) return;
@@ -547,44 +543,13 @@ function TaskRow({ task, onReload }: { task: OpsTask; onReload: () => void }) {
           </button>
         )}
 
-        {/* Deadline */}
-        {editingDeadline ? (
-          <input
-            autoFocus
-            type="date"
-            value={draftDeadline}
-            onChange={(e) => setDraftDeadline(e.target.value)}
-            onBlur={saveDeadline}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') saveDeadline();
-              if (e.key === 'Escape') { setDraftDeadline(task.deadline ? task.deadline.slice(0, 10) : ''); setEditingDeadline(false); }
-            }}
-            className="text-xs bg-white border border-brand-accent rounded px-1.5 py-0.5 outline-none"
-          />
-        ) : task.deadline ? (
-          <button
-            onClick={() => { setDraftDeadline(task.deadline ? task.deadline.slice(0, 10) : ''); setEditingDeadline(true); }}
-            className={`text-xs px-1.5 py-0.5 rounded ${
-              overdue
-                ? 'bg-red-100 text-red-800 font-semibold'
-                : task.deadline && isThisWeek(task.deadline)
-                  ? 'bg-amber-50 text-amber-800'
-                  : 'text-gray-500 hover:text-brand-dark'
-            }`}
-            title={overdue ? 'Försenad — klicka för att ändra deadline' : 'Klicka för att ändra deadline'}
-          >
-            {overdue && '⚠ '}
-            {new Date(task.deadline).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' })}
-          </button>
-        ) : (
-          <button
-            onClick={() => { setDraftDeadline(''); setEditingDeadline(true); }}
-            className="text-[10px] text-gray-400 hover:text-brand-dark px-1.5 border border-dashed border-gray-300 rounded"
-            title="Lägg till deadline"
-          >
-            + deadline
-          </button>
-        )}
+        {/* Deadline — native date-picker alltid interaktiv, ingen edit-toggle */}
+        <DeadlineChip
+          value={task.deadline ? task.deadline.slice(0, 10) : ''}
+          overdue={overdue}
+          thisWeek={task.deadline ? isThisWeek(task.deadline) : false}
+          onChange={setDeadline}
+        />
         {task.status !== 'OPEN' && task.status !== 'DONE' && (
           <StatusBadge status={task.status} />
         )}
@@ -617,6 +582,58 @@ function TaskRow({ task, onReload }: { task: OpsTask; onReload: () => void }) {
             <div><span className="text-gray-400">Anteckningar: </span>{task.notes}</div>
           )}
         </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Deadline-chip med native date-picker.
+ * Renderas som en "chip"-knapp men date-inputen ligger osynlig ovanpå så
+ * klick på chippen öppnar direkt browserns egen datumväljare. Sparar
+ * på onChange (utan onBlur som orsakade att datumet försvann direkt).
+ */
+function DeadlineChip({
+  value, overdue, thisWeek, onChange,
+}: { value: string; overdue: boolean; thisWeek: boolean; onChange: (v: string | null) => void }) {
+  const hasValue = !!value;
+  const chipCls = hasValue
+    ? overdue
+      ? 'bg-red-100 text-red-800 font-semibold'
+      : thisWeek
+        ? 'bg-amber-50 text-amber-800'
+        : 'text-gray-600 hover:text-brand-dark border border-transparent hover:border-gray-200'
+    : 'text-gray-400 hover:text-brand-dark border border-dashed border-gray-300';
+
+  const label = hasValue
+    ? new Date(value).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' })
+    : '+ deadline';
+
+  return (
+    <div className="relative inline-block">
+      <div
+        className={`text-xs px-1.5 py-0.5 rounded whitespace-nowrap cursor-pointer ${chipCls}`}
+        title={hasValue ? 'Klicka för att ändra deadline' : 'Klicka för att sätta deadline'}
+      >
+        {overdue && hasValue ? '⚠ ' : ''}
+        {label}
+      </div>
+      <input
+        type="date"
+        value={value}
+        onChange={(e) => onChange(e.target.value || null)}
+        className="absolute inset-0 opacity-0 cursor-pointer"
+        aria-label="Deadline"
+      />
+      {hasValue && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onChange(null); }}
+          className="absolute -right-1 -top-1 w-3 h-3 rounded-full bg-white text-gray-400 hover:text-red-600 text-[9px] leading-3 opacity-0 group-hover:opacity-100 shadow border border-gray-200 flex items-center justify-center"
+          title="Ta bort deadline"
+        >
+          ×
+        </button>
       )}
     </div>
   );
