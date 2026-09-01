@@ -38,6 +38,10 @@
     {
       "path": "/api/dashboard/tickets-email",
       "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/dashboard/save-daily-snapshot",
+      "schedule": "55 21 * * *"
     }
   ],
   "rewrites": [

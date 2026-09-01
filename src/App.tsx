@@ -266,6 +266,64 @@ const recentFeedback = [
 
 const fmt = (val: number) => new Intl.NumberFormat('sv-SE').format(val);
 
+/**
+ * KpiGoalRow — enhetlig KPI-visning för alla mål på översikten.
+ * Visar label, aktuellt värde / mål (unit), procent, progressbar och
+ * dygnsförändring om diff finns.
+ */
+function KpiGoalRow({
+  label, actual, goal, unit, diff, todayCount, hasSnapshot,
+}: {
+  label: string;
+  actual: number;
+  goal: number;
+  unit: string;
+  diff: number | null;
+  todayCount?: number | null;
+  hasSnapshot: boolean;
+}) {
+  const pct = goal > 0 ? Math.min(100, Math.round((actual / goal) * 100)) : 0;
+  const isOver = actual >= goal;
+  const barCls = isOver ? 'bg-emerald-500' : pct > 70 ? 'bg-amber-400' : 'bg-red-400';
+  const valueCls = isOver ? 'text-emerald-600 font-semibold' : 'text-brand-muted';
+
+  const fmtDiff = (n: number): string => {
+    const abs = new Intl.NumberFormat('sv-SE').format(Math.abs(Math.round(n)));
+    return abs;
+  };
+
+  let diffLabel: React.ReactNode = null;
+  if (hasSnapshot && diff !== null && diff !== undefined) {
+    if (Math.abs(diff) < 0.5) {
+      diffLabel = <span className="text-brand-muted">— Ingen förändring sedan igår</span>;
+    } else if (diff > 0) {
+      diffLabel = <span className="text-emerald-600 font-medium">↑ +{fmtDiff(diff)} {unit} sedan igår</span>;
+    } else {
+      diffLabel = <span className="text-red-600 font-medium">↓ −{fmtDiff(diff)} {unit} sedan igår</span>;
+    }
+  } else if (todayCount != null && todayCount > 0 && !hasSnapshot) {
+    diffLabel = <span className="text-emerald-600 font-medium">+{todayCount} idag</span>;
+  }
+
+  return (
+    <div>
+      <div className="flex justify-between text-xs mb-1">
+        <span className="text-brand-dark font-medium">{label}</span>
+        <span className={`tabular-nums ${valueCls}`}>
+          {new Intl.NumberFormat('sv-SE').format(Math.round(actual))} / {new Intl.NumberFormat('sv-SE').format(goal)} {unit} ({pct}%)
+        </span>
+      </div>
+      <div className="w-full bg-gray-100 rounded-full h-2">
+        <div
+          className={`h-2 rounded-full transition-all duration-500 ${barCls}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      {diffLabel && <div className="mt-1 text-[11px]">{diffLabel}</div>}
+    </div>
+  );
+}
+
 const OverviewView = () => {
   const [freshness, setFreshness] = React.useState<{
     overviewAgeMin: number | null;
@@ -329,6 +387,29 @@ const OverviewView = () => {
   const [staffOcc, setStaffOcc] = React.useState<StaffOcc[]>([]);
   const [staffOccLoading, setStaffOccLoading] = React.useState(true);
   const [workHoursPerMonth, setWorkHoursPerMonth] = React.useState<number | null>(null);
+
+  // Daglig KPI-jämförelse (för "↑ +X sedan igår"-visning)
+  type DailyDiff = {
+    current: {
+      bookedRevenue: number; invoicedRevenue: number; avgPricePerHour: number;
+      recurringPrivateClients: number; recurringCompanyClients: number;
+      staffCount: number; onlineBookings: number; onlineBookingsToday: number;
+    };
+    previous: any;
+    diff: {
+      bookedRevenue: number; invoicedRevenue: number; avgPricePerHour: number;
+      recurringPrivateClients: number; recurringCompanyClients: number;
+      staffCount: number; onlineBookings: number;
+    } | null;
+    previousSnapshotDate: string | null;
+  };
+  const [dailyDiff, setDailyDiff] = React.useState<DailyDiff | null>(null);
+  React.useEffect(() => {
+    fetch('/api/dashboard/daily-comparison')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && setDailyDiff(d))
+      .catch(() => {});
+  }, []);
   React.useEffect(() => {
     fetch('/api/dashboard/staff-occupancy')
       .then((r) => (r.ok ? r.json() : null))
@@ -605,42 +686,28 @@ const OverviewView = () => {
         ))}
       </div>
 
-      {/* Online-bokningar (Bokis) — trend per dag/vecka/månad */}
-      <OnlineBookingsTrend />
-
-      {/* Månadsmål - Enkel tabell */}
+      {/* Månadsmål — enhetlig design, inkl. dygnsförändring */}
       <Card>
         <CardContent className="p-5">
           <h4 className="text-sm font-semibold text-brand-dark mb-4">Månadsmål — {currentMonthName}</h4>
-          <div className="space-y-3">
+          <div className="space-y-4">
             {[
-              { label: 'Bokad försäljning', actual: stats.totalRevenueExVat, goal: 850000, unit: 'kr' },
-              { label: 'Fakturerad försäljning', actual: stats.totalInvoicedNet, goal: 850000, unit: 'kr' },
-              { label: 'Snittpris', actual: stats.avgPricePerHour, goal: 550, unit: 'kr/h' },
-              { label: 'Återk. kunder (privat)', actual: stats.recurringPrivateClients, goal: 250, unit: 'st' },
-              { label: 'Återk. kunder (företag)', actual: stats.recurringCompanyClients, goal: 50, unit: 'st' },
-              { label: 'Personal bas', actual: stats.employees, goal: 20, unit: 'st' },
-            ].map((item, i) => {
-              const pct = item.goal > 0 ? Math.min(100, Math.round((item.actual / item.goal) * 100)) : 0;
-              const isOver = item.actual >= item.goal;
-              return (
-                <div key={i}>
-                  <div className="flex justify-between text-xs mb-1">
-                    <span className="text-brand-dark font-medium">{item.label}</span>
-                    <span className={isOver ? 'text-emerald-600 font-semibold' : 'text-brand-muted'}>
-                      {fmt(Math.round(item.actual))} / {fmt(item.goal)} {item.unit} ({pct}%)
-                    </span>
-                  </div>
-                  <div className="w-full bg-gray-100 rounded-full h-2">
-                    <div
-                      className={`h-2 rounded-full transition-all duration-500 ${isOver ? 'bg-emerald-500' : pct > 70 ? 'bg-amber-400' : 'bg-red-400'}`}
-                      style={{ width: `${pct}%` }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
+              { label: 'Bokad försäljning', actual: stats.totalRevenueExVat, goal: 850000, unit: 'kr', diff: dailyDiff?.diff?.bookedRevenue ?? null },
+              { label: 'Fakturerad försäljning', actual: stats.totalInvoicedNet, goal: 850000, unit: 'kr', diff: dailyDiff?.diff?.invoicedRevenue ?? null },
+              { label: 'Snittpris', actual: stats.avgPricePerHour, goal: 550, unit: 'kr/h', diff: dailyDiff?.diff?.avgPricePerHour ?? null },
+              { label: 'Återkommande kunder — privat', actual: stats.recurringPrivateClients, goal: 250, unit: 'st', diff: dailyDiff?.diff?.recurringPrivateClients ?? null },
+              { label: 'Återkommande kunder — företag', actual: stats.recurringCompanyClients, goal: 50, unit: 'st', diff: dailyDiff?.diff?.recurringCompanyClients ?? null },
+              { label: 'Personal bas', actual: stats.employees, goal: 20, unit: 'st', diff: dailyDiff?.diff?.staffCount ?? null },
+              { label: 'Bokningar online', actual: dailyDiff?.current?.onlineBookings ?? stats.onlineBookings, goal: 60, unit: 'st', diff: dailyDiff?.diff?.onlineBookings ?? null, todayCount: dailyDiff?.current?.onlineBookingsToday ?? null },
+            ].map((item, i) => (
+              <KpiGoalRow key={i} {...item} hasSnapshot={!!dailyDiff?.previous} />
+            ))}
           </div>
+          {!dailyDiff?.previous && (
+            <div className="mt-4 text-[11px] text-brand-muted italic text-center">
+              Dygnsförändring visas från morgondagen — första snapshot sparas i natt kl. 23:55.
+            </div>
+          )}
         </CardContent>
       </Card>
 

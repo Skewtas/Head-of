@@ -871,6 +871,26 @@ model OpsTask {
   @@map("ops_tasks")
 }
 
+// Dagliga KPI-snapshots — sparas en gång per dygn så vi kan jämföra
+// dagens värden mot gårdagens och visa dygnsförändring på översikten.
+model DailyKpiSnapshot {
+  id                      Int      @id @default(autoincrement())
+  date                    DateTime @unique @db.Date
+  bookedRevenue           Float    @default(0) @map("booked_revenue")
+  invoicedRevenue         Float    @default(0) @map("invoiced_revenue")
+  avgPricePerHour         Float    @default(0) @map("avg_price_per_hour")
+  recurringPrivateClients Int      @default(0) @map("recurring_private_clients")
+  recurringCompanyClients Int      @default(0) @map("recurring_company_clients")
+  staffCount              Int      @default(0) @map("staff_count")
+  onlineBookings          Int      @default(0) @map("online_bookings")
+  metadata                Json?
+  createdAt               DateTime @default(now()) @map("created_at")
+  updatedAt               DateTime @updatedAt @map("updated_at")
+
+  @@index([date(sort: Desc)])
+  @@map("daily_kpi_snapshots")
+}
+
 // Cached dashboard snapshots (so the heavy Timewave aggregations don't run
 // every time someone opens ÖVERSIKT). Singleton-per-key row.
 model DashboardSnapshot {

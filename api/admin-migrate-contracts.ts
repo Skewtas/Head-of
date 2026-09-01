@@ -38,6 +38,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       '20260901_doma_services_seed_and_sanitize',
       '20260901_revert_to_stodona_services',
       '20260901_sanitize_legacy_templates',
+      '20260901_daily_kpi_snapshots',
     ];
     const applied: string[] = [];
     for (const m of migrations) {
