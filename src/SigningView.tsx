@@ -24,7 +24,6 @@ export default function SigningView() {
   const [error, setError] = useState<string | null>(null);
   const [personalNumber, setPersonalNumber] = useState('');
   const [phone, setPhone] = useState('');
-  const [email, setEmail] = useState('');
   const [accepted, setAccepted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
@@ -38,8 +37,6 @@ export default function SigningView() {
         if (!r.ok) throw new Error(j.error || 'Kunde inte hämta avtalet.');
         setData(j);
         if (j.signer.status === 'SIGNED') setDone(true);
-        // Pre-fill email med det som finns i signer
-        if (j.signer.email) setEmail(j.signer.email);
       } catch (e: any) {
         setError(e.message);
       } finally {
@@ -56,7 +53,7 @@ export default function SigningView() {
       const r = await fetch(`/api/contract-signing?token=${encodeURIComponent(token)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ personalNumber, phone, email, acceptedTerms: accepted }),
+        body: JSON.stringify({ personalNumber, phone, acceptedTerms: accepted }),
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || 'Signeringen misslyckades.');
@@ -156,15 +153,6 @@ export default function SigningView() {
                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white outline-none focus:border-brand-accent"
                 />
               </FieldRow>
-              <FieldRow label="E-postadress">
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="namn@exempel.se"
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white outline-none focus:border-brand-accent"
-                />
-              </FieldRow>
             </div>
 
             <label className="flex items-start gap-2 text-sm text-brand-dark cursor-pointer">
@@ -188,7 +176,7 @@ export default function SigningView() {
 
             <button
               onClick={submit}
-              disabled={submitting || !accepted || !personalNumber || !phone || !email}
+              disabled={submitting || !accepted || !personalNumber || !phone}
               className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 bg-brand-dark text-white rounded-lg text-sm font-semibold hover:bg-brand-dark/90 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {submitting && <Loader className="w-4 h-4 animate-spin" />}

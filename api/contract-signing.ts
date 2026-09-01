@@ -3,13 +3,20 @@
  * Ingen Clerk-auth — token i URL är åtkomsten.
  *
  *   GET  /api/contract-signing?token=X               → returnerar avtalsinnehåll + person-info att verifiera mot
- *   POST /api/contract-signing?token=X               → tar emot signatur (personnummer + telefon + email + checkbox)
+ *   POST /api/contract-signing?token=X               → tar emot signatur (personnummer + telefon + checkbox)
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { prisma } from './_lib/prisma.js';
 import { verifySigningToken, contentHash } from './_lib/signingToken.js';
 
 export const config = { maxDuration: 30 };
+
+/** Bevis-vänlig maskering: visa bara sista 4 tecknen i loggen. */
+function hashLast4(s: string): string {
+  if (!s) return '';
+  const last4 = s.slice(-4);
+  return `••••${last4}`;
+}
 
 function normalizePnr(s: string): string {
   const digits = s.replace(/[^0-9]/g, '');
@@ -87,32 +94,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const body = (req.body || {}) as {
       personalNumber?: string;
       phone?: string;
-      email?: string;
       acceptedTerms?: boolean;
     };
 
     if (!body.acceptedTerms) {
       return res.status(400).json({ error: 'Du måste kryssa i att du godkänner avtalet.' });
     }
-    if (!body.personalNumber || !body.phone || !body.email) {
-      return res.status(400).json({ error: 'Fyll i personnummer, telefonnummer och e-post.' });
+    if (!body.personalNumber || !body.phone) {
+      return res.status(400).json({ error: 'Fyll i personnummer och telefonnummer.' });
     }
 
-    // Verifiera mot ContractPerson: personnummer + email
+    // Verifiera mot ContractPerson: BÅDE personnummer OCH telefon måste matcha.
+    // Generisk felmeddelande — visa inte vilken uppgift som är fel (säkerhet).
     const person = contract.person;
-    if (person?.personalNumber) {
-      const providedPnr = normalizePnr(body.personalNumber);
-      const expectedPnr = normalizePnr(person.personalNumber);
-      if (providedPnr !== expectedPnr) {
-        return res.status(400).json({
-          error: 'Personnumret matchar inte avtalets uppgifter. Kontrollera att du signerar rätt avtal.',
-        });
-      }
-    }
-    if (person?.email && body.email.trim().toLowerCase() !== person.email.trim().toLowerCase()) {
+    const GENERIC_MISMATCH = 'Uppgifterna stämmer inte överens med mottagaren av avtalet. Kontrollera personnummer och telefonnummer.';
+
+    if (!person?.personalNumber || !person?.phone) {
       return res.status(400).json({
-        error: 'E-postadressen matchar inte avtalets uppgifter.',
+        error: 'Avtalets mottagare har inte personnummer och/eller telefon registrerat. Kontakta arbetsgivaren.',
       });
+    }
+    const providedPnr = normalizePnr(body.personalNumber);
+    const expectedPnr = normalizePnr(person.personalNumber);
+    const providedPhone = normalizePhone(body.phone);
+    const expectedPhone = normalizePhone(person.phone);
+    if (providedPnr !== expectedPnr || providedPhone !== expectedPhone) {
+      return res.status(400).json({ error: GENERIC_MISMATCH });
     }
 
     const ip = String(
@@ -128,9 +135,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       userAgent,
       contentHash: hash,
       contentVersion: version.version,
-      providedPersonalNumber: normalizePnr(body.personalNumber),
-      providedPhone: normalizePhone(body.phone),
-      providedEmail: body.email.trim().toLowerCase(),
+      // Hashade istället för klartext i loggen (säkerhet).
+      providedPersonalNumberHash: hashLast4(normalizePnr(body.personalNumber)),
+      providedPhoneHash: hashLast4(normalizePhone(body.phone)),
+      timewaveEmployeeId: person?.timewaveEmployeeId ?? null,
       signingOrder: signer.signingOrder,
     };
 

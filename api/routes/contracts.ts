@@ -1470,7 +1470,7 @@ router.post('/:id(\\d+)/send-for-signing', async (req, res) => {
         <a href="${signUrl}" style="display:inline-block;padding:14px 28px;background:#1a1a2e;color:#fff;text-decoration:none;border-radius:8px;font-weight:600;">Öppna &amp; signera avtalet</a>
       </div>
       <p style="margin:0 0 8px;font-size:13px;color:#4b4a55;">
-        Du behöver ange ditt <strong>personnummer</strong>, <strong>telefonnummer</strong> och <strong>e-postadress</strong> för att verifiera att det är du som signerar.
+        Du behöver ange ditt <strong>personnummer</strong> och <strong>telefonnummer</strong> för att verifiera att det är du som signerar.
       </p>
       <p style="margin:0 0 16px;font-size:12px;color:#8b8578;">
         Länken är personlig och giltig i 30 dagar. Om något krånglar, kontakta ${escapeHtmlText(employerName)} på ${escapeHtmlText(employerEmail)}.

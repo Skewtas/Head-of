@@ -596,7 +596,7 @@ export default function ContractWizard({
                   <div>
                     <div className="text-sm font-semibold text-emerald-900">Redo att sparas som utkast</div>
                     <div className="text-xs text-emerald-700 mt-1">
-                      Avtalet sparas som DRAFT. Från AVTAL-listan klickar du sedan <strong>"Skicka för signering"</strong> så skickas en unik signeringslänk till den anställdes email (+ kopia till mikaela.wigert@stodona.se). Anställd verifierar med personnummer, telefon och email. Du signerar därefter som arbetsgivare direkt i appen.
+                      Avtalet sparas som DRAFT. Från AVTAL-listan klickar du sedan <strong>"Skicka för signering"</strong> så skickas en unik signeringslänk till den anställdes email (+ kopia till mikaela.wigert@stodona.se). Anställd verifierar med personnummer och telefonnummer. Du signerar därefter som arbetsgivare direkt i appen.
                     </div>
                   </div>
                 </div>
