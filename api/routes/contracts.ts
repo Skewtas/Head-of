@@ -386,7 +386,10 @@ async function validateContractForSigning(
   const pctStr = String(percentage).trim();
   const idx = content.indexOf('Årsarbetstid');
   const window = content.slice(Math.max(0, idx - 400), idx + 400);
-  const nearby = window.includes(`${pctStr} %`) || window.includes(`${pctStr}%`);
+  // Godkänn både siffror ("75 %") och "Vid behov"-fallet
+  const nearby = /vid\s*behov/i.test(String(percentage))
+    ? /vid\s*behov/i.test(window)
+    : window.includes(`${pctStr} %`) || window.includes(`${pctStr}%`);
   if (!nearby) {
     return 'Avtalet kan inte skickas. Årsarbetstid måste anges tillsammans med anställningsgraden.';
   }
@@ -1084,7 +1087,38 @@ router.get('/templates/:id(\\d+)', async (req, res) => {
 // ─── SUBSTITUTE VARIABLES + CREATE FROM TEMPLATE ────────────────────────
 /** Ersätter {{path.to.value}} med värden från context. Tomma vid saknad path. */
 function substituteVariables(template: string, ctx: Record<string, any>): string {
-  return template.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_, path: string) => {
+  // Pre-process: om anställningsgraden är "Vid behov", ersätt hela
+  // "X % av heltid — Årsarbetstid"-blocken med "Vid behov — Årsarbetstid"
+  // så det inte blir "Vid behov % av heltid" (fult).
+  const pct = ctx?.employment?.percentage;
+  let pre = template;
+  if (typeof pct === 'string' && /vid\s*behov/i.test(pct)) {
+    // Svenska varianten
+    pre = pre.replace(
+      /<strong>\{\{\s*employment\.percentage\s*\}\} %<\/strong> <span[^>]*>av heltid<\/span> — <span[^>]*>Årsarbetstid<\/span>/g,
+      '<strong>Vid behov</strong> — <span style="color:#a68a4e;font-weight:700;">Årsarbetstid</span>'
+    );
+    // Engelska varianten
+    pre = pre.replace(
+      /<strong>\{\{\s*employment\.percentage\s*\}\} %<\/strong> of full-time — Annual working hours/g,
+      '<strong>On demand</strong> — Annual working hours'
+    );
+    // Fallback för legacy-mallar med enklare mönster
+    pre = pre.replace(
+      /<strong>\{\{\s*employment\.percentage\s*\}\} %<\/strong>/g,
+      '<strong>Vid behov</strong>'
+    );
+    pre = pre.replace(
+      /\{\{\s*employment\.(percentage|occupationPct)\s*\}\} %/g,
+      'Vid behov'
+    );
+    pre = pre.replace(
+      /\{\{\s*employment\.(percentage|occupationPct)\s*\}\} %/g,
+      'Vid behov'
+    );
+  }
+
+  return pre.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_, path: string) => {
     const parts = path.split('.');
     let cur: any = ctx;
     for (const p of parts) {
