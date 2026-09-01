@@ -1513,26 +1513,48 @@ router.post('/:id(\\d+)/send-for-signing', async (req, res) => {
     </div>
   `;
 
+  const recipients = Array.from(new Set([
+    employeeEmail.toLowerCase(),
+    'mikaela.wigert@stodona.se',
+  ]));
+
+  const hasResendKey = !!process.env.RESEND_API_KEY;
+  const fromAddr = process.env.SMTP_FROM || process.env.SMTP_USER || 'info@stodona.se';
+
+  let deliverResult: any = null;
+  let deliverError: string | null = null;
   try {
-    await deliverNewsletter({
+    deliverResult = await deliverNewsletter({
       newsletterId: `sign-${contract.id}-${employeeSigner.id}`,
-      // Skicka till anställd + alltid CC till mikaela.wigert@stodona.se
-      // så du har koll och kan spåra vad som skickats.
-      recipients: Array.from(new Set([
-        employeeEmail.toLowerCase(),
-        'mikaela.wigert@stodona.se',
-      ])),
+      recipients,
       subject: `Signera ditt anställningsavtal — ${contract.ownCompany.name}`,
       htmlContent: html,
       appUrl,
     });
   } catch (e: any) {
-    return res.status(500).json({ error: 'Kunde inte skicka signeringsmail: ' + e?.message });
+    deliverError = e?.message || String(e);
+  }
+
+  const mailSent = deliverResult && deliverResult.sent > 0;
+
+  if (!mailSent) {
+    return res.status(500).json({
+      error: '❌ Signeringsmailet kunde INTE skickas.',
+      debug: {
+        resendConfigured: hasResendKey,
+        fromAddress: fromAddr,
+        recipients,
+        deliverResult,
+        deliverError,
+        signerId: employeeSigner.id,
+        signUrl,
+      },
+    });
   }
 
   // Uppdatera status
   await prisma.contract.update({ where: { id }, data: { status: 'SENT' } });
-  await logAudit(userId, 'sent_for_signing', id, { employeeEmail, signerId: employeeSigner.id });
+  await logAudit(userId, 'sent_for_signing', id, { employeeEmail, signerId: employeeSigner.id, deliverResult });
 
   res.json({
     ok: true,
@@ -1540,7 +1562,9 @@ router.post('/:id(\\d+)/send-for-signing', async (req, res) => {
     signUrl,
     employeeEmail,
     ccTo: 'mikaela.wigert@stodona.se',
-    note: `✓ Signeringslänk skickad till ${employeeEmail} (och kopia till mikaela.wigert@stodona.se). Kolla din inkorg — mailet kommer från info@stodona.se.`,
+    deliverResult,
+    fromAddress: fromAddr,
+    note: `✓ Signeringslänk skickad till ${recipients.join(', ')} (från ${fromAddr}). ${deliverResult?.sent} mail levererat till Resend, ${deliverResult?.failed || 0} misslyckades.`,
   });
 });
 
