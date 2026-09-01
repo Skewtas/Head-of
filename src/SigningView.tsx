@@ -24,6 +24,7 @@ export default function SigningView() {
   const [error, setError] = useState<string | null>(null);
   const [personalNumber, setPersonalNumber] = useState('');
   const [phone, setPhone] = useState('');
+  const [fullName, setFullName] = useState('');
   const [accepted, setAccepted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
@@ -53,7 +54,7 @@ export default function SigningView() {
       const r = await fetch(`/api/contract-signing?token=${encodeURIComponent(token)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ personalNumber, phone, acceptedTerms: accepted }),
+        body: JSON.stringify({ personalNumber, phone, fullName, acceptedTerms: accepted }),
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || 'Signeringen misslyckades.');
@@ -135,21 +136,33 @@ export default function SigningView() {
             </p>
 
             <div className="grid grid-cols-1 gap-3">
+              <FieldRow label="Ditt fullständiga namn">
+                <input
+                  type="text"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  placeholder="För- och efternamn"
+                  autoComplete="name"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white outline-none focus:border-brand-accent"
+                />
+              </FieldRow>
               <FieldRow label="Personnummer (ÅÅÅÅMMDD-XXXX)">
                 <input
                   type="text"
                   value={personalNumber}
                   onChange={(e) => setPersonalNumber(e.target.value)}
                   placeholder="19900314-3329"
+                  autoComplete="off"
                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white outline-none focus:border-brand-accent"
                 />
               </FieldRow>
-              <FieldRow label="Telefonnummer">
+              <FieldRow label="Mobilnummer">
                 <input
                   type="tel"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   placeholder="070-123 45 67"
+                  autoComplete="tel"
                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white outline-none focus:border-brand-accent"
                 />
               </FieldRow>
@@ -176,7 +189,7 @@ export default function SigningView() {
 
             <button
               onClick={submit}
-              disabled={submitting || !accepted || !personalNumber || !phone}
+              disabled={submitting || !accepted || !personalNumber || !phone || !fullName}
               className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 bg-brand-dark text-white rounded-lg text-sm font-semibold hover:bg-brand-dark/90 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {submitting && <Loader className="w-4 h-4 animate-spin" />}

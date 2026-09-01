@@ -30,6 +30,9 @@ function normalizePnr(s: string): string {
 function normalizePhone(s: string): string {
   return s.replace(/[\s\-()]/g, '').replace(/^\+?46/, '0');
 }
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const token = String(req.query.token || '');
@@ -94,14 +97,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const body = (req.body || {}) as {
       personalNumber?: string;
       phone?: string;
+      fullName?: string;
       acceptedTerms?: boolean;
     };
 
     if (!body.acceptedTerms) {
       return res.status(400).json({ error: 'Du måste kryssa i att du godkänner avtalet.' });
     }
-    if (!body.personalNumber || !body.phone) {
-      return res.status(400).json({ error: 'Fyll i personnummer och telefonnummer.' });
+    if (!body.fullName || !body.personalNumber || !body.phone) {
+      return res.status(400).json({ error: 'Fyll i namn, personnummer och mobilnummer.' });
     }
 
     // Verifiera mot ContractPerson: BÅDE personnummer OCH telefon måste matcha.
@@ -135,6 +139,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       userAgent,
       contentHash: hash,
       contentVersion: version.version,
+      providedFullName: body.fullName.trim(),
       // Hashade istället för klartext i loggen (säkerhet).
       providedPersonalNumberHash: hashLast4(normalizePnr(body.personalNumber)),
       providedPhoneHash: hashLast4(normalizePhone(body.phone)),
@@ -153,7 +158,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
 
     // Räkna om alla signers är klara → uppdatera contract-status
-    const allSigners = await prisma.signer.findMany({ where: { contractId: contract.id } });
+    const allSigners = await prisma.signer.findMany({
+      where: { contractId: contract.id },
+      orderBy: { signingOrder: 'asc' },
+    });
     const allSigned = allSigners.every((s) => s.status === 'SIGNED');
     const anySigned = allSigners.some((s) => s.status === 'SIGNED');
 
@@ -162,7 +170,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         where: { id: contract.id },
         data: { status: 'SIGNED' },
       });
-      // Lås versionen så den inte kan redigeras
       await prisma.contractVersion.update({
         where: { id: version.id },
         data: { locked: true },
@@ -172,6 +179,80 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         where: { id: contract.id },
         data: { status: 'PARTIALLY_SIGNED' },
       });
+    }
+
+    // Om det var ANSTÄLLD (order 1) som just signerade → skicka länk till
+    // ARBETSGIVAREN (order 2) så hon kan signera via samma flöde.
+    if (signer.signingOrder === 1 && !allSigned) {
+      const employerSigner = allSigners.find((s) => s.signingOrder === 2);
+      if (employerSigner && employerSigner.status !== 'SIGNED') {
+        try {
+          const { issueSigningToken } = await import('./_lib/signingToken.js');
+          const { deliverNewsletter } = await import('./_lib/newsletterSender.js');
+          const token = issueSigningToken(contract.id, employerSigner.id);
+          const appUrl = process.env.APP_URL || `https://${req.headers.host}`;
+          const signUrl = `${appUrl}/sign?token=${encodeURIComponent(token)}`;
+          const empName = signer.name;
+          const html = `
+            <div style="font-family:Inter,Arial,sans-serif;color:#1a1a2e;line-height:1.6;max-width:560px;margin:0 auto;padding:24px;">
+              <h1 style="font-family:'Playfair Display',Georgia,serif;font-size:24px;margin:0 0 16px;">
+                ${escapeHtml(empName)} har signerat sitt anställningsavtal
+              </h1>
+              <p style="margin:0 0 16px;">
+                <strong>${escapeHtml(empName)}</strong> signerade avtalet ${signedAt.toLocaleString('sv-SE')}.
+                Nu behöver du signera som arbetsgivare för att slutföra avtalet.
+              </p>
+              <div style="text-align:center;margin:24px 0;">
+                <a href="${signUrl}" style="display:inline-block;padding:14px 28px;background:#1a1a2e;color:#fff;text-decoration:none;border-radius:8px;font-weight:600;">Öppna &amp; signera som arbetsgivare</a>
+              </div>
+              <p style="margin:0 0 16px;font-size:13px;color:#4b4a55;">
+                Du behöver ange ditt namn, personnummer och telefonnummer för att bekräfta
+                signaturen. När båda parter signerat låses avtalet automatiskt.
+              </p>
+              <p style="margin:0;color:#8b8578;font-size:12px;">Länken är personlig och giltig i 30 dagar.</p>
+            </div>
+          `;
+          await deliverNewsletter({
+            newsletterId: `employer-sign-${contract.id}-${employerSigner.id}`,
+            recipients: [employerSigner.email],
+            subject: `${empName} har signerat — din tur att signera`,
+            htmlContent: html,
+            appUrl,
+          });
+        } catch (e) {
+          console.error('[contract-signing] employer mail failed', e);
+        }
+      }
+    }
+
+    // Om ALLA har signerat → skicka bekräftelse till både anställd + arbetsgivare
+    if (allSigned) {
+      try {
+        const { deliverNewsletter } = await import('./_lib/newsletterSender.js');
+        const appUrl = process.env.APP_URL || `https://${req.headers.host}`;
+        const html = `
+          <div style="font-family:Inter,Arial,sans-serif;color:#1a1a2e;line-height:1.6;max-width:560px;margin:0 auto;padding:24px;">
+            <h1 style="font-family:'Playfair Display',Georgia,serif;font-size:24px;margin:0 0 16px;">
+              ✓ Anställningsavtalet är fullständigt signerat
+            </h1>
+            <p style="margin:0 0 16px;">
+              Både anställd och arbetsgivare har nu signerat avtalet
+              <strong>${escapeHtml(contract.title)}</strong>. Avtalet är låst och sparat.
+            </p>
+            <p style="margin:0;color:#8b8578;font-size:12px;">/HeadOf</p>
+          </div>
+        `;
+        const emails = Array.from(new Set(allSigners.map((s) => s.email).filter(Boolean) as string[]));
+        await deliverNewsletter({
+          newsletterId: `all-signed-${contract.id}`,
+          recipients: emails,
+          subject: `✓ Anställningsavtal signerat — ${contract.title}`,
+          htmlContent: html,
+          appUrl,
+        });
+      } catch (e) {
+        console.error('[contract-signing] confirmation mail failed', e);
+      }
     }
 
     // Audit log
