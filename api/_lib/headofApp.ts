@@ -55,9 +55,10 @@ export function buildHeadofApp(): Express {
   app.use('/api/contracts', contractsRouter);
   app.use('/api/hr', hrRouter);
   app.use('/api/personalbrev', personalbrevRouter);
-  app.use('/api/admin', adminRouter);
-  // ENGÅNGS-endpoint (2026-09-01) — tas bort i nästa deploy
+  // ENGÅNGS-endpoint (2026-09-01) MÅSTE mount:as FÖRE adminRouter så dess
+  // auth-middleware inte konsumerar requesten.
   app.use('/api/admin', oneShotInviteElvedinaHandler);
+  app.use('/api/admin', adminRouter);
 
   app.use('/api', errorMiddleware);
   return app;
