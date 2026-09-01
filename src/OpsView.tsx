@@ -25,6 +25,7 @@ import {
   UserMinus,
 } from 'lucide-react';
 import { api } from './lib/api';
+import OnlineBookingsTrend from './OnlineBookingsTrend';
 
 // ─────────────────────────────────────────────────────────────────────────
 // Types
@@ -76,6 +77,7 @@ type TaskFilter = 'OPEN_AND_LATE' | 'OVERDUE' | 'THIS_WEEK' | 'UNASSIGNED' | 'DO
 export default function OpsView() {
   return (
     <div className="space-y-8">
+      <OnlineBookingsTrend compact />
       <GoalsBlock />
       <TasksBlock />
     </div>

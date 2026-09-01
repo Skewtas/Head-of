@@ -67,6 +67,7 @@ import OpsView from './OpsView';
 import ContractsView from './ContractsView';
 import HRView from './HRView';
 import PersonalbrevView from './PersonalbrevView';
+import OnlineBookingsTrend from './OnlineBookingsTrend';
 
 // Utility for Tailwind classes
 function cn(...inputs: ClassValue[]) {
@@ -600,6 +601,9 @@ const OverviewView = () => {
           </Card>
         ))}
       </div>
+
+      {/* Online-bokningar (Bokis) — trend per dag/vecka/månad */}
+      <OnlineBookingsTrend />
 
       {/* Månadsmål - Enkel tabell */}
       <Card>
