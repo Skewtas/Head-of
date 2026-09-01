@@ -1482,7 +1482,12 @@ router.post('/:id(\\d+)/send-for-signing', async (req, res) => {
   try {
     await deliverNewsletter({
       newsletterId: `sign-${contract.id}-${employeeSigner.id}`,
-      recipients: [employeeEmail],
+      // Skicka till anställd + alltid CC till mikaela.wigert@stodona.se
+      // så du har koll och kan spåra vad som skickats.
+      recipients: Array.from(new Set([
+        employeeEmail.toLowerCase(),
+        'mikaela.wigert@stodona.se',
+      ])),
       subject: `Signera ditt anställningsavtal — ${contract.ownCompany.name}`,
       htmlContent: html,
       appUrl,
@@ -1500,7 +1505,8 @@ router.post('/:id(\\d+)/send-for-signing', async (req, res) => {
     signerId: employeeSigner.id,
     signUrl,
     employeeEmail,
-    note: `Signeringslänk skickad till ${employeeEmail}.`,
+    ccTo: 'mikaela.wigert@stodona.se',
+    note: `✓ Signeringslänk skickad till ${employeeEmail} (och kopia till mikaela.wigert@stodona.se). Kolla din inkorg — mailet kommer från info@stodona.se.`,
   });
 });
 

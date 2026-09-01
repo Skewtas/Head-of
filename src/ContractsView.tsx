@@ -304,11 +304,19 @@ function SigningActions({ contract, onReload }: { contract: Contract; onReload: 
     if (!confirm(`Skicka avtalet till ${contract.person?.firstName || 'anställd'} för signering?`)) return;
     setBusy(true);
     try {
-      const r = await api<{ note: string }>(`/api/contracts/${contract.id}/send-for-signing`, { method: 'POST' });
-      alert(r.note);
+      const r = await api<{ note: string; signUrl?: string; employeeEmail?: string }>(`/api/contracts/${contract.id}/send-for-signing`, { method: 'POST' });
+      // Tydlig alert med all info — så du säkert ser vart det gick
+      alert(
+        `✓ SKICKAT!\n\n` +
+        `Till: ${r.employeeEmail}\n` +
+        `Kopia till: mikaela.wigert@stodona.se\n` +
+        `Från: info@stodona.se\n\n` +
+        `Mailet kommer inom några minuter. Kolla också spam-mappen om det inte dyker upp.\n\n` +
+        `Direktlänk för signering (om du vill testa själv):\n${r.signUrl || '(saknas)'}`
+      );
       await onReload();
     } catch (e: any) {
-      alert(e?.body?.error || e?.message || 'Kunde inte skicka.');
+      alert('❌ Kunde inte skicka: ' + (e?.body?.error || e?.message || 'okänt fel'));
     } finally { setBusy(false); }
   };
 
