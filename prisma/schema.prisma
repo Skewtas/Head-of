@@ -848,22 +848,26 @@ model OpsGoal {
 }
 
 model OpsTask {
-  id        Int            @id @default(autoincrement())
-  section   OpsTaskSection
-  owner     String? // free-text or clerk user id
-  title     String
-  nextStep  String?        @map("next_step")
-  relatedTo String?        @map("related_to") // e.g. "Victoria", "Tandläkarhuset Solna"
-  status    OpsTaskStatus  @default(OPEN)
-  deadline  DateTime?      @db.Date
-  notes     String?
-  sortOrder Int            @default(0) @map("sort_order")
-  createdAt DateTime       @default(now()) @map("created_at")
-  updatedAt DateTime       @updatedAt @map("updated_at")
-  deletedAt DateTime?      @map("deleted_at")
+  id          Int            @id @default(autoincrement())
+  section     OpsTaskSection
+  owner       String? // free-text or clerk user id
+  title       String
+  nextStep    String?        @map("next_step")
+  relatedTo   String?        @map("related_to") // e.g. "Victoria", "Tandläkarhuset Solna"
+  status      OpsTaskStatus  @default(OPEN)
+  deadline    DateTime?      @db.Date
+  notes       String?
+  sortOrder   Int            @default(0) @map("sort_order")
+  completedAt DateTime?      @map("completed_at")            // sätts när status → DONE
+  completedBy String?        @map("completed_by")            // clerk user id
+  archivedAt  DateTime?      @map("archived_at")             // arkiverad från UI (Pipeline/Personal)
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
+  deletedAt   DateTime?      @map("deleted_at")
 
   @@index([section, status])
   @@index([owner])
+  @@index([status, deadline])
   @@map("ops_tasks")
 }
 

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../_lib/prisma.js';
-import { requireAuth } from '../_lib/auth.js';
+import { requireAuth, getUserId } from '../_lib/auth.js';
 import { asyncHandler, NotFound } from '../_lib/errors.js';
 import { parseBody, parseIdParam, parseQuery } from '../_lib/validation.js';
 
@@ -106,17 +106,21 @@ router.get(
         owner: z.string().optional(),
         status: z.enum(['OPEN', 'IN_PROGRESS', 'WAITING', 'DONE', 'CANCELLED']).optional(),
         includeDeleted: z.coerce.boolean().default(false),
+        includeArchived: z.coerce.boolean().default(false),
       }),
       req
     );
     const where: any = {};
     if (!q.includeDeleted) where.deletedAt = null;
+    if (!q.includeArchived) where.archivedAt = null;
     if (q.section) where.section = q.section;
     if (q.owner) where.owner = q.owner;
     if (q.status) where.status = q.status;
     const rows = await prisma.opsTask.findMany({
       where,
-      orderBy: [{ status: 'asc' }, { sortOrder: 'asc' }, { createdAt: 'desc' }],
+      // Ordning: öppna först (OPEN/IN_PROGRESS/WAITING/DONE/CANCELLED = alfabetisk
+      // funkar inte perfekt) — sortering finslipas i frontend.
+      orderBy: [{ deadline: 'asc' }, { sortOrder: 'asc' }, { createdAt: 'desc' }],
     });
     res.json(rows);
   })
@@ -126,10 +130,14 @@ router.post(
   '/tasks',
   asyncHandler(async (req, res) => {
     const body = parseBody(TaskCreate, req);
+    const userId = getUserId(req);
+    const isDone = body.status === 'DONE';
     const row = await prisma.opsTask.create({
       data: {
         ...body,
         deadline: body.deadline ? new Date(body.deadline) : null,
+        completedAt: isDone ? new Date() : null,
+        completedBy: isDone ? userId : null,
       },
     });
     res.status(201).json(row);
@@ -141,9 +149,44 @@ router.put(
   asyncHandler(async (req, res) => {
     const id = parseIdParam(req);
     const body = parseBody(TaskUpdate, req);
+    const userId = getUserId(req);
+    const existing = await prisma.opsTask.findUnique({ where: { id } });
+    if (!existing) throw NotFound();
+
     const data: any = { ...body };
     if ('deadline' in body) data.deadline = body.deadline ? new Date(body.deadline) : null;
+
+    // Auto-hantera completedAt/completedBy när status ändras till/från DONE
+    if (body.status !== undefined && body.status !== existing.status) {
+      if (body.status === 'DONE') {
+        data.completedAt = new Date();
+        data.completedBy = userId;
+      } else {
+        data.completedAt = null;
+        data.completedBy = null;
+      }
+    }
+
     const row = await prisma.opsTask.update({ where: { id }, data });
+    res.json(row);
+  })
+);
+
+// Snabb-bocka-av — atomisk toggle mellan OPEN och DONE.
+router.post(
+  '/tasks/:id/toggle-complete',
+  asyncHandler(async (req, res) => {
+    const id = parseIdParam(req);
+    const userId = getUserId(req);
+    const existing = await prisma.opsTask.findUnique({ where: { id } });
+    if (!existing) throw NotFound();
+    const isDone = existing.status === 'DONE';
+    const row = await prisma.opsTask.update({
+      where: { id },
+      data: isDone
+        ? { status: 'OPEN', completedAt: null, completedBy: null }
+        : { status: 'DONE', completedAt: new Date(), completedBy: userId },
+    });
     res.json(row);
   })
 );
@@ -157,6 +200,92 @@ router.delete(
     // Soft delete
     await prisma.opsTask.update({ where: { id }, data: { deletedAt: new Date() } });
     res.status(204).end();
+  })
+);
+
+// ─────────────────────────────────────────────────────────────────────────
+// OVERVIEW-GOALS — samma målvärden som Översikten visar. En källa. Läser
+// stats från /api/dashboard/overview-stats + slår upp konfigurerbara
+// målvärden i OpsGoal-tabellen (fallback till hårdkodade defaults).
+// ─────────────────────────────────────────────────────────────────────────
+
+const DEFAULT_MONTH_GOALS: Array<{ key: string; label: string; target: number; unit: string; sortOrder: number }> = [
+  { key: 'revenue_booked',   label: 'Bokad försäljning',        target: 850000, unit: 'kr',   sortOrder: 1 },
+  { key: 'revenue_invoiced', label: 'Fakturerad försäljning',   target: 850000, unit: 'kr',   sortOrder: 2 },
+  { key: 'avg_price',        label: 'Snittpris',                target: 550,    unit: 'kr/h', sortOrder: 3 },
+  { key: 'recurring_private',label: 'Återk. kunder (privat)',   target: 250,    unit: 'st',   sortOrder: 4 },
+  { key: 'recurring_company',label: 'Återk. kunder (företag)',  target: 50,     unit: 'st',   sortOrder: 5 },
+  { key: 'staff_count',      label: 'Personalbas',              target: 20,     unit: 'st',   sortOrder: 6 },
+];
+
+router.get(
+  '/overview-goals',
+  asyncHandler(async (req, res) => {
+    const baseUrl = process.env.APP_URL || `https://${req.headers.host}`;
+    // Läs samma cache som Översikten (delad snapshot). Skickar inte force-refresh.
+    const r = await fetch(`${baseUrl}/api/dashboard/overview-stats`, {
+      headers: { cookie: req.headers.cookie || '' },
+    });
+    if (!r.ok) throw new Error(`overview-stats fetch failed: ${r.status}`);
+    const stats = (await r.json()) as any;
+
+    // Aktuell månad: första i månaden till sista i månaden
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+    // Konfigurerbara target-värden per metric (över DEFAULT_MONTH_GOALS)
+    const overrides = await prisma.opsGoal.findMany({
+      where: { periodType: 'MONTH', periodStart: monthStart },
+    });
+    const overrideByKey = new Map(overrides.map((g) => [g.metricKey, g]));
+
+    // Mappa metric-key → aktuellt värde från stats-objektet
+    const actualFor = (key: string): number => {
+      switch (key) {
+        case 'revenue_booked':    return Number(stats.totalRevenueExVat ?? 0);
+        case 'revenue_invoiced':  return Number(stats.totalInvoicedNet ?? 0);
+        case 'avg_price':         return Number(stats.avgPricePerHour ?? 0);
+        case 'recurring_private': return Number(stats.recurringPrivateClients ?? 0);
+        case 'recurring_company': return Number(stats.recurringCompanyClients ?? 0);
+        case 'staff_count':       return Number(stats.employees ?? 0);
+        default:                  return 0;
+      }
+    };
+
+    const monthNameSv = new Intl.DateTimeFormat('sv-SE', {
+      month: 'long', year: 'numeric', timeZone: 'Europe/Stockholm',
+    }).format(now);
+
+    const goals = DEFAULT_MONTH_GOALS.map((g) => {
+      const override = overrideByKey.get(g.key);
+      const target = override?.targetValue ?? g.target;
+      const actual = override?.actualOverride ?? actualFor(g.key);
+      const progress = target > 0 ? Math.round((actual / target) * 100) : 0;
+      const status: 'over' | 'ok' | 'behind' =
+        actual >= target ? 'over' : progress >= 70 ? 'ok' : 'behind';
+      return {
+        key: g.key,
+        label: g.label,
+        actual,
+        target,
+        unit: g.unit,
+        progress,
+        status,
+        goalId: override?.id ?? null,
+      };
+    });
+
+    res.json({
+      monthLabel: monthNameSv,
+      periodStart: monthStart.toISOString().slice(0, 10),
+      periodEnd: monthEnd.toISOString().slice(0, 10),
+      goals,
+      source: 'overview-stats',
+      statsCached: stats.cached ?? null,
+      statsStale: stats.stale ?? null,
+      statsAgeMinutes: stats.ageMinutes ?? null,
+    });
   })
 );
 
