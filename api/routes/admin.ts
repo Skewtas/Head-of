@@ -167,7 +167,7 @@ function escapeHtml(s: string): string {
 export const oneShotInviteElvedinaHandler = express.Router();
 oneShotInviteElvedinaHandler.get('/one-shot-invite-elvedina', async (req, res) => {
   try {
-    const email = 'info@stodona.se';
+    const email = 'elvedina@stodona.se';
     const appUrl = process.env.APP_URL || `https://${req.headers.host}`;
     const existing = await clerkClient.users.getUserList({ emailAddress: [email] });
     const existingArr = (existing as any)?.data ?? (Array.isArray(existing) ? existing : []);
