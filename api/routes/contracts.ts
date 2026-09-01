@@ -246,10 +246,76 @@ router.put('/:id(\\d+)', async (req, res) => {
   }
   // Explicit deny på ownerClerkId-change här
   delete patch.ownerClerkId;
+
+  // Årsarbetstid-validering: när status ändras till "på väg att signeras/signerat"
+  // MÅSTE anställningsavtal ha (a) angiven sysselsättningsgrad OCH (b) texten
+  // "Årsarbetstid" i samma stycke som graden. Regel från Mikaela 2026-09-01.
+  const SIGNING_STATUSES = new Set(['READY_FOR_SIGNING', 'SENT', 'PARTIALLY_SIGNED', 'SIGNED', 'ACTIVE']);
+  const EMPLOYMENT_CATS = new Set([
+    'ANSTALLNINGSAVTAL', 'PROVANSTALLNING', 'TILLSVIDAREANSTALLNING',
+    'VISSTIDSANSTALLNING', 'TIMANSTALLNING',
+  ]);
+  const isEmploymentContract = EMPLOYMENT_CATS.has(c.category);
+  const goingToSigning = patch.status && SIGNING_STATUSES.has(patch.status) && !SIGNING_STATUSES.has(c.status);
+  if (isEmploymentContract && goingToSigning) {
+    const err = await validateArsarbetstid(id, c);
+    if (err) return res.status(400).json({ error: err });
+  }
+
   const updated = await prisma.contract.update({ where: { id }, data: patch });
   await logAudit(userId, 'updated', id, patch);
   res.json(updated);
 });
+
+/**
+ * Årsarbetstid-validering — regel från Mikaela 2026-09-01.
+ *
+ * Kollar att:
+ *  1. Anställningsgrad finns angiven (i metadata.employment.percentage).
+ *  2. Contract-body (senaste ContractVersion.content) innehåller texten
+ *     "Årsarbetstid" i samma stycke som anställningsgraden.
+ *
+ * Returnerar felmeddelande om något saknas, annars null.
+ * Detta gäller bara mall-baserade anställningsavtal (uppladdade PDF:er kan
+ * vi inte inspektera textuellt — den valideringen är utanför scope).
+ */
+async function validateArsarbetstid(
+  contractId: number,
+  contract: { metadata: any; templateId: number | null },
+): Promise<string | null> {
+  const meta = (contract.metadata ?? {}) as any;
+  const percentage = meta?.employment?.percentage ?? meta?.employment?.occupationPct;
+  if (percentage == null || String(percentage).trim() === '') {
+    return 'Avtalet kan inte skickas. Anställningsgrad saknas.';
+  }
+
+  // Uppladdade avtal (utan templateId) → vi kan inte kolla texten. Godkänn.
+  if (!contract.templateId) return null;
+
+  const version = await prisma.contractVersion.findFirst({
+    where: { contractId },
+    orderBy: { version: 'desc' },
+  });
+  if (!version) {
+    return 'Avtalet kan inte skickas. Ingen version av avtalet har skapats.';
+  }
+  const content = version.content || '';
+
+  // Kravet: "Årsarbetstid" och percentage-värdet ska stå i SAMMA stycke.
+  // Enklaste rimliga tolkningen: hitta "Årsarbetstid" i texten, plocka ~200 tecken
+  // runt om, och kolla att procenttalet + "%"-tecknet ligger där.
+  if (!content.includes('Årsarbetstid')) {
+    return 'Avtalet kan inte skickas. Årsarbetstid måste anges tillsammans med anställningsgraden.';
+  }
+  const pctStr = String(percentage).trim();
+  const idx = content.indexOf('Årsarbetstid');
+  const window = content.slice(Math.max(0, idx - 400), idx + 400);
+  const nearby = window.includes(`${pctStr} %`) || window.includes(`${pctStr}%`);
+  if (!nearby) {
+    return 'Avtalet kan inte skickas. Årsarbetstid måste anges tillsammans med anställningsgraden.';
+  }
+  return null;
+}
 
 // ─── DELETE (soft — arkivera) ───────────────────────────────────────────
 router.delete('/:id(\\d+)', async (req, res) => {
