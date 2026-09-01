@@ -168,15 +168,56 @@ export const oneShotInviteElvedinaHandler = express.Router();
 oneShotInviteElvedinaHandler.get('/one-shot-invite-elvedina', async (req, res) => {
   try {
     const email = 'info@stodona.se';
+    const appUrl = process.env.APP_URL || `https://${req.headers.host}`;
     const existing = await clerkClient.users.getUserList({ emailAddress: [email] });
     const existingArr = (existing as any)?.data ?? (Array.isArray(existing) ? existing : []);
+
+    // Om kontot redan finns → skicka bara info-mail med lösenordsåterställnings-instruktioner
     if (existingArr.length > 0) {
-      return res.status(409).json({
-        error: `User ${email} already exists`,
-        userId: existingArr[0].id,
+      const existingUserId = existingArr[0].id;
+      const html = `
+        <div style="font-family:Inter,Arial,sans-serif;color:#1a1a2e;line-height:1.6;max-width:560px;margin:0 auto;padding:24px;">
+          <h1 style="font-family:'Playfair Display',Georgia,serif;font-size:24px;margin:0 0 16px;">Inlogg för Elvedina — info@stodona.se</h1>
+          <p style="margin:0 0 16px;">Hej,</p>
+          <p style="margin:0 0 16px;">Det finns redan ett användarkonto kopplat till <strong>info@stodona.se</strong> i HeadOf-systemet. Elvedina kan använda det befintliga kontot — hon behöver bara sätta (eller återställa) sitt lösenord.</p>
+          <div style="padding:16px 20px;background:#faf7ee;border-left:3px solid #c9a96e;margin:0 0 16px;">
+            <div style="font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:#a68a4e;font-weight:700;margin-bottom:8px;">Så här gör Elvedina</div>
+            <ol style="margin:0;padding-left:18px;">
+              <li style="margin-bottom:6px;">Gå till <a href="${appUrl}" style="color:#a68a4e;">${appUrl}</a></li>
+              <li style="margin-bottom:6px;">Klicka <strong>Sign in</strong> och skriv <strong>${email}</strong></li>
+              <li style="margin-bottom:6px;">Klicka <strong>Forgot password?</strong></li>
+              <li style="margin-bottom:6px;">Klicka på länken i återställningsmailet som landar i denna inkorg</li>
+              <li>Sätt ett nytt lösenord — klart!</li>
+            </ol>
+          </div>
+          <p style="margin:0 0 16px;color:#8b8578;font-size:12px;">
+            Kontots ID i Clerk: <code>${existingUserId}</code><br/>
+            Om något krånglar, kontakta Mikaela.
+          </p>
+          <p style="margin:0;color:#8b8578;font-size:12px;">/HeadOf-systemet</p>
+        </div>
+      `;
+      let notifRes: any = null;
+      try {
+        notifRes = await deliverNewsletter({
+          newsletterId: `password-reset-info-${Date.now()}`,
+          recipients: [email],
+          subject: 'Inlogg för Elvedina — info@stodona.se',
+          htmlContent: html,
+          appUrl,
+        });
+      } catch (e: any) {
+        notifRes = { error: e?.message };
+      }
+      return res.json({
+        ok: true,
+        mode: 'existing-user-info-mail',
+        email,
+        existingUserId,
+        notification: notifRes,
+        note: 'Konto finns redan. Info-mail skickat till info@stodona.se med lösenordsåterställnings-instruktioner.',
       });
     }
-    const appUrl = process.env.APP_URL || `https://${req.headers.host}`;
     const invitation = await clerkClient.invitations.createInvitation({
       emailAddress: email,
       redirectUrl: appUrl,
