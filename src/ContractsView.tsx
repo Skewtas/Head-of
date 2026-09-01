@@ -89,30 +89,17 @@ export default function ContractsView() {
   const [categoryFilter, setCategoryFilter] = useState<string>('');
   const [uploadOpen, setUploadOpen] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
-  const [missing, setMissing] = useState<{
-    totalActive: number;
-    totalRaw?: number;
-    excludedCount?: number;
-    excludedNames?: string[];
-    withActive: number;
-    missing: any[];
-    missingCount: number;
-    todayYmd: string;
-  } | null>(null);
-  const [expandedMissingId, setExpandedMissingId] = useState<number | null>(null);
 
   const reload = async () => {
-    const [s, list, cos, miss] = await Promise.all([
+    const [s, list, cos] = await Promise.all([
       api<Stats>('/api/contracts/stats').catch(() => null),
       api<{ data: Contract[]; isSuperadmin: boolean }>('/api/contracts').catch(() => ({ data: [], isSuperadmin: false })),
       api<{ id: number; name: string }[]>('/api/contracts/companies').catch(() => []),
-      api<{ totalActive: number; totalRaw?: number; excludedCount?: number; excludedNames?: string[]; withActive: number; missing: any[]; missingCount: number; todayYmd: string }>('/api/contracts/missing-employees').catch(() => null),
     ]);
     if (s) setStats(s);
     setContracts(list.data);
     setIsSuperadmin(list.isSuperadmin);
     setCompanies(cos);
-    if (miss) setMissing(miss);
   };
 
   useEffect(() => {
@@ -198,118 +185,9 @@ export default function ContractsView() {
         <KpiCard label="Utgångna" value={stats?.expired ?? '—'} icon={AlertTriangle} accent="red" />
       </div>
 
-      {/* Varning: aktiva Timewave-anställda utan aktivt anställningsavtal */}
-      {missing && missing.missingCount > 0 && (
-        <div className="bg-red-50 border border-red-200 rounded-xl p-4 space-y-3">
-          <div className="flex items-start gap-3">
-            <AlertTriangle className="w-5 h-5 text-red-700 flex-shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <h3 className="text-sm font-semibold text-red-900">
-                {missing.missingCount} anställd{missing.missingCount === 1 ? '' : 'a'} saknar registrerat avtal i systemet
-              </h3>
-              <p className="text-xs text-red-700/80 mt-0.5">
-                {missing.withActive} av {missing.totalActive} aktiva Timewave-anställda har giltigt avtal registrerat i systemet per {missing.todayYmd}.
-                {missing.excludedCount ? ` ${missing.excludedCount} filtrerad${missing.excludedCount === 1 ? '' : 'e'} bort (dummies + slutat: ${missing.excludedNames?.join(', ')}).` : ''}
-                {' '}Klicka på en rad för att se detaljer.
-              </p>
-              <p className="text-[11px] text-red-700/60 mt-1 italic">
-                Har personen ett pappersavtal? Klicka <strong>Ladda upp befintligt</strong> uppe till höger för att lägga in en scan.
-              </p>
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            {missing.missing.map((p) => {
-              const isOpen = expandedMissingId === p.timewaveEmployeeId;
-              const reasonLabel: Record<string, string> = {
-                NO_CONTRACT: 'Inget avtal kopplat',
-                NOT_YET_STARTED: 'Avtal finns, men startdatum har inte inträffat',
-                EXPIRED: 'Avtal finns, men har löpt ut',
-                DRAFT_ONLY: 'Endast utkast/opåbörjad signering',
-                OTHER: 'Övrigt — se detaljer',
-              };
-              return (
-                <div key={p.timewaveEmployeeId} className="bg-white border border-red-200 rounded-lg overflow-hidden">
-                  <button
-                    onClick={() => setExpandedMissingId(isOpen ? null : p.timewaveEmployeeId)}
-                    className="w-full text-left px-3 py-2 flex items-center gap-3 hover:bg-red-50 text-sm"
-                  >
-                    <span className="font-medium text-red-900 flex-1">
-                      {p.firstName} {p.lastName}
-                      {p.occupation && <span className="text-red-500 text-[10px] ml-1">· {p.occupation}%</span>}
-                    </span>
-                    <span className="text-[11px] px-2 py-0.5 rounded-full bg-red-100 text-red-700">
-                      {reasonLabel[p.reason] || p.reason}
-                    </span>
-                    <span className="text-[10px] text-red-500">{isOpen ? '▲' : '▼'}</span>
-                  </button>
-                  {isOpen && (
-                    <div className="border-t border-red-100 px-3 py-2 bg-red-50/50 text-xs space-y-2">
-                      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-red-900/80">
-                        <div><span className="text-red-500">Timewave-ID:</span> {p.timewaveEmployeeId}</div>
-                        <div><span className="text-red-500">Anställd sedan:</span> {p.startDate || '—'}</div>
-                        <div><span className="text-red-500">Email:</span> {p.email || '—'}</div>
-                        <div><span className="text-red-500">Personnummer:</span> {p.personalNumber || '—'}</div>
-                      </div>
-
-                      {p.candidates.length > 0 ? (
-                        <div>
-                          <div className="text-red-700 font-medium mt-1 mb-1">
-                            Avtal vi hittade ({p.candidates.length}):
-                          </div>
-                          <ul className="space-y-1">
-                            {p.candidates.map((c: any) => (
-                              <li
-                                key={c.id}
-                                className="flex items-center gap-2 px-2 py-1.5 bg-white rounded border border-red-100"
-                              >
-                                <span className={`w-1.5 h-1.5 rounded-full ${c.isActive ? 'bg-emerald-500' : 'bg-red-400'}`} />
-                                <span className="flex-1 truncate">
-                                  <span className="font-medium">{c.title}</span>
-                                  <span className="text-red-500 text-[10px] ml-2">
-                                    {c.startDate || '—'} → {c.endDate || 'tv.'}
-                                  </span>
-                                </span>
-                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-700">
-                                  {c.status}
-                                </span>
-                                <span className="text-[10px] text-red-500" title={`Matchad via ${c.matchMethod}`}>
-                                  ~{c.matchMethod}
-                                </span>
-                                <span className="text-[10px] text-red-600 max-w-[180px] truncate" title={c.activeReason}>
-                                  {c.activeReason}
-                                </span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      ) : (
-                        <div className="text-red-700 italic">
-                          Inga avtal kopplade till denna anställd (via Timewave-ID, personnummer, email eller namn).
-                        </div>
-                      )}
-
-                      <div className="pt-1 flex gap-2">
-                        <button
-                          onClick={() => setUploadOpen(true)}
-                          className="text-xs px-3 py-1 bg-white border border-red-300 text-red-700 rounded hover:bg-red-50"
-                        >
-                          Ladda upp befintligt
-                        </button>
-                        <button
-                          onClick={() => setWizardOpen(true)}
-                          className="text-xs px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700"
-                        >
-                          Skapa nytt avtal
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
+{/* Missing-employees-varningen borttagen 2026-09-01 — data i systemet är inte
+   komplett ännu och varningen gav mest brus. Endpointen finns kvar för
+   framtida bruk men visas inte i UI. */}
 
       {/* Sök/filter */}
       <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">

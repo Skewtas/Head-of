@@ -29,7 +29,7 @@ import opsRouter from '../routes/ops.js';
 import contractsRouter from '../routes/contracts.js';
 import hrRouter from '../routes/hr.js';
 import personalbrevRouter from '../routes/personalbrev.js';
-import adminRouter, { oneShotInviteElvedinaHandler } from '../routes/admin.js';
+import adminRouter from '../routes/admin.js';
 import { errorMiddleware } from './errors.js';
 
 export function buildHeadofApp(): Express {
@@ -55,9 +55,6 @@ export function buildHeadofApp(): Express {
   app.use('/api/contracts', contractsRouter);
   app.use('/api/hr', hrRouter);
   app.use('/api/personalbrev', personalbrevRouter);
-  // ENGÅNGS-endpoint (2026-09-01) MÅSTE mount:as FÖRE adminRouter så dess
-  // auth-middleware inte konsumerar requesten.
-  app.use('/api/admin', oneShotInviteElvedinaHandler);
   app.use('/api/admin', adminRouter);
 
   app.use('/api', errorMiddleware);
