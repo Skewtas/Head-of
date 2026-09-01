@@ -22,7 +22,23 @@ type TimewaveEmployee = {
   postal_code?: string;
   city?: string;
   employee_startdate?: string | null;
-  base_contract?: { occupation?: number } | null;
+  base_contract?: {
+    occupation?: number;
+    job_title?: string;
+    title?: string;
+    position?: string;
+    hourly_rate?: number | string;
+    salary?: number | string;
+  } | null;
+  // Möjliga extra-fält Timewave kan skicka
+  employee_number?: string;
+  job_title?: string;
+  title?: string;
+  position?: string;
+  role?: string;
+  bank_account?: string;
+  hourly_rate?: number | string;
+  salary?: number | string;
   status?: string;
   deleted?: boolean;
 };
@@ -143,8 +159,41 @@ export default function ContractWizard({
     setPersonAddress(e.address || '');
     setPersonZip(e.postal_code || '');
     setPersonCity(e.city || '');
+
+    // Startdatum
     if (e.employee_startdate) setStartDate(String(e.employee_startdate).slice(0, 10));
+
+    // Sysselsättningsgrad från base_contract.occupation
     if (e.base_contract?.occupation) setOccupationPct(String(e.base_contract.occupation));
+
+    // Befattning — sök i alla möjliga fält Timewave kan använda.
+    // Default till "Städare" (Stodona är städbolag) om ingen titel finns.
+    const jobTitle =
+      e.job_title || e.title || e.position || e.role ||
+      e.base_contract?.job_title || e.base_contract?.title || e.base_contract?.position ||
+      'Städare';
+    setRole(jobTitle);
+
+    // Anställningsnummer — från Timewave om det finns, annars generera
+    // deterministiskt från Timewave-ID:t så det blir stabilt (samma anställd
+    // → samma nummer varje gång).
+    if (e.employee_number) {
+      setEmploymentNumber(e.employee_number);
+    } else if (!employmentNumber) {
+      const year = new Date().getFullYear();
+      const padded = String(e.id).padStart(4, '0');
+      setEmploymentNumber(`S-${year}-${padded}`);
+    }
+
+    // Timlön/månadslön om Timewave har det
+    const hr = e.hourly_rate ?? e.base_contract?.hourly_rate;
+    if (hr && !hourlyRate) setHourlyRate(String(hr));
+    const sal = e.salary ?? e.base_contract?.salary;
+    if (sal && !salary) setSalary(String(sal));
+
+    // Bankkonto
+    if (e.bank_account && !bankAccount) setBankAccount(e.bank_account);
+
     setEmpSearchOpen(false);
     setEmpSearch(`${e.first_name || ''} ${e.last_name || ''}`.trim());
   };
@@ -200,7 +249,10 @@ export default function ContractWizard({
   }, [step, templateId, ownCompanyId, personCtx, employmentCtx]);
 
   const validateStep1 = () => {
-    if (!firstName || !lastName || !role || !startDate) return 'Fyll i förnamn, efternamn, befattning och startdatum.';
+    if (!firstName || !lastName || !startDate) {
+      return 'Fyll i förnamn, efternamn och startdatum — eller välj anställd från Timewave för att hämta allt automatiskt.';
+    }
+    if (!role) return 'Befattning saknas. Välj anställd från Timewave, eller fyll i manuellt (t.ex. "Städare").';
     if (!ownCompanyId) return 'Välj företag.';
     return null;
   };
@@ -315,7 +367,8 @@ export default function ContractWizard({
                     </div>
                   )}
                   <div className="text-[11px] text-brand-muted mt-1 italic">
-                    Väljer du en anställd fylls personnr, kontakt, adress, startdatum och anställningsgrad i automatiskt.
+                    Väljer du en anställd fylls <strong>allt</strong> i automatiskt: personnr, kontakt, adress, startdatum,
+                    anställningsgrad, befattning och anställningsnummer.
                   </div>
                 </div>
 
