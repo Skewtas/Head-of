@@ -247,9 +247,8 @@ router.put('/:id(\\d+)', async (req, res) => {
   // Explicit deny på ownerClerkId-change här
   delete patch.ownerClerkId;
 
-  // Årsarbetstid-validering: när status ändras till "på väg att signeras/signerat"
-  // MÅSTE anställningsavtal ha (a) angiven sysselsättningsgrad OCH (b) texten
-  // "Årsarbetstid" i samma stycke som graden. Regel från Mikaela 2026-09-01.
+  // Obligatoriska kontroller innan avtal kan skickas för signering.
+  // Regler från Mikaela 2026-09-01 — hårda systemregler, inte bara mall-text.
   const SIGNING_STATUSES = new Set(['READY_FOR_SIGNING', 'SENT', 'PARTIALLY_SIGNED', 'SIGNED', 'ACTIVE']);
   const EMPLOYMENT_CATS = new Set([
     'ANSTALLNINGSAVTAL', 'PROVANSTALLNING', 'TILLSVIDAREANSTALLNING',
@@ -258,7 +257,7 @@ router.put('/:id(\\d+)', async (req, res) => {
   const isEmploymentContract = EMPLOYMENT_CATS.has(c.category);
   const goingToSigning = patch.status && SIGNING_STATUSES.has(patch.status) && !SIGNING_STATUSES.has(c.status);
   if (isEmploymentContract && goingToSigning) {
-    const err = await validateArsarbetstid(id, c);
+    const err = await validateContractForSigning(id, c);
     if (err) return res.status(400).json({ error: err });
   }
 
@@ -268,42 +267,81 @@ router.put('/:id(\\d+)', async (req, res) => {
 });
 
 /**
- * Årsarbetstid-validering — regel från Mikaela 2026-09-01.
+ * Obligatoriska kontroller innan ett anställningsavtal kan skickas för
+ * signering (regler från Mikaela 2026-09-01, hårda systemregler).
  *
- * Kollar att:
- *  1. Anställningsgrad finns angiven (i metadata.employment.percentage).
- *  2. Contract-body (senaste ContractVersion.content) innehåller texten
- *     "Årsarbetstid" i samma stycke som anställningsgraden.
+ * Kontrollerar i tur och ordning:
+ *  1. Arbetsgivare = Doma Services AB
+ *  2. Anställd har namn + personnummer
+ *  3. Anställningsform (kategori)
+ *  4. Startdatum
+ *  5. Lön (månadslön ELLER timlön)
+ *  6. Anställningsgrad (metadata.employment.percentage)
+ *  7. Årsarbetstid står bredvid anställningsgraden i content
+ *  8. INGEN felaktig hänvisning till kollektivavtal
  *
- * Returnerar felmeddelande om något saknas, annars null.
- * Detta gäller bara mall-baserade anställningsavtal (uppladdade PDF:er kan
- * vi inte inspektera textuellt — den valideringen är utanför scope).
+ * Returnerar felmeddelande om något inte stämmer, annars null.
+ * För uppladdade PDF-avtal (utan templateId) skippas textuella kontroller
+ * eftersom vi inte kan inspektera PDF-innehåll.
  */
-async function validateArsarbetstid(
+async function validateContractForSigning(
   contractId: number,
-  contract: { metadata: any; templateId: number | null },
+  contract: any,
 ): Promise<string | null> {
+  // 1. Arbetsgivare = Doma Services AB
+  const ownCompany = await prisma.ownCompany.findUnique({
+    where: { id: contract.ownCompanyId },
+    select: { name: true },
+  });
+  if (!ownCompany || ownCompany.name.trim() !== 'Doma Services AB') {
+    return `Avtalet kan inte skickas. Arbetsgivare måste vara Doma Services AB (nuvarande: ${ownCompany?.name || 'saknas'}).`;
+  }
+
+  // 2. Person-info
+  if (!contract.personId) {
+    return 'Avtalet kan inte skickas. Ingen anställd är kopplad till avtalet.';
+  }
+  const person = await prisma.contractPerson.findUnique({ where: { id: contract.personId } });
+  if (!person || !person.firstName || !person.lastName) {
+    return 'Avtalet kan inte skickas. Den anställdes namn saknas.';
+  }
+  if (!person.personalNumber || person.personalNumber.replace(/[^0-9]/g, '').length < 10) {
+    return 'Avtalet kan inte skickas. Den anställdes personnummer saknas.';
+  }
+
+  // 3. Anställningsform (kategori)
+  if (!contract.category) {
+    return 'Avtalet kan inte skickas. Anställningsform saknas.';
+  }
+
+  // 4. Startdatum
+  if (!contract.startDate) {
+    return 'Avtalet kan inte skickas. Startdatum saknas.';
+  }
+
+  // 5-6. Lön + anställningsgrad från metadata
   const meta = (contract.metadata ?? {}) as any;
-  const percentage = meta?.employment?.percentage ?? meta?.employment?.occupationPct;
+  const emp = meta?.employment ?? {};
+  const percentage = emp.percentage ?? emp.occupationPct;
   if (percentage == null || String(percentage).trim() === '') {
     return 'Avtalet kan inte skickas. Anställningsgrad saknas.';
   }
+  const salary = emp.salary;
+  const hourlyRate = emp.hourlyRate ?? emp.hourly_rate;
+  if ((!salary || String(salary).trim() === '') && (!hourlyRate || String(hourlyRate).trim() === '')) {
+    return 'Avtalet kan inte skickas. Lön saknas (månadslön eller timlön krävs).';
+  }
 
-  // Uppladdade avtal (utan templateId) → vi kan inte kolla texten. Godkänn.
+  // 7-8. Textuella kontroller (bara för mall-baserade avtal)
   if (!contract.templateId) return null;
-
   const version = await prisma.contractVersion.findFirst({
     where: { contractId },
     orderBy: { version: 'desc' },
   });
-  if (!version) {
-    return 'Avtalet kan inte skickas. Ingen version av avtalet har skapats.';
-  }
+  if (!version) return 'Avtalet kan inte skickas. Ingen version av avtalet har skapats.';
   const content = version.content || '';
 
-  // Kravet: "Årsarbetstid" och percentage-värdet ska stå i SAMMA stycke.
-  // Enklaste rimliga tolkningen: hitta "Årsarbetstid" i texten, plocka ~200 tecken
-  // runt om, och kolla att procenttalet + "%"-tecknet ligger där.
+  // 7. Årsarbetstid bredvid anställningsgraden
   if (!content.includes('Årsarbetstid')) {
     return 'Avtalet kan inte skickas. Årsarbetstid måste anges tillsammans med anställningsgraden.';
   }
@@ -314,6 +352,24 @@ async function validateArsarbetstid(
   if (!nearby) {
     return 'Avtalet kan inte skickas. Årsarbetstid måste anges tillsammans med anställningsgraden.';
   }
+
+  // 8. Ingen felaktig hänvisning till kollektivavtal — Doma har inget.
+  // Vi tolererar ord i explicit "vi har INTE kollektivavtal"-mening bara om
+  // det uttryckligen står "har inte kollektivavtal" eller "utan kollektivavtal".
+  const lower = content.toLowerCase();
+  const mentionsCollective = lower.includes('kollektivavtal');
+  if (mentionsCollective) {
+    const explicitlyDenied =
+      lower.includes('utan kollektivavtal') ||
+      lower.includes('har inte kollektivavtal') ||
+      lower.includes('har inget kollektivavtal') ||
+      lower.includes('inte något kollektivavtal') ||
+      lower.includes('omfattas inte av kollektivavtal');
+    if (!explicitlyDenied) {
+      return 'Avtalet kan inte skickas. Doma Services AB har inte kollektivavtal — avtalet innehåller en felaktig hänvisning till kollektivavtal som måste tas bort.';
+    }
+  }
+
   return null;
 }
 
