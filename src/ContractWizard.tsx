@@ -79,13 +79,26 @@ export default function ContractWizard({
   const [personCity, setPersonCity] = useState('');
 
   const [role, setRole] = useState('');
-  const [occupationPct, setOccupationPct] = useState('100');
+  // Sysselsättningsgrad: "ON_DEMAND" (default), "25", "50", "75", "80", "100", "OTHER"
+  const [occupationMode, setOccupationMode] = useState<'ON_DEMAND' | '25' | '50' | '75' | '80' | '100' | 'OTHER'>('ON_DEMAND');
+  const [occupationOther, setOccupationOther] = useState('');
+  // Serialiserad occupation för mall + validering — "Vid behov" eller "X %"
+  const occupationPct = occupationMode === 'ON_DEMAND'
+    ? 'Vid behov'
+    : occupationMode === 'OTHER'
+      ? (occupationOther || '')
+      : occupationMode;
   const [employmentForm, setEmploymentForm] = useState<'TILLSVIDARE' | 'PROV' | 'VISSTID' | 'TIM'>('TIM');
   const [workArea, setWorkArea] = useState('Stockholm med omnejd');
   const [employmentNumber, setEmploymentNumber] = useState('');
   const [bankAccount, setBankAccount] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+
+  // Löneform: HOURLY (timlön) eller MONTHLY (månadslön). Default HOURLY.
+  const [salaryForm, setSalaryForm] = useState<'HOURLY' | 'MONTHLY'>('HOURLY');
+  // Semesterersättning ingår i timlönen (default TRUE per regel).
+  const [vacationIncludedInHourly, setVacationIncludedInHourly] = useState(true);
 
   // Timanställning: MAX 1 år, slutdatum auto-räknas från tillträde (start + 1 år − 1 dag)
   const autoTimEnd = (isoStart: string): string => {
@@ -163,8 +176,13 @@ export default function ContractWizard({
     // Startdatum
     if (e.employee_startdate) setStartDate(String(e.employee_startdate).slice(0, 10));
 
-    // Sysselsättningsgrad från base_contract.occupation
-    if (e.base_contract?.occupation) setOccupationPct(String(e.base_contract.occupation));
+    // Sysselsättningsgrad — försök mappa Timewave-värdet till våra alternativ.
+    // Default förblir "Vid behov" om Timewave saknar värde.
+    if (e.base_contract?.occupation) {
+      const p = String(e.base_contract.occupation);
+      if (['25','50','75','80','100'].includes(p)) setOccupationMode(p as any);
+      else if (Number(p) > 0) { setOccupationMode('OTHER'); setOccupationOther(p); }
+    }
 
     // Befattning — sök i alla möjliga fält Timewave kan använda.
     // Default till "Städare" (Stodona är städbolag) om ingen titel finns.
@@ -174,15 +192,10 @@ export default function ContractWizard({
       'Städare';
     setRole(jobTitle);
 
-    // Anställningsnummer — från Timewave om det finns, annars generera
-    // deterministiskt från Timewave-ID:t så det blir stabilt (samma anställd
-    // → samma nummer varje gång).
+    // Anställningsnummer — MÅSTE vara Fortnox-numret exakt.
+    // Vi auto-fyller ENDAST om Timewave råkar ha det redan. Ingen autogenerering.
     if (e.employee_number) {
       setEmploymentNumber(e.employee_number);
-    } else if (!employmentNumber) {
-      const year = new Date().getFullYear();
-      const padded = String(e.id).padStart(4, '0');
-      setEmploymentNumber(`S-${year}-${padded}`);
     }
 
     // Timlön/månadslön om Timewave har det
@@ -207,7 +220,14 @@ export default function ContractWizard({
     startDate, start_date: startDate,
     endDate, end_date: endDate,
     probationEndDate, probation_end_date: probationEndDate,
-    salary, hourlyRate, hourly_rate: hourlyRate,
+    // Löneform: skickar bara den som är vald
+    salary_form: salaryForm,
+    salaryForm,
+    salary: salaryForm === 'MONTHLY' ? salary : '',
+    hourlyRate: salaryForm === 'HOURLY' ? hourlyRate : '',
+    hourly_rate: salaryForm === 'HOURLY' ? hourlyRate : '',
+    vacation_included_in_hourly: salaryForm === 'HOURLY' ? vacationIncludedInHourly : null,
+    vacationIncludedInHourly: salaryForm === 'HOURLY' ? vacationIncludedInHourly : null,
     workplace, work_area: workArea || workplace,
     workHours, vacation,
     noticePeriod, notice_period: noticePeriod,
@@ -218,7 +238,7 @@ export default function ContractWizard({
     employmentNumber,
     bank_account: bankAccount,
     bankAccount,
-  }), [role, occupationPct, startDate, endDate, probationEndDate, salary, hourlyRate, workplace, workArea, workHours, vacation, noticePeriod, otherTerms, employmentForm, employmentNumber, bankAccount]);
+  }), [role, occupationPct, startDate, endDate, probationEndDate, salary, salaryForm, hourlyRate, vacationIncludedInHourly, workplace, workArea, workHours, vacation, noticePeriod, otherTerms, employmentForm, employmentNumber, bankAccount]);
 
   const personCtx = useMemo(() => ({
     firstName, lastName, personalNumber,
@@ -253,7 +273,12 @@ export default function ContractWizard({
       return 'Fyll i förnamn, efternamn och startdatum — eller välj anställd från Timewave för att hämta allt automatiskt.';
     }
     if (!role) return 'Befattning saknas. Välj anställd från Timewave, eller fyll i manuellt (t.ex. "Städare").';
-    if (!ownCompanyId) return 'Välj företag.';
+    if (!ownCompanyId) return 'Välj arbetsgivare.';
+    if (!employmentNumber.trim()) return 'Anställningsnummer saknas. Ange exakt samma anställningsnummer som personen har i Fortnox.';
+    if (!occupationPct) return 'Sysselsättningsgrad saknas.';
+    if (occupationMode === 'OTHER' && !occupationOther.trim()) return 'Fyll i annan sysselsättningsgrad (%).';
+    if (salaryForm === 'HOURLY' && !hourlyRate.trim()) return 'Timlön saknas.';
+    if (salaryForm === 'MONTHLY' && !salary.trim()) return 'Månadslön saknas.';
     return null;
   };
 
@@ -390,7 +415,17 @@ export default function ContractWizard({
               <section>
                 <h4 className="text-[10px] font-bold uppercase tracking-wider text-brand-muted mb-3">Anställningsvillkor</h4>
                 <div className="grid grid-cols-2 gap-3">
-                  <Field label="Anställningsnummer"><input value={employmentNumber} onChange={(e) => setEmploymentNumber(e.target.value)} placeholder="Ex: S-2026-0047" className={inp} /></Field>
+                  <Field label="Anställningsnummer Fortnox *">
+                    <input
+                      value={employmentNumber}
+                      onChange={(e) => setEmploymentNumber(e.target.value)}
+                      placeholder="Exakt som i Fortnox"
+                      className={inp}
+                    />
+                    <div className="text-[10px] text-brand-muted mt-1 italic">
+                      Ange exakt samma anställningsnummer som personen har i Fortnox. Får inte auto-genereras eller ändras.
+                    </div>
+                  </Field>
                   <Field label="Anställningsform *">
                     <select value={employmentForm} onChange={(e) => setEmploymentForm(e.target.value as any)} className={inp}>
                       <option value="TILLSVIDARE">Tillsvidareanställning</option>
@@ -400,7 +435,30 @@ export default function ContractWizard({
                     </select>
                   </Field>
                   <Field label="Befattning *"><input value={role} onChange={(e) => setRole(e.target.value)} placeholder="Städare, Teamledare…" className={inp} /></Field>
-                  <Field label="Anställningsgrad (%)"><input value={occupationPct} onChange={(e) => setOccupationPct(e.target.value)} type="number" className={inp} /></Field>
+                  <Field label="Sysselsättningsgrad *">
+                    <select
+                      value={occupationMode}
+                      onChange={(e) => setOccupationMode(e.target.value as any)}
+                      className={inp}
+                    >
+                      <option value="ON_DEMAND">Vid behov (standard)</option>
+                      <option value="25">25 %</option>
+                      <option value="50">50 %</option>
+                      <option value="75">75 %</option>
+                      <option value="80">80 %</option>
+                      <option value="100">100 %</option>
+                      <option value="OTHER">Annan %</option>
+                    </select>
+                    {occupationMode === 'OTHER' && (
+                      <input
+                        value={occupationOther}
+                        onChange={(e) => setOccupationOther(e.target.value)}
+                        placeholder="Ex: 60"
+                        type="number"
+                        className={`${inp} mt-2`}
+                      />
+                    )}
+                  </Field>
                   <Field label="Tillträdesdag *">
                     <input
                       type="date"
@@ -408,7 +466,6 @@ export default function ContractWizard({
                       onChange={(e) => {
                         const v = e.target.value;
                         setStartDate(v);
-                        // Auto-sätt slutdatum för TIM (start + 1 år − 1 dag)
                         if (employmentForm === 'TIM' && v) setEndDate(autoTimEnd(v));
                       }}
                       className={inp}
@@ -427,13 +484,60 @@ export default function ContractWizard({
                   )}
                   <Field label="Arbetsområde"><input value={workArea} onChange={(e) => setWorkArea(e.target.value)} placeholder="Stockholm med omnejd" className={inp} /></Field>
                   <Field label="Arbetsplats (specifik)"><input value={workplace} onChange={(e) => setWorkplace(e.target.value)} placeholder="Ex: hos våra kunder" className={inp} /></Field>
-                  {employmentForm !== 'TIM' && (
-                    <Field label="Månadslön (kr)"><input value={salary} onChange={(e) => setSalary(e.target.value)} type="number" className={inp} /></Field>
-                  )}
-                  {employmentForm === 'TIM' && (
-                    <Field label="Timlön (kr) *"><input value={hourlyRate} onChange={(e) => setHourlyRate(e.target.value)} type="number" className={inp} /></Field>
-                  )}
                   <Field label="Bankkonto för lön"><input value={bankAccount} onChange={(e) => setBankAccount(e.target.value)} placeholder="Ex: Nordea 3300 · 12 34 567 890 1" className={inp} /></Field>
+                </div>
+
+                {/* LÖNEFORM — explicit val Timlön vs Månadslön */}
+                <div className="mt-4 p-4 bg-brand-bg/40 border border-gray-200 rounded-lg">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-brand-muted mb-3">Löneform *</div>
+                  <div className="grid grid-cols-2 gap-3 mb-3">
+                    <button
+                      type="button"
+                      onClick={() => setSalaryForm('HOURLY')}
+                      className={`p-3 text-left rounded-lg border-2 ${
+                        salaryForm === 'HOURLY' ? 'border-brand-dark bg-white' : 'border-gray-200 bg-white hover:border-brand-accent'
+                      }`}
+                    >
+                      <div className="font-semibold text-brand-dark text-sm">Timlön</div>
+                      <div className="text-[11px] text-brand-muted mt-0.5">XX kr/timme</div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSalaryForm('MONTHLY')}
+                      className={`p-3 text-left rounded-lg border-2 ${
+                        salaryForm === 'MONTHLY' ? 'border-brand-dark bg-white' : 'border-gray-200 bg-white hover:border-brand-accent'
+                      }`}
+                    >
+                      <div className="font-semibold text-brand-dark text-sm">Månadslön</div>
+                      <div className="text-[11px] text-brand-muted mt-0.5">XX XXX kr/månad</div>
+                    </button>
+                  </div>
+
+                  {salaryForm === 'HOURLY' ? (
+                    <>
+                      <Field label="Timlön (kr/timme) *">
+                        <input value={hourlyRate} onChange={(e) => setHourlyRate(e.target.value)} type="number" placeholder="Ex: 185" className={inp} />
+                      </Field>
+                      <label className="mt-3 flex items-start gap-2 text-sm cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={vacationIncludedInHourly}
+                          onChange={(e) => setVacationIncludedInHourly(e.target.checked)}
+                          className="mt-0.5"
+                        />
+                        <span>
+                          <strong>Timlönen inkluderar semesterersättning</strong> (12 % ingår i timlönen)
+                          <div className="text-[11px] text-brand-muted mt-0.5 font-normal">
+                            Bocka ur om semesterersättning ska hanteras separat.
+                          </div>
+                        </span>
+                      </label>
+                    </>
+                  ) : (
+                    <Field label="Månadslön (kr/månad) *">
+                      <input value={salary} onChange={(e) => setSalary(e.target.value)} type="number" placeholder="Ex: 29500" className={inp} />
+                    </Field>
+                  )}
                 </div>
                 <Field label="Arbetstid"><input value={workHours} onChange={(e) => setWorkHours(e.target.value)} className={inp} /></Field>
                 <Field label="Semester"><input value={vacation} onChange={(e) => setVacation(e.target.value)} className={inp} /></Field>

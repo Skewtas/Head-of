@@ -288,13 +288,22 @@ async function validateContractForSigning(
   contractId: number,
   contract: any,
 ): Promise<string | null> {
-  // 1. Arbetsgivare = Stodona Services AB
+  // 1. Arbetsgivare måste vara ett godkänt Stodona-bolag med rätt orgnr
   const ownCompany = await prisma.ownCompany.findUnique({
     where: { id: contract.ownCompanyId },
-    select: { name: true },
+    select: { name: true, organizationNumber: true },
   });
-  if (!ownCompany || ownCompany.name.trim() !== 'Stodona Services AB') {
-    return `Avtalet kan inte skickas. Arbetsgivare måste vara Stodona Services AB (nuvarande: ${ownCompany?.name || 'saknas'}).`;
+  if (!ownCompany) return 'Avtalet kan inte skickas. Arbetsgivare saknas.';
+  const validCompanies: Record<string, string> = {
+    'Stodona Services AB': '559481-1332',
+    'Stodona AB': '559201-1059',
+  };
+  const expectedOrgNr = validCompanies[ownCompany.name.trim()];
+  if (!expectedOrgNr) {
+    return `Avtalet kan inte skickas. Arbetsgivare "${ownCompany.name}" är inte ett godkänt bolag. Använd Stodona Services AB eller Stodona AB.`;
+  }
+  if (ownCompany.organizationNumber !== expectedOrgNr) {
+    return `Avtalet kan inte skickas. Fel organisationsnummer för ${ownCompany.name} (${ownCompany.organizationNumber}). Ska vara ${expectedOrgNr}.`;
   }
 
   // 2. Person-info
@@ -319,17 +328,46 @@ async function validateContractForSigning(
     return 'Avtalet kan inte skickas. Startdatum saknas.';
   }
 
-  // 5-6. Lön + anställningsgrad från metadata
   const meta = (contract.metadata ?? {}) as any;
   const emp = meta?.employment ?? {};
+
+  // 4b. Anställningsnummer i Fortnox — obligatoriskt
+  const empNumber = String(emp.employment_number ?? emp.employmentNumber ?? '').trim();
+  if (!empNumber) {
+    return 'Avtalet kan inte skickas. Anställningsnummer (Fortnox) saknas.';
+  }
+
+  // 5. Sysselsättningsgrad — måste finnas (kan vara "Vid behov" eller ett tal)
   const percentage = emp.percentage ?? emp.occupationPct;
   if (percentage == null || String(percentage).trim() === '') {
-    return 'Avtalet kan inte skickas. Anställningsgrad saknas.';
+    return 'Avtalet kan inte skickas. Sysselsättningsgrad saknas.';
   }
+
+  // 6. Löneform + rätt lönefält
+  const salaryForm = String(emp.salary_form ?? emp.salaryForm ?? '').toUpperCase();
   const salary = emp.salary;
   const hourlyRate = emp.hourlyRate ?? emp.hourly_rate;
-  if ((!salary || String(salary).trim() === '') && (!hourlyRate || String(hourlyRate).trim() === '')) {
-    return 'Avtalet kan inte skickas. Lön saknas (månadslön eller timlön krävs).';
+
+  if (!salaryForm) {
+    // Fallback för äldre avtal utan explicit löneform: acceptera om något lönebelopp finns
+    if ((!salary || String(salary).trim() === '') && (!hourlyRate || String(hourlyRate).trim() === '')) {
+      return 'Avtalet kan inte skickas. Löneform (timlön/månadslön) saknas.';
+    }
+  } else if (salaryForm === 'HOURLY') {
+    if (!hourlyRate || String(hourlyRate).trim() === '') {
+      return 'Avtalet kan inte skickas. Timlön saknas.';
+    }
+    // Semesterersättning-inställning MÅSTE vara satt (true eller false)
+    const vac = emp.vacation_included_in_hourly ?? emp.vacationIncludedInHourly;
+    if (vac !== true && vac !== false) {
+      return 'Avtalet kan inte skickas. Ange om timlönen inkluderar semesterersättning eller ej.';
+    }
+  } else if (salaryForm === 'MONTHLY') {
+    if (!salary || String(salary).trim() === '') {
+      return 'Avtalet kan inte skickas. Månadslön saknas.';
+    }
+  } else {
+    return `Avtalet kan inte skickas. Okänd löneform "${salaryForm}".`;
   }
 
   // 7-8. Textuella kontroller (bara för mall-baserade avtal)
