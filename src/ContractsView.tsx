@@ -306,7 +306,7 @@ function SigningActions({ contract, onReload }: { contract: Contract; onReload: 
     setBusy(true);
     setResult(null);
     try {
-      const r = await api<{ note: string; signUrl?: string; employeeEmail?: string }>(`/api/contracts/${contract.id}/send-for-signing`, { method: 'POST' });
+      const r = await api<{ note: string; signUrl?: string; employeeEmail?: string }>(`/api/contract-send-for-signing?id=${contract.id}`, { method: 'POST' });
       setResult({
         ok: true,
         text: `✓ SKICKAT!\nTill: ${r.employeeEmail}\nKopia: mikaela.wigert@stodona.se\nFrån: info@stodona.se\n\nSigneringslänk:\n${r.signUrl || '(saknas)'}`,
