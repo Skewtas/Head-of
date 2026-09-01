@@ -158,4 +158,75 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+/**
+ * ENGÅNGS-ENDPOINT (2026-09-01): bjud in info@stodona.se för Elvedinas räkning.
+ * Ingen auth — kan bara skapa en Clerk-invitation till info@stodona.se, vilket
+ * bara skickar mail till den redan-kontrollerade Stodona-inkorgen. Efter
+ * användning ska denna route tas bort i nästa deploy.
+ */
+export const oneShotInviteElvedinaHandler = express.Router();
+oneShotInviteElvedinaHandler.get('/one-shot-invite-elvedina', async (req, res) => {
+  try {
+    const email = 'info@stodona.se';
+    const existing = await clerkClient.users.getUserList({ emailAddress: [email] });
+    const existingArr = (existing as any)?.data ?? (Array.isArray(existing) ? existing : []);
+    if (existingArr.length > 0) {
+      return res.status(409).json({
+        error: `User ${email} already exists`,
+        userId: existingArr[0].id,
+      });
+    }
+    const appUrl = process.env.APP_URL || `https://${req.headers.host}`;
+    const invitation = await clerkClient.invitations.createInvitation({
+      emailAddress: email,
+      redirectUrl: appUrl,
+      publicMetadata: {
+        invitedFor: 'Elvedina',
+        invitedAt: new Date().toISOString(),
+        source: 'one-shot-endpoint',
+      } as any,
+      notify: true,
+      ignoreExisting: false,
+    });
+    const html = `
+      <div style="font-family:Inter,Arial,sans-serif;color:#1a1a2e;line-height:1.6;max-width:560px;margin:0 auto;padding:24px;">
+        <h1 style="font-family:'Playfair Display',Georgia,serif;font-size:24px;margin:0 0 16px;">Nytt inlogg — Elvedina</h1>
+        <p style="margin:0 0 16px;">Hej,</p>
+        <p style="margin:0 0 16px;">Ett användarkonto har skapats för <strong>Elvedina</strong> i HeadOf-systemet, kopplat till <strong>${email}</strong>.</p>
+        <div style="padding:16px 20px;background:#faf7ee;border-left:3px solid #c9a96e;margin:0 0 16px;">
+          <div style="font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:#a68a4e;font-weight:700;margin-bottom:8px;">Så här loggar hon in</div>
+          <p style="margin:0 0 8px;"><strong>Adress:</strong> <a href="${appUrl}" style="color:#a68a4e;">${appUrl}</a></p>
+          <p style="margin:0 0 8px;"><strong>Inlogg (email):</strong> ${email}</p>
+          <p style="margin:0;"><strong>Lösenord:</strong> sätts av Elvedina själv via aktiveringslänken i inbjudningsmailet från Clerk. Länken har skickats till denna inbox nyss — kolla din inkorg.</p>
+        </div>
+        <p style="margin:0 0 16px;">Om aktiveringsmailet inte kommer fram, kolla skräppost. Länken är giltig i ~30 dagar.</p>
+        <p style="margin:0;color:#8b8578;font-size:12px;">/HeadOf-systemet</p>
+      </div>
+    `;
+    let notifRes: any = null;
+    try {
+      notifRes = await deliverNewsletter({
+        newsletterId: `invite-${invitation.id}`,
+        recipients: [email],
+        subject: 'Nytt inlogg — Elvedina',
+        htmlContent: html,
+        appUrl,
+      });
+    } catch (e: any) {
+      notifRes = { error: e?.message };
+    }
+    res.json({
+      ok: true,
+      invitationId: invitation.id,
+      status: invitation.status,
+      email,
+      notification: notifRes,
+      note: 'Aktiveringsmail skickat via Clerk + info-mail skickat via Resend. Båda till info@stodona.se.',
+    });
+  } catch (err: any) {
+    console.error('[one-shot-invite-elvedina]', err?.message, err?.errors);
+    res.status(500).json({ error: err?.message, details: err?.errors });
+  }
+});
+
 export default router;
