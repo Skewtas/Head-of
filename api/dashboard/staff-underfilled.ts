@@ -13,6 +13,7 @@
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getTimewaveToken, forceRefreshTimewaveToken } from '../_lib/timewaveAuth.js';
+import { workHoursInMonth } from '../_lib/workHours.js';
 
 export const config = { maxDuration: 60 };
 
@@ -20,7 +21,6 @@ const RECIPIENTS = ['info@stodona.se', 'mikaela.wigert@stodona.se'];
 const CONTRACT_BUCKETS = new Set([50, 75, 100]);
 const EXCLUDE_NAME_SUBSTRINGS = ['tenita', 'laila', 'erik näf', 'luisa fernanda', 'mikaela wigert'];
 const ABSENCE_SERVICE_IDS = new Set([3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 26, 27, 28, 29, 30, 31, 34, 37, 39, 41, 42, 43, 44]);
-const WORK_HOURS_PER_MONTH_100 = 160;
 const UNDER_THRESHOLD_PCT = 90;
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -65,6 +65,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // ── Perioder ──────────────────────────────────────────────────────
     const now = new Date();
+    // Faktiska arbetstimmar för aktuell månad (vardagar minus helgdagar × 8h).
+    const workHoursPerMonth = workHoursInMonth(now.getFullYear(), now.getMonth());
     const pad = (n: number) => String(n).padStart(2, '0');
     const monthStart = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-01`;
     const monthEndDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
@@ -117,7 +119,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }[] = [];
     for (const e of tracked) {
       const s = stats.get(e.id)!;
-      const target = (e.occupation / 100) * WORK_HOURS_PER_MONTH_100;
+      const target = (e.occupation / 100) * workHoursPerMonth;
       const pct = Math.round((s.hours / target) * 100);
       const missing = Math.round(target - s.hours);
       if (pct < UNDER_THRESHOLD_PCT && missing > 5) {
@@ -156,7 +158,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ok: true, dryRun: true, subject, recipients: RECIPIENTS,
         underCount: under.length, totalMissing, openDaysCount: openDays.length,
         htmlLength: html.length,
-        tracked: tracked.map((e) => ({ name: e.name, occupation: e.occupation, hours: Math.round(stats.get(e.id)!.hours), target: (e.occupation / 100) * WORK_HOURS_PER_MONTH_100 })),
+        tracked: tracked.map((e) => ({ name: e.name, occupation: e.occupation, hours: Math.round(stats.get(e.id)!.hours), target: (e.occupation / 100) * workHoursPerMonth })),
         under: under.map(({ name, occupation, hours, target, missing, pct }) => ({ name, occupation, hours, target, missing, pct })),
         openDays: openDays.map((o) => ({ name: o.name, occupation: o.occupation, days: o.dates.length })),
         period: { monthStart, monthEnd, historyStart },

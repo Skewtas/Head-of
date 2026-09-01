@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getTimewaveToken, forceRefreshTimewaveToken } from '../_lib/timewaveAuth.js';
+import { workHoursInMonth } from '../_lib/workHours.js';
 
 // Tar 15+ s att aggregera alla anställda × en månads missions.
 export const config = { maxDuration: 60 };
@@ -82,8 +83,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    // Calculate occupancy (assuming 160h work month)
-    const workHoursPerMonth = 160;
+    // Faktiska arbetstimmar för aktuell månad (vardagar minus svenska helgdagar × 8h).
+    const workHoursPerMonth = workHoursInMonth(now.getFullYear(), now.getMonth());
     const staffList = employees
       .filter((e: any) => !e.deleted)
       .map((e: any) => {
@@ -110,6 +111,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       totalEmployees: staffList.length,
       totalHours: Math.round(staffList.reduce((s: number, e: any) => s + e.hours, 0)),
       avgOccupancy: staffList.length > 0 ? Math.round(staffList.reduce((s: number, e: any) => s + e.occupancy, 0) / staffList.length) : 0,
+      workHoursPerMonth,
     });
   } catch (err: any) {
     console.error("Staff summary error:", err.message);

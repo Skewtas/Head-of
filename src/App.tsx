@@ -327,11 +327,13 @@ const OverviewView = () => {
   };
   const [staffOcc, setStaffOcc] = React.useState<StaffOcc[]>([]);
   const [staffOccLoading, setStaffOccLoading] = React.useState(true);
+  const [workHoursPerMonth, setWorkHoursPerMonth] = React.useState<number | null>(null);
   React.useEffect(() => {
     fetch('/api/dashboard/staff-occupancy')
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (d && Array.isArray(d.employees)) setStaffOcc(d.employees);
+        if (d && typeof d.workHoursPerMonth === 'number') setWorkHoursPerMonth(d.workHoursPerMonth);
       })
       .catch(() => {})
       .finally(() => setStaffOccLoading(false));
@@ -877,7 +879,8 @@ const OverviewView = () => {
                 Beläggning per anställd — {currentMonthName}
               </h4>
               <p className="text-xs text-brand-muted mt-0.5">
-                Timmar bokade hittills i månaden. 100% = 160 h (heltid). Klicka på en rad för att kopiera namnet.
+                Timmar bokade hittills i månaden. 100% = {workHoursPerMonth ?? '…'} h (heltid, {currentMonthName}).
+                Klicka på en rad för att kopiera namnet.
               </p>
             </div>
             {!staffOccLoading && staffOcc.length > 0 && (
