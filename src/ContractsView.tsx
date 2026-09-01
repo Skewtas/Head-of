@@ -316,7 +316,14 @@ function SigningActions({ contract, onReload }: { contract: Contract; onReload: 
       );
       await onReload();
     } catch (e: any) {
-      alert('❌ Kunde inte skicka: ' + (e?.body?.error || e?.message || 'okänt fel'));
+      const body = e?.body || {};
+      const parts = [
+        '❌ Kunde inte skicka: ' + (body.error || e?.message || 'okänt fel'),
+      ];
+      if (body.debug) {
+        parts.push('', '--- DEBUG ---', JSON.stringify(body.debug, null, 2));
+      }
+      alert(parts.join('\n'));
     } finally { setBusy(false); }
   };
 
