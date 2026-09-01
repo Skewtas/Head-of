@@ -66,6 +66,7 @@ import ImportView from './ImportView';
 import OpsView from './OpsView';
 import ContractsView from './ContractsView';
 import HRView from './HRView';
+import PersonalbrevView from './PersonalbrevView';
 
 // Utility for Tailwind classes
 function cn(...inputs: ClassValue[]) {
@@ -1971,6 +1972,7 @@ export default function App() {
     { id: 'ops', label: 'VECKOUPPFÖLJNING', icon: ListChecks },
     { id: 'contracts', label: 'AVTAL', icon: FileText },
     { id: 'hr', label: 'HR', icon: Heart },
+    { id: 'personalbrev', label: 'PERSONALBREV', icon: Send },
     { id: 'email', label: 'E-POST UTSKICK', icon: Mail },
     { id: 'import', label: 'IMPORTERA FRÅN TIMEWAVE', icon: RefreshCw },
     // Dolda flikar — KUNDER / PERSONAL / ACTIONLISTA / ÄRENDEHANTERING / MAIL.
@@ -2058,6 +2060,7 @@ export default function App() {
               {activeTab === 'ops' && <OpsView />}
               {activeTab === 'contracts' && <ContractsView />}
               {activeTab === 'hr' && <HRView />}
+              {activeTab === 'personalbrev' && <PersonalbrevView />}
               {activeTab === 'import' && <ImportView />}
             </div>
           </main>
