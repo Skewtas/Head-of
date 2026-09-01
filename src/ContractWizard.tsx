@@ -120,7 +120,7 @@ export default function ContractWizard({
   const [salary, setSalary] = useState('');
   const [hourlyRate, setHourlyRate] = useState('');
   const [workplace, setWorkplace] = useState('');
-  const [workHours, setWorkHours] = useState('Enligt schema, i genomsnitt 40 timmar per helgfri vecka.');
+  const [workHours, setWorkHours] = useState('Enligt schema');
   const [vacation, setVacation] = useState('25 dagar per år enligt semesterlagen.');
   const [noticePeriod, setNoticePeriod] = useState('Enligt LAS.');
   const [otherTerms, setOtherTerms] = useState('');
@@ -192,11 +192,9 @@ export default function ContractWizard({
       'Städare';
     setRole(jobTitle);
 
-    // Anställningsnummer — MÅSTE vara Fortnox-numret exakt.
-    // Vi auto-fyller ENDAST om Timewave råkar ha det redan. Ingen autogenerering.
-    if (e.employee_number) {
-      setEmploymentNumber(e.employee_number);
-    }
+    // Anställningsnummer — samma som Timewave-ID (regel Mikaela 2026-09-01).
+    // Auto-fylls alltid från vald Timewave-anställd.
+    setEmploymentNumber(String(e.id));
 
     // Timlön/månadslön om Timewave har det
     const hr = e.hourly_rate ?? e.base_contract?.hourly_rate;
@@ -274,7 +272,7 @@ export default function ContractWizard({
     }
     if (!role) return 'Befattning saknas. Välj anställd från Timewave, eller fyll i manuellt (t.ex. "Städare").';
     if (!ownCompanyId) return 'Välj arbetsgivare.';
-    if (!employmentNumber.trim()) return 'Anställningsnummer saknas. Ange exakt samma anställningsnummer som personen har i Fortnox.';
+    if (!employmentNumber.trim()) return 'Anställningsnummer saknas. Välj anställd från Timewave så fylls det i automatiskt (Timewave-ID).';
     if (!occupationPct) return 'Sysselsättningsgrad saknas.';
     if (occupationMode === 'OTHER' && !occupationOther.trim()) return 'Fyll i annan sysselsättningsgrad (%).';
     if (salaryForm === 'HOURLY' && !hourlyRate.trim()) return 'Timlön saknas.';
@@ -415,15 +413,15 @@ export default function ContractWizard({
               <section>
                 <h4 className="text-[10px] font-bold uppercase tracking-wider text-brand-muted mb-3">Anställningsvillkor</h4>
                 <div className="grid grid-cols-2 gap-3">
-                  <Field label="Anställningsnummer Fortnox *">
+                  <Field label="Anställningsnummer (Timewave-ID) *">
                     <input
                       value={employmentNumber}
                       onChange={(e) => setEmploymentNumber(e.target.value)}
-                      placeholder="Exakt som i Fortnox"
+                      placeholder="Fylls automatiskt när du väljer anställd från Timewave"
                       className={inp}
                     />
                     <div className="text-[10px] text-brand-muted mt-1 italic">
-                      Ange exakt samma anställningsnummer som personen har i Fortnox. Får inte auto-genereras eller ändras.
+                      Ska vara EXAKT samma ID som i Timewave. Fylls automatiskt när du väljer anställd i sökrutan ovan.
                     </div>
                   </Field>
                   <Field label="Anställningsform *">
@@ -598,17 +596,17 @@ export default function ContractWizard({
                   <div>
                     <div className="text-sm font-semibold text-emerald-900">Redo att sparas som utkast</div>
                     <div className="text-xs text-emerald-700 mt-1">
-                      Signeringsflödet (Visma Sign) kopplas på i Fas 4. Just nu sparas avtalet som DRAFT — du kan sen skicka det för signering när Fas 4 är på plats.
+                      Avtalet sparas som DRAFT. Från AVTAL-listan klickar du sedan <strong>"Skicka för signering"</strong> så skickas en unik signeringslänk till den anställdes email (+ kopia till mikaela.wigert@stodona.se). Anställd verifierar med personnummer, telefon och email. Du signerar därefter som arbetsgivare direkt i appen.
                     </div>
                   </div>
                 </div>
               </div>
 
               <div className="text-sm text-brand-muted">
-                <p><strong className="text-brand-dark">Signerare</strong> (planerade — läggs till skarpt i Fas 4):</p>
+                <p><strong className="text-brand-dark">Signerare</strong>:</p>
                 <ol className="list-decimal ml-5 mt-2 space-y-1">
-                  <li>{firstName} {lastName} — anställd</li>
-                  <li>{companies.find((c) => c.id === ownCompanyId)?.name} — firmatecknare</li>
+                  <li>{firstName} {lastName} — anställd (signerar via mail-länk)</li>
+                  <li>{companies.find((c) => c.id === ownCompanyId)?.name} — firmatecknare (signerar i appen)</li>
                 </ol>
               </div>
             </div>

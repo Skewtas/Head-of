@@ -334,7 +334,7 @@ async function validateContractForSigning(
   // 4b. Anställningsnummer i Fortnox — obligatoriskt
   const empNumber = String(emp.employment_number ?? emp.employmentNumber ?? '').trim();
   if (!empNumber) {
-    return 'Avtalet kan inte skickas. Anställningsnummer (Fortnox) saknas.';
+    return 'Avtalet kan inte skickas. Anställningsnummer saknas (Timewave-ID).';
   }
 
   // 5. Sysselsättningsgrad — måste finnas (kan vara "Vid behov" eller ett tal)
