@@ -56,42 +56,191 @@ interface RecipientOptions {
 }
 
 // ─── Mallar ────────────────────────────────────────────────────────────
-const EMAIL_TEMPLATES: Array<{ id: string; name: string; init: Partial<Draft> }> = [
+const EMAIL_TEMPLATES: Array<{ id: string; name: string; desc: string; init: Partial<Draft> }> = [
   {
     id: 'blank',
-    name: 'Tomt veckobrev',
-    init: { useTemplate: true, subject: 'Veckobrev', intro: '', weekInfo: '', keyDates: '', outro: '' },
+    name: 'Tomt',
+    desc: 'Börja från noll',
+    init: { useTemplate: true, subject: '', intro: '', weekInfo: '', keyDates: '', outro: '' },
   },
   {
-    id: 'summary',
-    name: 'Veckans sammanfattning',
+    id: 'monday-boost',
+    name: 'Måndags-peppen',
+    desc: 'Starta veckan positivt',
     init: {
       useTemplate: true,
-      subject: 'Veckobrev — vecka {vecka}',
-      intro: 'Hej alla,\n\nHär kommer veckans uppdatering från Stodona.',
-      weekInfo: '• …\n• …\n• …',
-      keyDates: '• Måndag: …\n• Onsdag: …\n• Fredag: …',
-      outro: 'Tveka inte att höra av dig om något är oklart.\n\nHa en fin vecka!',
+      subject: 'God morgon, nya vecka! ✨',
+      intro:
+        'Hej fina team,\n\n' +
+        'Ny vecka, nya möjligheter. Jag vill börja med att säga TACK för allt fantastiskt jobb ni gör — det märks verkligen ute hos kunderna.',
+      weekInfo:
+        'Fokus den här veckan:\n' +
+        '• Ta hand om varandra och kunderna som vanligt — ni är bäst på det\n' +
+        '• Kom ihåg att checka in och ut i tid, så vi kan planera rätt\n' +
+        '• Om något krånglar: hör av dig direkt, vi löser det tillsammans',
+      keyDates:
+        '• Onsdag: teammöte kl. 16.00\n' +
+        '• Fredag: löneperiod stängs — se till att alla pass är rapporterade',
+      outro:
+        'Ni gör en jätteviktig insats varje dag. Kör hårt, ta pauser, och glöm inte att fråga om ni behöver hjälp.\n\n' +
+        'Ha en riktigt fin vecka!\n/Mikaela',
     },
   },
   {
-    id: 'important',
-    name: 'Viktig information',
+    id: 'weekly-summary',
+    name: 'Veckans sammanfattning',
+    desc: 'Balanserad, lagom',
     init: {
       useTemplate: true,
-      subject: 'Viktigt meddelande',
-      intro: 'Hej alla,',
-      weekInfo: 'Vi vill informera om följande: …',
+      subject: 'Veckobrev — allt du behöver veta',
+      intro:
+        'Hej allihopa,\n\n' +
+        'Hoppas ni haft en bra vecka! Här kommer en snabb uppdatering om vad som gäller framöver.',
+      weekInfo:
+        'Det här är på gång:\n' +
+        '• …\n' +
+        '• …\n' +
+        '• …',
+      keyDates:
+        '• Måndag: …\n' +
+        '• Onsdag: …\n' +
+        '• Fredag: …',
+      outro:
+        'Har du frågor, undringar eller idéer — hojta till! Vi är ett lag.\n\n' +
+        'Kram,\n/Mikaela',
+    },
+  },
+  {
+    id: 'friday-thanks',
+    name: 'Tack för veckan (fredag)',
+    desc: 'Fira, tacka, ladda om',
+    init: {
+      useTemplate: true,
+      subject: 'Ni är otroliga — tack för denna vecka! 💛',
+      intro:
+        'Hej team,\n\n' +
+        'Vilken vecka! Jag vill bara passa på att säga hur stolt jag är över er. Varje enskild insats gör skillnad — och det märks.',
+      weekInfo:
+        'Höjdpunkter från veckan:\n' +
+        '• Ni tog hand om extra bokningar utan att blinka\n' +
+        '• Kundfeedback: många glada mejl har trillat in ✨\n' +
+        '• Ni ställde upp för varandra när det behövdes — det är sådant som gör Stodona till Stodona',
+      keyDates:
+        'Nästa vecka:\n' +
+        '• Schemat är uppdaterat i systemet — kolla dina pass\n' +
+        '• Löneutbetalning: senast den 25:e',
+      outro:
+        'Nu — vila. Ladda batterierna. Umgås med de ni tycker om. Ni har verkligen förtjänat det.\n\n' +
+        'Ses på måndag!\n/Mikaela',
+    },
+  },
+  {
+    id: 'new-month',
+    name: 'Ny månad — nystart',
+    desc: 'Sätt tonen för månaden',
+    init: {
+      useTemplate: true,
+      subject: 'Ny månad — vi kör!',
+      intro:
+        'Hej fina Stodona-familj,\n\n' +
+        'En ny månad ligger framför oss. Jag ville skicka en peppning och några ord om vad vi fokuserar på framöver.',
+      weekInfo:
+        'Så här jobbar vi vidare:\n' +
+        '• Kvalitet i varje pass — små saker gör stor skillnad\n' +
+        '• Vi håller kommunikationen öppen — säg till om något behövs\n' +
+        '• Vi tar hand om varandra — det är så vi växer tillsammans',
+      keyDates:
+        'Viktiga datum i månaden:\n' +
+        '• Personalmöte: … \n' +
+        '• Lönedag: den 25:e\n' +
+        '• Deadline för semesteransökan: …',
+      outro:
+        'Ni är hjärtat i det vi bygger. Utan er finns inget Stodona. Tack för att ni är med.\n\n' +
+        'Kör hårt, ha kul, och tveka inte att höra av er.\n/Mikaela',
+    },
+  },
+  {
+    id: 'welcome-new',
+    name: 'Välkomna ny kollega',
+    desc: 'Introducera + fira',
+    init: {
+      useTemplate: true,
+      subject: 'Välkommen [Namn] till teamet! 🎉',
+      intro:
+        'Hej alla,\n\n' +
+        'Jag vill så gärna presentera vår nya kollega [Namn], som börjar hos oss den [datum]! Vi är superglada att ha dig med, [Namn] — hoppas du känner dig sedd och välkommen från dag ett.',
+      weekInfo:
+        'Lite om [Namn]:\n' +
+        '• Kommer att jobba främst i [område/team]\n' +
+        '• [Kort presentation — ålder, intressen, tidigare erfarenhet]\n' +
+        '• Säg hej när du ser hen — vi är bäst på att välkomna nya!',
       keyDates: '',
-      outro: 'Tack för uppmärksamheten.',
+      outro:
+        'Ett stort välkomnande från hela Stodona-familjen. Vi ser fram emot att jobba med dig, [Namn]!\n\n' +
+        'Kram,\n/Mikaela',
+    },
+  },
+  {
+    id: 'important-notice',
+    name: 'Viktig information',
+    desc: 'Formell men varm',
+    init: {
+      useTemplate: true,
+      subject: 'Viktigt att läsa — [ämne]',
+      intro:
+        'Hej alla,\n\n' +
+        'Jag vill lyfta något viktigt som berör oss alla. Läs gärna igenom noga.',
+      weekInfo:
+        'Så här är det:\n' +
+        '• Vad har hänt / vad gäller nu\n' +
+        '• Vad betyder det för dig i praktiken\n' +
+        '• Vad du behöver göra (om något)',
+      keyDates: '',
+      outro:
+        'Har du frågor är du varmt välkommen att höra av dig till mig direkt. Vi går igenom det tillsammans.\n\n' +
+        'Tack för att ni tar det här på allvar!\n/Mikaela',
     },
   },
 ];
 
-const SMS_TEMPLATES: Array<{ id: string; name: string; text: string }> = [
-  { id: 'blank', name: 'Tomt sms', text: '' },
-  { id: 'reminder', name: 'Snabb påminnelse', text: 'Hej {{name}}! Kom ihåg …' },
-  { id: 'schedule', name: 'Schemaändring', text: 'Hej {{name}}, ditt pass … har flyttats. Se schemat.' },
+const SMS_TEMPLATES: Array<{ id: string; name: string; desc: string; text: string }> = [
+  { id: 'blank', name: 'Tomt', desc: 'Skriv fritt', text: '' },
+  {
+    id: 'monday-pep',
+    name: 'Måndags-peppen',
+    desc: 'God morgon till hela laget',
+    text: 'God morgon {{name}}! ✨ Ny vecka, nya möjligheter. Tack för allt du gör — du är guld värd. Kör hårt och hör av dig om det behövs! /Mikaela',
+  },
+  {
+    id: 'friday-thanks',
+    name: 'Tack för veckan',
+    desc: 'Fredags-hälsning',
+    text: 'Hej {{name}}! Vilken vecka du dragit igenom 💛 Tack för din insats — den märks. Ha en riktigt skön helg, du har förtjänat det!',
+  },
+  {
+    id: 'reminder',
+    name: 'Snabb påminnelse',
+    desc: 'Vänlig påminnelse',
+    text: 'Hej {{name}}! Vänlig påminnelse om [händelse/deadline] den [datum]. Säg till om du undrar något. Tack! /Stodona',
+  },
+  {
+    id: 'schedule',
+    name: 'Schemaändring',
+    desc: 'När passet flyttas',
+    text: 'Hej {{name}}, ditt pass [datum + tid] har flyttats. Nya tiden ser du i schemat. Hör av dig om det inte funkar för dig!',
+  },
+  {
+    id: 'appreciation',
+    name: 'Uppskattning',
+    desc: 'Fira en insats',
+    text: 'Hej {{name}}! Vill bara säga tack för det du gjorde den här veckan — grymt jobbat 💪 Sån som du är hjärtat i Stodona.',
+  },
+  {
+    id: 'urgent',
+    name: 'Akut info',
+    desc: 'Kort och tydligt',
+    text: 'Hej {{name}}, viktigt meddelande: [kort beskrivning]. Ring/sms:a mig om du undrar något. Tack!',
+  },
 ];
 
 // ─── Main ──────────────────────────────────────────────────────────────
@@ -682,18 +831,21 @@ function StepContent({
       </p>
 
       {showTemplates && (
-        <div className="mb-4 p-3 bg-white border border-gray-200 rounded-lg">
-          <div className="text-xs text-brand-muted mb-2">Välj en mall att utgå från:</div>
-          <div className="grid grid-cols-3 gap-2">
+        <div className="mb-4 p-4 bg-white border border-gray-200 rounded-lg">
+          <div className="text-xs text-brand-muted mb-3">
+            Välj en färdig mall — du kan redigera precis som du vill efteråt.
+          </div>
+          <div className="grid grid-cols-2 gap-2">
             {(draft.type === 'EMAIL' ? EMAIL_TEMPLATES : SMS_TEMPLATES).map((t) => (
               <button
                 key={t.id}
                 onClick={() => draft.type === 'EMAIL'
                   ? applyTemplate((t as any).init)
                   : applyTemplate({ body: (t as any).text, useTemplate: false })}
-                className="p-3 text-left bg-brand-bg hover:bg-gray-100 rounded border border-gray-200 text-xs"
+                className="p-3 text-left bg-brand-bg hover:bg-gray-100 rounded-lg border border-gray-200 hover:border-brand-accent transition-colors"
               >
-                <div className="font-semibold text-brand-dark">{t.name}</div>
+                <div className="font-semibold text-brand-dark text-sm">{t.name}</div>
+                <div className="text-[11px] text-brand-muted mt-0.5">{(t as any).desc}</div>
               </button>
             ))}
           </div>
