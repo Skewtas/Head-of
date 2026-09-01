@@ -271,7 +271,7 @@ router.put('/:id(\\d+)', async (req, res) => {
  * signering (regler från Mikaela 2026-09-01, hårda systemregler).
  *
  * Kontrollerar i tur och ordning:
- *  1. Arbetsgivare = Doma Services AB
+ *  1. Arbetsgivare = Stodona Services AB
  *  2. Anställd har namn + personnummer
  *  3. Anställningsform (kategori)
  *  4. Startdatum
@@ -288,13 +288,13 @@ async function validateContractForSigning(
   contractId: number,
   contract: any,
 ): Promise<string | null> {
-  // 1. Arbetsgivare = Doma Services AB
+  // 1. Arbetsgivare = Stodona Services AB
   const ownCompany = await prisma.ownCompany.findUnique({
     where: { id: contract.ownCompanyId },
     select: { name: true },
   });
-  if (!ownCompany || ownCompany.name.trim() !== 'Doma Services AB') {
-    return `Avtalet kan inte skickas. Arbetsgivare måste vara Doma Services AB (nuvarande: ${ownCompany?.name || 'saknas'}).`;
+  if (!ownCompany || ownCompany.name.trim() !== 'Stodona Services AB') {
+    return `Avtalet kan inte skickas. Arbetsgivare måste vara Stodona Services AB (nuvarande: ${ownCompany?.name || 'saknas'}).`;
   }
 
   // 2. Person-info
@@ -366,7 +366,7 @@ async function validateContractForSigning(
       lower.includes('inte något kollektivavtal') ||
       lower.includes('omfattas inte av kollektivavtal');
     if (!explicitlyDenied) {
-      return 'Avtalet kan inte skickas. Doma Services AB har inte kollektivavtal — avtalet innehåller en felaktig hänvisning till kollektivavtal som måste tas bort.';
+      return 'Avtalet kan inte skickas. Stodona Services AB har inte kollektivavtal — avtalet innehåller en felaktig hänvisning till kollektivavtal som måste tas bort.';
     }
   }
 
