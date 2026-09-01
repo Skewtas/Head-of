@@ -188,7 +188,9 @@ function TasksBlock() {
   const reload = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await api<OpsTask[]>(`/api/ops/tasks?section=ACTION`);
+      // Hämtar ALLA sektioner (ACTION + återställda PIPELINE/PERSONAL).
+      // Vi filtrerar inte längre på section i UI:et — allt bor i samma lista.
+      const data = await api<OpsTask[]>(`/api/ops/tasks`);
       setTasks(data);
     } finally {
       setLoading(false);
