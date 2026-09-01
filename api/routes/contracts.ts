@@ -1333,4 +1333,203 @@ async function logAudit(userId: string, action: string, contractId: number, afte
   }
 }
 
+// ─── SIGNERING ─────────────────────────────────────────────────────────
+
+/**
+ * POST /api/contracts/:id/send-for-signing
+ * Skapar/uppdaterar Signer för anställd, skickar mail med HMAC-länk via Resend.
+ * Kör alla validering-kontroller innan (validateContractForSigning).
+ */
+router.post('/:id(\\d+)/send-for-signing', async (req, res) => {
+  const userId = getUserId(req)!;
+  const id = Number(req.params.id);
+  const c = await accessibleContract(userId, req, id);
+  if (!c) return res.status(404).json({ error: 'Not found or no access' });
+
+  // Kör alla obligatoriska kontroller
+  const err = await validateContractForSigning(id, c);
+  if (err) return res.status(400).json({ error: err });
+
+  // Hämta person + version
+  const contract = await prisma.contract.findUnique({
+    where: { id },
+    include: {
+      person: true,
+      ownCompany: true,
+      versions: { orderBy: { version: 'desc' }, take: 1 },
+    },
+  });
+  if (!contract || !contract.person || !contract.person.email) {
+    return res.status(400).json({ error: 'Avtalet kan inte skickas — den anställdes e-post saknas.' });
+  }
+
+  const version = contract.versions[0];
+  if (!version) return res.status(400).json({ error: 'Ingen avtalsversion finns.' });
+
+  const employeeName = `${contract.person.firstName} ${contract.person.lastName}`.trim();
+  const employeeEmail = contract.person.email;
+
+  // Skapa/uppdatera Signer-rader: anställd (order 1) + arbetsgivare (order 2)
+  const employerName = contract.ownCompany.signatoryName || 'Arbetsgivare';
+  const employerEmail = contract.ownCompany.signatoryEmail || 'info@stodona.se';
+
+  // Rensa eventuella tidigare pending signers och skapa nya
+  await prisma.signer.deleteMany({
+    where: { contractId: id, status: { not: 'SIGNED' } },
+  });
+
+  const employeeSigner = await prisma.signer.create({
+    data: {
+      contractId: id,
+      name: employeeName,
+      email: employeeEmail,
+      signingOrder: 1,
+      status: 'PENDING',
+    },
+  });
+  await prisma.signer.upsert({
+    where: { contractId_signingOrder: { contractId: id, signingOrder: 2 } as any },
+    update: { name: employerName, email: employerEmail, status: 'PENDING' },
+    create: {
+      contractId: id,
+      name: employerName,
+      email: employerEmail,
+      signingOrder: 2,
+      status: 'PENDING',
+    },
+  }).catch(async () => {
+    // Fallback om kompositnyckel inte finns
+    await prisma.signer.create({
+      data: {
+        contractId: id,
+        name: employerName,
+        email: employerEmail,
+        signingOrder: 2,
+        status: 'PENDING',
+      },
+    });
+  });
+
+  // Generera HMAC-token för anställdens signering
+  const { issueSigningToken } = await import('../_lib/signingToken.js');
+  const token = issueSigningToken(id, employeeSigner.id);
+  const appUrl = process.env.APP_URL || `https://${req.headers.host}`;
+  const signUrl = `${appUrl}/sign?token=${encodeURIComponent(token)}`;
+
+  // Skicka mail via Resend
+  const { deliverNewsletter } = await import('../_lib/newsletterSender.js');
+  const html = `
+    <div style="font-family:Inter,Arial,sans-serif;color:#1a1a2e;line-height:1.6;max-width:560px;margin:0 auto;padding:24px;">
+      <h1 style="font-family:'Playfair Display',Georgia,serif;font-size:24px;margin:0 0 16px;">
+        Signera ditt anställningsavtal
+      </h1>
+      <p style="margin:0 0 16px;">Hej ${escapeHtmlText(contract.person.firstName)},</p>
+      <p style="margin:0 0 16px;">
+        Ett anställningsavtal från <strong>${escapeHtmlText(contract.ownCompany.name)}</strong>
+        är redo att signeras av dig. Klicka på knappen för att läsa igenom och signera.
+      </p>
+      <div style="text-align:center;margin:24px 0;">
+        <a href="${signUrl}" style="display:inline-block;padding:14px 28px;background:#1a1a2e;color:#fff;text-decoration:none;border-radius:8px;font-weight:600;">Öppna &amp; signera avtalet</a>
+      </div>
+      <p style="margin:0 0 8px;font-size:13px;color:#4b4a55;">
+        Du behöver ange ditt <strong>personnummer</strong>, <strong>telefonnummer</strong> och <strong>e-postadress</strong> för att verifiera att det är du som signerar.
+      </p>
+      <p style="margin:0 0 16px;font-size:12px;color:#8b8578;">
+        Länken är personlig och giltig i 30 dagar. Om något krånglar, kontakta ${escapeHtmlText(employerName)} på ${escapeHtmlText(employerEmail)}.
+      </p>
+      <p style="margin:0;color:#8b8578;font-size:12px;">/${escapeHtmlText(contract.ownCompany.name)}</p>
+    </div>
+  `;
+
+  try {
+    await deliverNewsletter({
+      newsletterId: `sign-${contract.id}-${employeeSigner.id}`,
+      recipients: [employeeEmail],
+      subject: `Signera ditt anställningsavtal — ${contract.ownCompany.name}`,
+      htmlContent: html,
+      appUrl,
+    });
+  } catch (e: any) {
+    return res.status(500).json({ error: 'Kunde inte skicka signeringsmail: ' + e?.message });
+  }
+
+  // Uppdatera status
+  await prisma.contract.update({ where: { id }, data: { status: 'SENT' } });
+  await logAudit(userId, 'sent_for_signing', id, { employeeEmail, signerId: employeeSigner.id });
+
+  res.json({
+    ok: true,
+    signerId: employeeSigner.id,
+    signUrl,
+    employeeEmail,
+    note: `Signeringslänk skickad till ${employeeEmail}.`,
+  });
+});
+
+/**
+ * POST /api/contracts/:id/sign-as-employer
+ * Arbetsgivare signerar avtalet direkt från HeadOf-appen (inloggad).
+ */
+router.post('/:id(\\d+)/sign-as-employer', async (req, res) => {
+  const userId = getUserId(req)!;
+  const id = Number(req.params.id);
+  const c = await accessibleContract(userId, req, id);
+  if (!c) return res.status(404).json({ error: 'Not found or no access' });
+
+  // Bara superadmin/owner får arbetsgivarsignera
+  if (!isSuperadmin(req) && c.ownerClerkId !== userId) {
+    return res.status(403).json({ error: 'Endast superadmin eller ägare kan signera som arbetsgivare.' });
+  }
+
+  const employerSigner = await prisma.signer.findFirst({
+    where: { contractId: id, signingOrder: 2 },
+  });
+  if (!employerSigner) {
+    return res.status(400).json({ error: 'Ingen arbetsgivar-signerare finns. Skicka avtalet först.' });
+  }
+  if (employerSigner.status === 'SIGNED') {
+    return res.status(400).json({ error: 'Redan signerat av arbetsgivare.' });
+  }
+
+  const version = await prisma.contractVersion.findFirst({
+    where: { contractId: id },
+    orderBy: { version: 'desc' },
+  });
+  if (!version) return res.status(500).json({ error: 'Ingen avtalsversion finns.' });
+
+  const { contentHash } = await import('../_lib/signingToken.js');
+  const ip = String(req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || 'unknown').split(',')[0].trim();
+  const signedAt = new Date();
+
+  await prisma.signer.update({
+    where: { id: employerSigner.id },
+    data: {
+      status: 'SIGNED',
+      signedAt,
+      auditData: {
+        signedAt: signedAt.toISOString(),
+        ip,
+        userAgent: String(req.headers['user-agent'] || 'unknown'),
+        contentHash: contentHash(version.content),
+        contentVersion: version.version,
+        clerkUserId: userId,
+        signingOrder: 2,
+      } as any,
+    },
+  });
+
+  const allSigners = await prisma.signer.findMany({ where: { contractId: id } });
+  const allSigned = allSigners.every((s) => s.status === 'SIGNED');
+
+  if (allSigned) {
+    await prisma.contract.update({ where: { id }, data: { status: 'SIGNED' } });
+    await prisma.contractVersion.update({ where: { id: version.id }, data: { locked: true } });
+  } else {
+    await prisma.contract.update({ where: { id }, data: { status: 'PARTIALLY_SIGNED' } });
+  }
+
+  await logAudit(userId, 'signed_as_employer', id, {});
+  res.json({ ok: true, allSigned });
+});
+
 export default router;

@@ -68,6 +68,7 @@ import ContractsView from './ContractsView';
 import HRView from './HRView';
 import PersonalbrevView from './PersonalbrevView';
 import OnlineBookingsTrend from './OnlineBookingsTrend';
+import SigningView from './SigningView';
 
 // Utility for Tailwind classes
 function cn(...inputs: ClassValue[]) {
@@ -1971,6 +1972,11 @@ const ScheduleView = () => (
 // --- MAIN APP ---
 
 export default function App() {
+  // Public route för signering — går utanför Clerk-inloggning.
+  if (typeof window !== 'undefined' && window.location.pathname === '/sign') {
+    return <SigningView />;
+  }
+
   const [activeTab, setActiveTab] = useState('overview');
 
   const tabs = [

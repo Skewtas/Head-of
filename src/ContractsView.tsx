@@ -233,7 +233,8 @@ export default function ContractsView() {
                   <th className="text-left pb-2">Slutdatum</th>
                   <th className="text-left pb-2">Status</th>
                   <th className="text-right pb-2">Signerare</th>
-                  <th className="text-right pb-2 pr-2">Dokument</th>
+                  <th className="text-right pb-2">Dokument</th>
+                  <th className="text-right pb-2 pr-2">Signering</th>
                 </tr>
               </thead>
               <tbody>
@@ -261,7 +262,7 @@ export default function ContractsView() {
                       <td className="py-3 text-right text-brand-muted text-xs">
                         {c._count.signers > 0 ? `${c._count.signers} st` : '—'}
                       </td>
-                      <td className="py-3 pr-2 text-right">
+                      <td className="py-3 text-right">
                         {firstAttachment ? (
                           <a
                             href={firstAttachment.fileUrl}
@@ -277,6 +278,9 @@ export default function ContractsView() {
                           <span className="text-gray-300">—</span>
                         )}
                       </td>
+                      <td className="py-3 pr-2 text-right">
+                        <SigningActions contract={c} onReload={reload} />
+                      </td>
                     </tr>
                   );
                 })}
@@ -291,6 +295,66 @@ export default function ContractsView() {
       </div>
     </div>
   );
+}
+
+function SigningActions({ contract, onReload }: { contract: Contract; onReload: () => Promise<void> }) {
+  const [busy, setBusy] = React.useState(false);
+
+  const sendForSigning = async () => {
+    if (!confirm(`Skicka avtalet till ${contract.person?.firstName || 'anställd'} för signering?`)) return;
+    setBusy(true);
+    try {
+      const r = await api<{ note: string }>(`/api/contracts/${contract.id}/send-for-signing`, { method: 'POST' });
+      alert(r.note);
+      await onReload();
+    } catch (e: any) {
+      alert(e?.body?.error || e?.message || 'Kunde inte skicka.');
+    } finally { setBusy(false); }
+  };
+
+  const signAsEmployer = async () => {
+    if (!confirm('Signera avtalet som arbetsgivare?')) return;
+    setBusy(true);
+    try {
+      const r = await api<{ allSigned: boolean }>(`/api/contracts/${contract.id}/sign-as-employer`, { method: 'POST' });
+      alert(r.allSigned ? 'Avtalet är nu fullständigt signerat.' : 'Signerat. Väntar på anställd.');
+      await onReload();
+    } catch (e: any) {
+      alert(e?.body?.error || e?.message || 'Kunde inte signera.');
+    } finally { setBusy(false); }
+  };
+
+  const isEmployment = ['ANSTALLNINGSAVTAL', 'PROVANSTALLNING', 'TILLSVIDAREANSTALLNING', 'VISSTIDSANSTALLNING', 'TIMANSTALLNING'].includes(contract.category);
+  if (!isEmployment) return <span className="text-gray-300 text-xs">—</span>;
+
+  if (contract.status === 'SIGNED' || contract.status === 'ACTIVE') {
+    return <span className="text-emerald-600 text-xs font-semibold">✓ Signerat</span>;
+  }
+  if (contract.status === 'DRAFT' || contract.status === 'READY_FOR_SIGNING') {
+    return (
+      <button
+        onClick={sendForSigning}
+        disabled={busy}
+        className="text-xs px-2 py-1 bg-brand-dark text-white rounded hover:bg-brand-dark/90 disabled:opacity-50"
+      >
+        Skicka för signering
+      </button>
+    );
+  }
+  if (contract.status === 'SENT' || contract.status === 'PARTIALLY_SIGNED') {
+    return (
+      <div className="flex gap-1 justify-end">
+        <button
+          onClick={signAsEmployer}
+          disabled={busy}
+          className="text-xs px-2 py-1 bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:opacity-50"
+        >
+          Signera som arbetsgivare
+        </button>
+      </div>
+    );
+  }
+  return <span className="text-gray-300 text-xs">—</span>;
 }
 
 function KpiCard({
