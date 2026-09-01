@@ -13,8 +13,133 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Mail, MessageSquare, Plus, Send, Users, User, ChevronRight, Loader,
   Check, Copy, Trash2, Clock, X, ArrowLeft, Eye, Sparkles, AlertTriangle,
+  Smile,
 } from 'lucide-react';
 import { api } from './lib/api';
+
+// ─── Emoji-picker ─────────────────────────────────────────────────────
+// Enkel, snabb, no-dependencies. Kategorier med de emojis Stodona faktiskt
+// använder i personalkommunikation.
+const EMOJI_CATEGORIES: Array<{ label: string; emojis: string[] }> = [
+  { label: 'Vanligt', emojis: ['✨','💛','🎉','🙏','👏','💪','🌟','✅','☀️','🌸','💫','🔥','❤️','😊','💚','💙'] },
+  { label: 'Ansikten', emojis: ['😊','😄','😃','🙂','😉','😍','🥰','😘','🤗','🤔','😌','😎','🥳','😴','☺️','🙌'] },
+  { label: 'Hand & Peppning', emojis: ['👍','👏','🙌','💪','🤝','✌️','🙏','👋','🤞','👌','💯','🎯','⭐','🌟','✨','🏆'] },
+  { label: 'Hjärtan', emojis: ['❤️','💛','💚','💙','💜','🧡','🤍','🖤','💕','💖','💗','💓','💝','💞','💟','💘'] },
+  { label: 'Fira & Fest', emojis: ['🎉','🎊','🥳','🎈','🎁','🎂','🍾','🥂','🎆','🎇','🌈','🎵','🎶','🎀','🎂','🍰'] },
+  { label: 'Jobb & Städ', emojis: ['🧹','🧼','🧽','✨','🏠','🚪','🪟','🧴','🧺','🧑‍🔧','📋','📅','⏰','📞','📱','💼'] },
+  { label: 'Väder & Årstid', emojis: ['☀️','🌤️','⛅','🌦️','🌧️','⛈️','❄️','☃️','🌨️','🌪️','🌈','🍂','🍁','🌸','🌷','🌻'] },
+  { label: 'Symboler', emojis: ['✅','❌','⚠️','ℹ️','💡','📌','🔔','🔴','🟢','🟡','⭐','✔️','➡️','⬅️','↩️','🆕'] },
+];
+
+function EmojiPickerPopover({
+  onPick, onClose,
+}: { onPick: (emoji: string) => void; onClose: () => void }) {
+  const [category, setCategory] = useState(0);
+  return (
+    <div className="absolute z-50 top-full right-0 mt-1 w-80 bg-white rounded-xl border border-gray-200 shadow-xl">
+      <div className="flex items-center border-b border-gray-100 px-2 py-1 gap-0.5 overflow-x-auto">
+        {EMOJI_CATEGORIES.map((c, i) => (
+          <button
+            key={c.label}
+            onClick={() => setCategory(i)}
+            className={`px-2 py-1 text-[11px] rounded whitespace-nowrap ${
+              category === i ? 'bg-brand-dark text-white' : 'text-brand-muted hover:bg-gray-100'
+            }`}
+          >
+            {c.label}
+          </button>
+        ))}
+        <button onClick={onClose} className="ml-auto p-1 text-brand-muted hover:text-brand-dark">
+          <X className="w-3 h-3" />
+        </button>
+      </div>
+      <div className="grid grid-cols-8 gap-1 p-2 max-h-52 overflow-y-auto">
+        {EMOJI_CATEGORIES[category].emojis.map((e, i) => (
+          <button
+            key={`${category}-${i}`}
+            onClick={() => onPick(e)}
+            className="text-xl leading-none w-8 h-8 flex items-center justify-center rounded hover:bg-gray-100"
+            title={e}
+          >
+            {e}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Textarea/input med inbyggd emoji-knapp uppe till höger. */
+function InputWithEmoji({
+  value, onChange, multiline = false, rows = 3, maxLength, placeholder, className,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  multiline?: boolean;
+  rows?: number;
+  maxLength?: number;
+  placeholder?: string;
+  className?: string;
+}) {
+  const [showPicker, setShowPicker] = useState(false);
+  const ref = useRef<HTMLTextAreaElement | HTMLInputElement | null>(null);
+
+  const insertAtCursor = (emoji: string) => {
+    const el = ref.current;
+    if (!el) { onChange((value || '') + emoji); return; }
+    const start = (el as any).selectionStart ?? value.length;
+    const end = (el as any).selectionEnd ?? value.length;
+    const next = value.substring(0, start) + emoji + value.substring(end);
+    onChange(next);
+    // Placera markören efter emojin efter render
+    requestAnimationFrame(() => {
+      if (!ref.current) return;
+      const pos = start + emoji.length;
+      try { (ref.current as any).setSelectionRange(pos, pos); (ref.current as any).focus(); } catch {}
+    });
+  };
+
+  const baseCls = className ?? 'w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white outline-none focus:border-brand-accent';
+
+  return (
+    <div className="relative">
+      {multiline ? (
+        <textarea
+          ref={ref as any}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          rows={rows}
+          maxLength={maxLength}
+          placeholder={placeholder}
+          className={`${baseCls} pr-9`}
+        />
+      ) : (
+        <input
+          ref={ref as any}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          maxLength={maxLength}
+          placeholder={placeholder}
+          className={`${baseCls} pr-9`}
+        />
+      )}
+      <button
+        type="button"
+        onClick={() => setShowPicker((v) => !v)}
+        className={`absolute right-2 ${multiline ? 'top-2' : 'top-1/2 -translate-y-1/2'} text-gray-400 hover:text-brand-dark p-1`}
+        title="Infoga emoji"
+      >
+        <Smile className="w-4 h-4" />
+      </button>
+      {showPicker && (
+        <EmojiPickerPopover
+          onPick={(e) => insertAtCursor(e)}
+          onClose={() => setShowPicker(false)}
+        />
+      )}
+    </div>
+  );
+}
 
 // ─── Types ─────────────────────────────────────────────────────────────
 type MessageType = 'EMAIL' | 'SMS';
@@ -855,60 +980,54 @@ function StepContent({
       {draft.type === 'EMAIL' ? (
         <div className="space-y-4">
           <Field label="Rubrik">
-            <input
+            <InputWithEmoji
               value={draft.subject}
-              onChange={(e) => setDraft({ ...draft, subject: e.target.value })}
-              placeholder="Ex: Veckobrev — vecka 36"
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white outline-none focus:border-brand-accent"
+              onChange={(v) => setDraft({ ...draft, subject: v })}
+              placeholder="Ex: Veckobrev — vecka 36 ✨"
             />
           </Field>
           <Field label="Inledning">
-            <textarea
+            <InputWithEmoji
+              multiline rows={2}
               value={draft.intro}
-              onChange={(e) => setDraft({ ...draft, intro: e.target.value })}
-              rows={2}
-              placeholder="Ex: Hej alla, här kommer veckans uppdatering…"
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white outline-none focus:border-brand-accent"
+              onChange={(v) => setDraft({ ...draft, intro: v })}
+              placeholder="Ex: Hej alla, här kommer veckans uppdatering 💛"
             />
           </Field>
           <Field label="Veckans information">
-            <textarea
+            <InputWithEmoji
+              multiline rows={4}
               value={draft.weekInfo}
-              onChange={(e) => setDraft({ ...draft, weekInfo: e.target.value })}
-              rows={4}
+              onChange={(v) => setDraft({ ...draft, weekInfo: v })}
               placeholder="Vad har hänt, vad händer? Kort och tydligt."
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white outline-none focus:border-brand-accent"
             />
           </Field>
           <Field label="Viktiga datum">
-            <textarea
+            <InputWithEmoji
+              multiline rows={3}
               value={draft.keyDates}
-              onChange={(e) => setDraft({ ...draft, keyDates: e.target.value })}
-              rows={3}
+              onChange={(v) => setDraft({ ...draft, keyDates: v })}
               placeholder="Ex: Måndag 8/9: personalmöte 16:00…"
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white outline-none focus:border-brand-accent"
             />
           </Field>
           <Field label="Avslutning">
-            <textarea
+            <InputWithEmoji
+              multiline rows={2}
               value={draft.outro}
-              onChange={(e) => setDraft({ ...draft, outro: e.target.value })}
-              rows={2}
-              placeholder="Ex: Ha en fin vecka! /Mikaela"
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white outline-none focus:border-brand-accent"
+              onChange={(v) => setDraft({ ...draft, outro: v })}
+              placeholder="Ex: Ha en fin vecka! /Mikaela 🌟"
             />
           </Field>
         </div>
       ) : (
         <div>
           <Field label="Meddelande">
-            <textarea
+            <InputWithEmoji
+              multiline rows={8}
               value={draft.body}
-              onChange={(e) => setDraft({ ...draft, body: e.target.value })}
-              rows={8}
+              onChange={(v) => setDraft({ ...draft, body: v })}
               maxLength={918}
               placeholder="Hej {{name}}, …"
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white outline-none focus:border-brand-accent font-mono"
             />
           </Field>
           <SmsCounter text={draft.body} />
