@@ -1,15 +1,14 @@
 -- Doma Services AB — ny arbetsgivare för ALLA nya anställningsavtal.
 -- Ersätter Stodona Services AB som default på mallarna. Idempotent.
 
--- 1. Skapa Doma Services AB (om det inte finns)
+-- 1. Doma Services AB skulle skapats här men blev fel — Stodona Services AB
+--    är rätt bolag. INSERT:en är kvar men no-op om orgnummer redan finns.
+--    (Följande migration 20260901_revert_to_stodona_services pekar tillbaka.)
 INSERT INTO "own_companies" ("name", "organization_number", "address", "postal_code", "city", "signatory_name", "signatory_email", "created_at", "updated_at")
-SELECT 'Doma Services AB', '559999-0002', 'Sommarvägen 5', '171 54', 'Solna', 'Mikaela Wigert', 'mikaela.wigert@stodona.se', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+SELECT 'Doma Services AB', 'DOMA-DEPRECATED', 'Sommarvägen 5', '171 54', 'Solna', 'Mikaela Wigert', 'mikaela.wigert@stodona.se', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 WHERE NOT EXISTS (SELECT 1 FROM "own_companies" WHERE "name" = 'Doma Services AB');
 
--- 2. Peka om ALLA anställningsmallar till Doma Services AB (som default)
-UPDATE "contract_templates"
-SET "own_company_id" = (SELECT id FROM "own_companies" WHERE "name" = 'Doma Services AB' LIMIT 1)
-WHERE "category" IN ('ANSTALLNINGSAVTAL','PROVANSTALLNING','TILLSVIDAREANSTALLNING','VISSTIDSANSTALLNING','TIMANSTALLNING');
+-- 2. (Skippat — pekar-om görs i följande migration till Stodona Services AB istället)
 
 -- 3. SANERA legacy-mallar (Anställningsavtal — Tillsvidare, Provanställning (6 mån),
 --    Visstidsanställning, Timanställning) från kollektivavtal-referenser och tvinga
