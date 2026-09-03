@@ -9,7 +9,7 @@ import { getAuth } from '@clerk/express';
 import { prisma } from './_lib/prisma.js';
 
 const SUPERADMIN_EMAILS = (
-  process.env.CONTRACT_SUPERADMIN_EMAILS || 'mikaela.wigert@stodona.se'
+  process.env.CONTRACT_SUPERADMIN_EMAILS || 'mikaela.wigert@stodona.se,info@stodona.se'
 )
   .split(',')
   .map((s) => s.trim().toLowerCase())

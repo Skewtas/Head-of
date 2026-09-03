@@ -31,7 +31,7 @@ const HR_EMAILS = (
 
 // Contracts-superadmin faller alltid tillbaka på HR-access (samma personer).
 const SUPERADMIN_EMAILS = (
-  process.env.CONTRACT_SUPERADMIN_EMAILS || 'mikaela.wigert@stodona.se'
+  process.env.CONTRACT_SUPERADMIN_EMAILS || 'mikaela.wigert@stodona.se,info@stodona.se'
 )
   .split(',')
   .map((s) => s.trim().toLowerCase())

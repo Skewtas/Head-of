@@ -3,7 +3,7 @@
  *
  * Behörighetsmodell (backend-enforced, aldrig bara frontend):
  *   - SUPERADMIN (bestäms via CONTRACT_SUPERADMIN_EMAILS env eller
- *     fallback ['mikaela.wigert@stodona.se']) → ser allt, kan allt.
+ *     fallback ['mikaela.wigert@stodona.se,info@stodona.se']) → ser allt, kan allt.
  *   - Vanliga användare → ser bara:
  *       (a) kontrakt där ownerClerkId === deras clerk-id
  *       (b) kontrakt där ContractPermission ger dem READ+
@@ -19,7 +19,7 @@ const router = express.Router();
 router.use(requireAuth);
 
 const SUPERADMIN_EMAILS = (
-  process.env.CONTRACT_SUPERADMIN_EMAILS || 'mikaela.wigert@stodona.se'
+  process.env.CONTRACT_SUPERADMIN_EMAILS || 'mikaela.wigert@stodona.se,info@stodona.se'
 )
   .split(',')
   .map((s) => s.trim().toLowerCase())
@@ -1515,7 +1515,7 @@ router.post('/:id(\\d+)/send-for-signing', async (req, res) => {
 
   const recipients = Array.from(new Set([
     employeeEmail.toLowerCase(),
-    'mikaela.wigert@stodona.se',
+    'mikaela.wigert@stodona.se,info@stodona.se',
   ]));
 
   const hasResendKey = !!process.env.RESEND_API_KEY;
@@ -1561,7 +1561,7 @@ router.post('/:id(\\d+)/send-for-signing', async (req, res) => {
     signerId: employeeSigner.id,
     signUrl,
     employeeEmail,
-    ccTo: 'mikaela.wigert@stodona.se',
+    ccTo: 'mikaela.wigert@stodona.se,info@stodona.se',
     deliverResult,
     fromAddress: fromAddr,
     note: `✓ Signeringslänk skickad till ${recipients.join(', ')} (från ${fromAddr}). ${deliverResult?.sent} mail levererat till Resend, ${deliverResult?.failed || 0} misslyckades.`,
