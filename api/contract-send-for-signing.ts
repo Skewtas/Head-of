@@ -32,6 +32,21 @@ function escapeHtml(s: string): string {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // Diagnostik: /api/contract-send-for-signing?envcheck=1 → visa env-status utan auth
+  if (req.query.envcheck === '1') {
+    return res.json({
+      SIGNING_SECRET: !!process.env.SIGNING_SECRET,
+      SIGNING_SECRET_length: process.env.SIGNING_SECRET?.length || 0,
+      CRON_SECRET: !!process.env.CRON_SECRET,
+      CRON_SECRET_length: process.env.CRON_SECRET?.length || 0,
+      RESEND_API_KEY: !!process.env.RESEND_API_KEY,
+      CLERK_SECRET_KEY: !!process.env.CLERK_SECRET_KEY,
+      SMTP_FROM: process.env.SMTP_FROM || null,
+      APP_URL: process.env.APP_URL || null,
+      VERCEL_ENV: process.env.VERCEL_ENV || null,
+      NODE_ENV: process.env.NODE_ENV || null,
+    });
+  }
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   const userId = await getClerkUserId(req);
   if (!userId) return res.status(401).json({ error: 'Unauthorized' });
