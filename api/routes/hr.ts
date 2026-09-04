@@ -23,7 +23,7 @@ router.use(requireAuth);
 
 const HR_EMAILS = (
   process.env.HR_ADMIN_EMAILS ||
-  'mikaela.wigert@stodona.se,mikaela.wigert@gmail.com,mikaela@stodona.se'
+  'mikaela.wigert@stodona.se,mikaela.wigert@gmail.com,mikaela@stodona.se,info@stodona.se'
 )
   .split(',')
   .map((s) => s.trim().toLowerCase())
@@ -31,7 +31,7 @@ const HR_EMAILS = (
 
 // Contracts-superadmin faller alltid tillbaka på HR-access (samma personer).
 const SUPERADMIN_EMAILS = (
-  process.env.CONTRACT_SUPERADMIN_EMAILS || 'mikaela.wigert@stodona.se,info@stodona.se'
+  process.env.CONTRACT_SUPERADMIN_EMAILS || 'mikaela.wigert@stodona.se'
 )
   .split(',')
   .map((s) => s.trim().toLowerCase())

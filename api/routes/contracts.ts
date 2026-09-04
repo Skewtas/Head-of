@@ -19,13 +19,25 @@ const router = express.Router();
 router.use(requireAuth);
 
 const SUPERADMIN_EMAILS = (
-  process.env.CONTRACT_SUPERADMIN_EMAILS || 'mikaela.wigert@stodona.se,info@stodona.se'
+  process.env.CONTRACT_SUPERADMIN_EMAILS || 'mikaela.wigert@stodona.se'
 )
   .split(',')
   .map((s) => s.trim().toLowerCase())
   .filter(Boolean);
 
-// Clerk gick igenom i requireAuth; hämta email från req om det finns.
+// HR_VIEWER: ser BARA anställningsavtal + HR-cases (INTE kund/leverantör/övrigt)
+const HR_VIEWER_EMAILS = (
+  process.env.HR_VIEWER_EMAILS || 'info@stodona.se'
+)
+  .split(',')
+  .map((s) => s.trim().toLowerCase())
+  .filter(Boolean);
+
+const EMPLOYMENT_CATEGORIES_LIST = [
+  'ANSTALLNINGSAVTAL', 'PROVANSTALLNING', 'TILLSVIDAREANSTALLNING',
+  'VISSTIDSANSTALLNING', 'TIMANSTALLNING',
+];
+
 function getUserEmail(req: Request): string | null {
   const email = (req as any).auth?.sessionClaims?.email
     ?? (req as any).auth?.user?.emailAddresses?.[0]?.emailAddress
@@ -36,11 +48,21 @@ function isSuperadmin(req: Request): boolean {
   const email = getUserEmail(req);
   return !!email && SUPERADMIN_EMAILS.includes(email);
 }
+function isHRViewer(req: Request): boolean {
+  const email = getUserEmail(req);
+  return !!email && HR_VIEWER_EMAILS.includes(email);
+}
 
 /** Returnerar hela Contract-raden om användaren har åtkomst, annars null. */
 async function accessibleContract(userId: string, req: Request, contractId: number) {
   if (isSuperadmin(req)) {
     return prisma.contract.findUnique({ where: { id: contractId } });
+  }
+  if (isHRViewer(req)) {
+    // HR-viewer ser bara anställningsavtal
+    return prisma.contract.findFirst({
+      where: { id: contractId, category: { in: EMPLOYMENT_CATEGORIES_LIST as any } },
+    });
   }
   return prisma.contract.findFirst({
     where: {
@@ -73,7 +95,9 @@ router.get('/', async (req, res) => {
 
   const where = isSuperadmin(req)
     ? baseWhere
-    : {
+    : isHRViewer(req)
+      ? { AND: [baseWhere, { category: { in: EMPLOYMENT_CATEGORIES_LIST as any } }] }
+      : {
         AND: [
           baseWhere,
           {
@@ -122,7 +146,9 @@ router.get('/stats', async (req, res) => {
   const userId = getUserId(req)!;
   const scopeWhere = isSuperadmin(req)
     ? {}
-    : {
+    : isHRViewer(req)
+      ? { category: { in: EMPLOYMENT_CATEGORIES_LIST as any } }
+      : {
         OR: [
           { ownerClerkId: userId },
           { permissions: { some: { clerkUserId: userId } } },

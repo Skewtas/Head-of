@@ -27,7 +27,7 @@ function authOrCronSecret(req: Request, res: Response, next: NextFunction) {
 router.use(authOrCronSecret);
 
 const SUPERADMIN_EMAILS = (
-  process.env.CONTRACT_SUPERADMIN_EMAILS || 'mikaela.wigert@stodona.se,info@stodona.se'
+  process.env.CONTRACT_SUPERADMIN_EMAILS || 'mikaela.wigert@stodona.se'
 ).split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
 
 async function requireSuperadmin(req: Request, res: Response): Promise<boolean> {
