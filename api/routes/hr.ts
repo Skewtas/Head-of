@@ -150,10 +150,12 @@ const SICK_SERVICE_ID = 3;
 router.post('/sick-leave/scan', async (req, res) => {
   if (!(await requireHR(req, res))) return;
 
+  const startedAt = Date.now();
   const pad = (n: number) => String(n).padStart(2, '0');
   const today = new Date();
   const start = new Date(today);
-  start.setMonth(start.getMonth() - 12);
+  // 6 månader (var 12 tidigare — tar för lång tid för Vercel)
+  start.setMonth(start.getMonth() - 6);
 
   const fromISO = `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}`;
   const toISO = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
@@ -174,31 +176,49 @@ router.post('/sick-leave/scan', async (req, res) => {
     });
   }
 
-  // Per-anställd: samlar startdatum för alla sjuk-missions
-  type Row = { name: string; email: string | null; days: Set<string>; episodes: string[][]; missions: any[] };
+  type Row = { name: string; email: string | null; days: Set<string>; missions: any[] };
   const perEmp = new Map<number, Row>();
 
-  let page = 1;
-  let totalPages = 1;
-  while (page <= totalPages) {
-    const url = `${base}/missions?filter[startdate]=${fromISO}&filter[enddate]=${toISO}&page[size]=30&page[number]=${page}`;
-    const resp = await fetch(url, {
+  // Hämta första sidan för att veta totalt antal
+  const fetchPage = async (p: number, retry = true): Promise<any> => {
+    const url = `${base}/missions?filter[startdate]=${fromISO}&filter[enddate]=${toISO}&page[size]=200&page[number]=${p}`;
+    const r = await fetch(url, {
       headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
     });
-    if (resp.status === 403) {
+    if (r.status === 403 && retry) {
       token = await forceRefreshTimewaveToken();
-      page = 1;
-      perEmp.clear();
-      continue;
+      return fetchPage(p, false);
     }
-    if (!resp.ok) throw new Error(`Timewave missions ${resp.status}`);
-    const data = await resp.json();
-    totalPages = data.last_page || 1;
+    if (!r.ok) throw new Error(`Timewave missions p${p} → ${r.status}`);
+    return r.json();
+  };
 
-    for (const m of data.data || []) {
-      const services = m.services || [];
-      const isSick = services.some((s: any) => (s.service_id || s.id) === SICK_SERVICE_ID);
-      if (!isSick) continue;
+  const firstData = await fetchPage(1);
+  const totalPages = firstData.last_page || 1;
+  let allMissions: any[] = firstData.data || [];
+
+  // Hämta resterande sidor parallellt (4 åt gången)
+  if (totalPages > 1) {
+    const PAR = 4;
+    for (let p = 2; p <= totalPages; p += PAR) {
+      const batch: number[] = [];
+      for (let i = 0; i < PAR && p + i <= totalPages; i++) batch.push(p + i);
+      const results = await Promise.all(batch.map((pn) => fetchPage(pn).catch(() => ({ data: [] }))));
+      for (const r of results) allMissions = allMissions.concat(r.data || []);
+    }
+  }
+
+  // Räkna sjuk-missions
+  let sickMissionsFound = 0;
+  for (const m of allMissions) {
+    const services = m.services || [];
+    const isSick = services.some((s: any) => {
+      const sid = s.service_id || s.id;
+      return sid === SICK_SERVICE_ID;
+    });
+    if (!isSick) continue;
+    sickMissionsFound++;
+    {
       const date: string = String(m.startdate || m.date || '').slice(0, 10);
       if (!date) continue;
 
@@ -209,14 +229,13 @@ router.post('/sick-leave/scan', async (req, res) => {
         if (!info) continue;
         let row = perEmp.get(empId);
         if (!row) {
-          row = { name: info.name, email: info.email, days: new Set(), episodes: [], missions: [] };
+          row = { name: info.name, email: info.email, days: new Set(), missions: [] };
           perEmp.set(empId, row);
         }
         row.days.add(date);
         row.missions.push({ date, missionId: m.id, cancelled: emp.cancelled });
       }
     }
-    page++;
   }
 
   // Räkna episoder: sammanhängande sjukdagar (dag n+1 räknas som samma episod)
@@ -315,14 +334,20 @@ router.post('/sick-leave/scan', async (req, res) => {
     created.push(s.timewaveEmployeeId);
   }
 
+  const elapsedMs = Date.now() - startedAt;
   res.json({
     ok: true,
     windowStart: fromISO,
     windowEnd: toISO,
+    totalMissions: allMissions.length,
+    sickMissionsFound,
+    employeesWithSickness: perEmp.size,
     scanned: summary.length,
     triggered: summary.filter((s) => s.triggeredThreshold).length,
     created: created.length,
     skipped: skipped.length,
+    elapsedMs,
+    sickServiceIdUsed: SICK_SERVICE_ID,
     summary: summary
       .filter((s) => s.episodes > 0)
       .sort((a, b) => b.episodes - a.episodes || b.days - a.days),
