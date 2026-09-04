@@ -84,11 +84,16 @@ type SummaryRow = {
   days: number;
   latest: string;
   triggeredThreshold: 'STRONG' | 'WARNING' | 'DAYS' | null;
+  byMonth: Record<string, number>;
 };
+
+type MonthlyTotals = Record<string, { totalDays: number; employees: number }>;
 
 export default function HRView() {
   const [cases, setCases] = useState<Case[]>([]);
   const [summary, setSummary] = useState<SummaryRow[]>([]);
+  const [months, setMonths] = useState<string[]>([]);
+  const [monthlyTotals, setMonthlyTotals] = useState<MonthlyTotals>({});
   const [windowLabel, setWindowLabel] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -103,6 +108,8 @@ export default function HRView() {
         api<{ cases: Case[] }>('/api/hr/sick-leave/cases'),
       ]);
       setSummary(scan.summary || []);
+      setMonths(scan.months || []);
+      setMonthlyTotals(scan.monthlyTotals || {});
       setWindowLabel(`${scan.windowStart} → ${scan.windowEnd}`);
       setCases(list.cases || []);
     } catch (e: any) {
@@ -239,17 +246,44 @@ export default function HRView() {
           </div>
         </div>
       ) : (
+        <>
+          {/* Månadsöversikt — totalt sjukdagar + antal anställda per månad */}
+          {months.length > 0 && (
+            <div className="bg-white border border-gray-200 rounded-lg mb-4 overflow-hidden">
+              <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-xs font-semibold text-brand-muted uppercase tracking-wide">
+                Månad för månad
+              </div>
+              <div className="grid" style={{ gridTemplateColumns: `repeat(${months.length}, minmax(0, 1fr))` }}>
+                {months.map((m) => {
+                  const label = new Intl.DateTimeFormat('sv-SE', { month: 'long', year: 'numeric', timeZone: 'Europe/Stockholm' }).format(new Date(m + '-01'));
+                  const t = monthlyTotals[m] || { totalDays: 0, employees: 0 };
+                  return (
+                    <div key={m} className="p-4 border-r border-gray-100 last:border-r-0">
+                      <div className="text-[10px] text-brand-muted uppercase tracking-wide capitalize">{label}</div>
+                      <div className="text-2xl font-semibold text-brand-dark tabular-nums mt-1">{t.totalDays}</div>
+                      <div className="text-[11px] text-brand-muted">sjukdagar · {t.employees} pers</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
         <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 text-xs uppercase tracking-wide text-brand-muted">
               <tr>
                 <th className="px-4 py-3 text-left">Anställd</th>
-                <th className="px-4 py-3 text-center">Tillfällen</th>
-                <th className="px-4 py-3 text-center">Dagar</th>
-                <th className="px-4 py-3 text-left">Senaste</th>
-                <th className="px-4 py-3 text-left">Trigger</th>
-                <th className="px-4 py-3 text-left">Ärende</th>
-                <th className="px-4 py-3"></th>
+                <th className="px-3 py-3 text-center">Tillf.</th>
+                <th className="px-3 py-3 text-center">Dagar</th>
+                {months.map((m) => (
+                  <th key={m} className="px-2 py-3 text-center text-[10px]">
+                    {new Intl.DateTimeFormat('sv-SE', { month: 'short', timeZone: 'Europe/Stockholm' }).format(new Date(m + '-01'))}
+                  </th>
+                ))}
+                <th className="px-3 py-3 text-left">Trigger</th>
+                <th className="px-3 py-3 text-left">Ärende</th>
+                <th className="px-3 py-3"></th>
               </tr>
             </thead>
             <tbody>
@@ -258,14 +292,21 @@ export default function HRView() {
                 return (
                 <tr key={s.timewaveEmployeeId} className="border-t border-gray-100 hover:bg-gray-50/50">
                   <td className="px-4 py-3 font-medium text-brand-dark">{s.name}</td>
-                  <td className="px-4 py-3 text-center tabular-nums">{s.episodes}</td>
-                  <td className="px-4 py-3 text-center tabular-nums">{s.days}</td>
-                  <td className="px-4 py-3 text-xs text-brand-muted tabular-nums">{s.latest || '—'}</td>
-                  <td className="px-4 py-3"><TriggerBadge trigger={s.triggeredThreshold} /></td>
-                  <td className="px-4 py-3">
+                  <td className="px-3 py-3 text-center tabular-nums">{s.episodes}</td>
+                  <td className="px-3 py-3 text-center tabular-nums font-semibold">{s.days}</td>
+                  {months.map((m) => {
+                    const d = s.byMonth?.[m] ?? 0;
+                    return (
+                      <td key={m} className={`px-2 py-3 text-center text-xs tabular-nums ${d === 0 ? 'text-gray-300' : 'text-brand-dark'}`}>
+                        {d || '·'}
+                      </td>
+                    );
+                  })}
+                  <td className="px-3 py-3"><TriggerBadge trigger={s.triggeredThreshold} /></td>
+                  <td className="px-3 py-3">
                     {c ? <StatusBadge status={c.status} /> : <span className="text-[11px] text-brand-muted">—</span>}
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="px-3 py-3 text-right">
                     <button
                       onClick={() => setSelectedEmp({ empId: s.timewaveEmployeeId, name: s.name, caseId: c?.id ?? null })}
                       className="text-xs px-2 py-1 rounded border border-gray-200 text-brand-dark hover:bg-gray-100"
@@ -279,6 +320,7 @@ export default function HRView() {
             </tbody>
           </table>
         </div>
+        </>
       )}
 
       {selectedEmp && (

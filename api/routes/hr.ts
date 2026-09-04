@@ -154,8 +154,9 @@ router.post('/sick-leave/scan', async (req, res) => {
   const pad = (n: number) => String(n).padStart(2, '0');
   const today = new Date();
   const start = new Date(today);
-  // 6 månader (var 12 tidigare — tar för lång tid för Vercel)
-  start.setMonth(start.getMonth() - 6);
+  // 3 månader tillbaka (regel Mikaela 2026-09-01)
+  start.setMonth(start.getMonth() - 3);
+  start.setDate(1); // första i månaden för prydliga månads-buckets
 
   const fromISO = `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}`;
   const toISO = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
@@ -239,6 +240,16 @@ router.post('/sick-leave/scan', async (req, res) => {
   }
 
   // Räkna episoder: sammanhängande sjukdagar (dag n+1 räknas som samma episod)
+  // Bygg lista av månader i fönstret (YYYY-MM)
+  const monthKeys: string[] = [];
+  {
+    const cur = new Date(start.getFullYear(), start.getMonth(), 1);
+    while (cur <= today) {
+      monthKeys.push(`${cur.getFullYear()}-${pad(cur.getMonth() + 1)}`);
+      cur.setMonth(cur.getMonth() + 1);
+    }
+  }
+
   const summary: Array<{
     timewaveEmployeeId: number;
     name: string;
@@ -247,10 +258,20 @@ router.post('/sick-leave/scan', async (req, res) => {
     days: number;
     latest: string;
     triggeredThreshold: 'STRONG' | 'WARNING' | 'DAYS' | null;
+    byMonth: Record<string, number>;   // YYYY-MM → antal sjukdagar
   }> = [];
 
   for (const [empId, row] of perEmp.entries()) {
     const days = Array.from(row.days).sort();
+
+    // Månad-breakdown
+    const byMonth: Record<string, number> = {};
+    for (const k of monthKeys) byMonth[k] = 0;
+    for (const d of days) {
+      const mk = d.slice(0, 7);
+      if (mk in byMonth) byMonth[mk]++;
+    }
+
     const episodes: string[][] = [];
     let current: string[] = [];
     for (let i = 0; i < days.length; i++) {
@@ -278,6 +299,7 @@ router.post('/sick-leave/scan', async (req, res) => {
     else if (dayCount >= THRESHOLD_TOTAL_DAYS) trigger = 'DAYS';
 
     summary.push({
+      byMonth,
       timewaveEmployeeId: empId,
       name: row.name,
       email: row.email,
@@ -334,11 +356,25 @@ router.post('/sick-leave/scan', async (req, res) => {
     created.push(s.timewaveEmployeeId);
   }
 
+  // Totaler per månad över alla anställda
+  const monthlyTotals: Record<string, { totalDays: number; employees: number }> = {};
+  for (const k of monthKeys) monthlyTotals[k] = { totalDays: 0, employees: 0 };
+  for (const s of summary) {
+    for (const [mk, days] of Object.entries(s.byMonth)) {
+      if (days > 0) {
+        monthlyTotals[mk].totalDays += days;
+        monthlyTotals[mk].employees++;
+      }
+    }
+  }
+
   const elapsedMs = Date.now() - startedAt;
   res.json({
     ok: true,
     windowStart: fromISO,
     windowEnd: toISO,
+    months: monthKeys,
+    monthlyTotals,
     totalMissions: allMissions.length,
     sickMissionsFound,
     employeesWithSickness: perEmp.size,
