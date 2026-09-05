@@ -219,23 +219,22 @@ router.post('/sick-leave/scan', async (req, res) => {
     });
     if (!isSick) continue;
     sickMissionsFound++;
-    {
-      const date: string = String(m.startdate || m.date || '').slice(0, 10);
-      if (!date) continue;
-
-      for (const emp of m.employees || []) {
-        const empId = emp.employee_id || emp.id;
-        if (!empId) continue;
-        const info = employees.get(empId);
-        if (!info) continue;
-        let row = perEmp.get(empId);
-        if (!row) {
-          row = { name: info.name, email: info.email, days: new Set(), missions: [] };
-          perEmp.set(empId, row);
-        }
-        row.days.add(date);
-        row.missions.push({ date, missionId: m.id, cancelled: emp.cancelled });
+    // Timewave lägger datumet PÅ SKIFTET (emp.startdate), inte på mission-objektet.
+    for (const emp of m.employees || []) {
+      const empId = emp.employee_id || emp.id;
+      if (!empId) continue;
+      const info = employees.get(empId);
+      if (!info) continue;
+      const dateRaw: string = String(emp.startdate || m.startdate || m.date || '');
+      const date = dateRaw.slice(0, 10);
+      if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
+      let row = perEmp.get(empId);
+      if (!row) {
+        row = { name: info.name, email: info.email, days: new Set(), missions: [] };
+        perEmp.set(empId, row);
       }
+      row.days.add(date);
+      row.missions.push({ date, missionId: m.id, cancelled: emp.cancelled });
     }
   }
 
