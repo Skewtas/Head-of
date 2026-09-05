@@ -32,17 +32,22 @@ const BodySchema = z.object({
   recipientMode: z.enum(['ALL', 'TEAM', 'INDIVIDUAL']).optional(),
   recipientTeamId: z.number().nullable().optional(),
   scheduledFor: z.string().nullable().optional(),
+  translatedLanguage: z.string().nullable().optional(),
+  translatedText: z.string().nullable().optional(),
 });
 type Body = z.infer<typeof BodySchema>;
 
+const LANGUAGE_LABELS: Record<string, string> = {
+  en: '🇬🇧 English', uk: '🇺🇦 Українська', es: '🇪🇸 Español', sq: '🇦🇱 Shqip',
+  pl: '🇵🇱 Polski', ar: '🇸🇦 العربية', ru: '🇷🇺 Русский', ro: '🇷🇴 Română',
+};
+
 // Konvertera struktur till HTML för email preview + skickning
 function renderEmailHtml(b: Body): string {
-  if (b.body && !b.intro && !b.weekInfo && !b.keyDates && !b.outro) {
-    // Fritext-läge — bara wrappa
-    return `<div style="font-family:Inter,Arial,sans-serif;color:#1a1a2e;line-height:1.55;max-width:640px;margin:0 auto;">${(b.body || '').replace(/\n/g, '<br/>')}</div>`;
-  }
   const esc = (s?: string) => (s || '').replace(/</g, '&lt;').replace(/\n/g, '<br/>');
-  return `<div style="font-family:Inter,Arial,sans-serif;color:#1a1a2e;line-height:1.6;max-width:640px;margin:0 auto;padding:24px;">
+  const swedishHtml = b.body && !b.intro && !b.weekInfo && !b.keyDates && !b.outro
+    ? `<div style="font-family:Inter,Arial,sans-serif;color:#1a1a2e;line-height:1.55;max-width:640px;margin:0 auto;">${esc(b.body)}</div>`
+    : `<div style="font-family:Inter,Arial,sans-serif;color:#1a1a2e;line-height:1.6;max-width:640px;margin:0 auto;padding:24px;">
     ${b.subject ? `<h1 style="font-family:'Playfair Display',Georgia,serif;font-size:28px;color:#1a1a2e;margin:0 0 20px;">${esc(b.subject)}</h1>` : ''}
     ${b.intro ? `<p style="margin:0 0 16px;color:#1a1a2e;">${esc(b.intro)}</p>` : ''}
     ${b.weekInfo ? `<div style="margin:0 0 20px;padding:16px 20px;background:#faf7ee;border-left:3px solid #c9a96e;">
@@ -56,15 +61,28 @@ function renderEmailHtml(b: Body): string {
     ${b.outro ? `<p style="margin:16px 0 0;color:#1a1a2e;">${esc(b.outro)}</p>` : ''}
     <div style="margin-top:32px;padding-top:16px;border-top:1px solid #eae4d9;font-size:12px;color:#8b8578;text-align:center;">Stodona</div>
   </div>`;
+
+  if (b.translatedLanguage && b.translatedText?.trim()) {
+    const label = LANGUAGE_LABELS[b.translatedLanguage] || b.translatedLanguage;
+    return `${swedishHtml}
+      <div style="max-width:640px;margin:0 auto;padding:0 24px;">
+        <hr style="margin:24px 0;border:none;border-top:1px dashed #c9a96e;" />
+        <div style="font-size:11px;color:#8b8578;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px;">${label}</div>
+        <div style="font-family:Inter,Arial,sans-serif;color:#1a1a2e;line-height:1.55;white-space:pre-wrap;">${esc(b.translatedText)}</div>
+      </div>`;
+  }
+  return swedishHtml;
 }
 
 // Bygg SMS-text från strukturen (rå text, radbrytningar bevaras)
 function renderSmsText(b: Body): string {
-  if (b.body) return b.body.trim();
-  const parts = [b.subject, b.intro, b.weekInfo, b.keyDates, b.outro]
-    .filter(Boolean)
-    .map((s) => s!.trim());
-  return parts.join('\n\n');
+  const svenskt = b.body
+    ? b.body.trim()
+    : [b.subject, b.intro, b.weekInfo, b.keyDates, b.outro].filter(Boolean).map((s) => s!.trim()).join('\n\n');
+  if (b.translatedText?.trim()) {
+    return `${svenskt}\n---\n${b.translatedText.trim()}`;
+  }
+  return svenskt;
 }
 
 // Hjälpare: hämta anställda och filtrera till kontaktbara mottagare

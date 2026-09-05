@@ -160,7 +160,20 @@ interface Draft {
   recipientIds: number[];
   scheduledFor: string | null;        // ISO
   useTemplate: boolean;               // struktur (intro/weekInfo/...) vs fritext
+  translatedLanguage: string | null;  // t.ex. 'en', 'uk', 'es' etc — översatt version bifogas
+  translatedText: string | null;      // AI-genererad översättning (kan redigeras manuellt)
 }
+
+const TRANSLATION_LANGUAGES: Array<{ code: string; label: string; flag: string }> = [
+  { code: 'en', label: 'Engelska', flag: '🇬🇧' },
+  { code: 'uk', label: 'Ukrainska', flag: '🇺🇦' },
+  { code: 'es', label: 'Spanska', flag: '🇪🇸' },
+  { code: 'sq', label: 'Albanska', flag: '🇦🇱' },
+  { code: 'pl', label: 'Polska', flag: '🇵🇱' },
+  { code: 'ar', label: 'Arabiska', flag: '🇸🇦' },
+  { code: 'ru', label: 'Ryska', flag: '🇷🇺' },
+  { code: 'ro', label: 'Rumänska', flag: '🇷🇴' },
+];
 
 interface HistoryRow {
   id: string;
@@ -565,6 +578,8 @@ function ComposeView({ existingId, onDone }: { existingId: string | null; onDone
     recipientIds: [],
     scheduledFor: null,
     useTemplate: true,
+    translatedLanguage: null,
+    translatedText: null,
   });
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [options, setOptions] = useState<RecipientOptions | null>(null);
@@ -1034,6 +1049,9 @@ function StepContent({
         </div>
       )}
 
+      {/* Översättning för anställda som inte pratar svenska */}
+      <TranslationBlock draft={draft} setDraft={setDraft} />
+
       <div className="mt-6 flex justify-between">
         <button onClick={onBack} className="text-sm text-brand-muted hover:text-brand-dark">← Tillbaka</button>
         <button
@@ -1043,6 +1061,91 @@ function StepContent({
           Förhandsgranska <Eye className="w-4 h-4" />
         </button>
       </div>
+    </div>
+  );
+}
+
+/** Extra språk-block — auto-översätter innehållet via AI. */
+function TranslationBlock({ draft, setDraft }: { draft: Draft; setDraft: (d: Draft) => void }) {
+  const [translating, setTranslating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const sourceText = draft.type === 'EMAIL'
+    ? [draft.subject, draft.intro, draft.weekInfo && `Veckans information:\n${draft.weekInfo}`, draft.keyDates && `Viktiga datum:\n${draft.keyDates}`, draft.outro].filter(Boolean).join('\n\n')
+    : draft.body;
+
+  const translate = async () => {
+    if (!draft.translatedLanguage || !sourceText.trim()) return;
+    setTranslating(true);
+    setError(null);
+    try {
+      const r = await fetch('/api/personalbrev-translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: sourceText, targetLanguage: draft.translatedLanguage }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || 'Översättning misslyckades');
+      setDraft({ ...draft, translatedText: j.translated });
+    } catch (e: any) { setError(e.message); }
+    finally { setTranslating(false); }
+  };
+
+  return (
+    <div className="mt-6 p-4 bg-brand-bg/40 border border-gray-200 rounded-lg">
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-brand-muted">Extra språk (valfritt)</span>
+      </div>
+      <p className="text-xs text-brand-muted mb-3">
+        Många anställda pratar inte svenska. Välj språk så översätter AI:n automatiskt och bifogar översättningen i utskicket.
+      </p>
+      <div className="flex flex-wrap gap-2 mb-3">
+        <button
+          type="button"
+          onClick={() => setDraft({ ...draft, translatedLanguage: null, translatedText: null })}
+          className={`px-3 py-1.5 text-xs rounded-full border ${
+            !draft.translatedLanguage ? 'bg-brand-dark text-white border-brand-dark' : 'bg-white text-brand-muted border-gray-200'
+          }`}
+        >
+          Ingen översättning
+        </button>
+        {TRANSLATION_LANGUAGES.map((l) => (
+          <button
+            key={l.code}
+            type="button"
+            onClick={() => setDraft({ ...draft, translatedLanguage: l.code, translatedText: null })}
+            className={`px-3 py-1.5 text-xs rounded-full border inline-flex items-center gap-1 ${
+              draft.translatedLanguage === l.code ? 'bg-brand-dark text-white border-brand-dark' : 'bg-white text-brand-dark border-gray-200 hover:border-brand-accent'
+            }`}
+          >
+            <span>{l.flag}</span>{l.label}
+          </button>
+        ))}
+      </div>
+      {draft.translatedLanguage && (
+        <>
+          <div className="flex items-center gap-2 mb-2">
+            <button
+              type="button"
+              onClick={translate}
+              disabled={translating || !sourceText.trim()}
+              className="text-xs px-3 py-1.5 bg-brand-accent text-white rounded hover:bg-brand-accent/90 disabled:opacity-50 inline-flex items-center gap-1.5"
+            >
+              {translating ? <Loader className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+              {draft.translatedText ? 'Översätt igen' : 'Översätt automatiskt'}
+            </button>
+            {draft.translatedText && <span className="text-[11px] text-emerald-600">✓ Översatt · redigera fritt nedan</span>}
+          </div>
+          {error && <div className="mb-2 p-2 text-xs bg-rose-50 border border-rose-200 rounded text-rose-800">{error}</div>}
+          <textarea
+            value={draft.translatedText || ''}
+            onChange={(e) => setDraft({ ...draft, translatedText: e.target.value })}
+            rows={8}
+            placeholder="Översatt text visas här när du klickar på knappen…"
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white outline-none focus:border-brand-accent"
+          />
+        </>
+      )}
     </div>
   );
 }
@@ -1212,25 +1315,38 @@ function toBody(d: Draft) {
     recipientMode: d.recipientMode,
     recipientTeamId: d.recipientTeamId,
     scheduledFor: d.scheduledFor,
+    translatedLanguage: d.translatedLanguage,
+    translatedText: d.translatedText,
   };
 }
 
 function esc(s: string): string { return (s || '').replace(/</g, '&lt;').replace(/\n/g, '<br/>'); }
 
 function renderEmailPreview(d: Draft): string {
-  if (d.body && !d.intro && !d.weekInfo && !d.keyDates && !d.outro) {
-    return `<div style="font-family:Inter,Arial,sans-serif;color:#1a1a2e;line-height:1.55;">${esc(d.body)}</div>`;
-  }
-  return `<div style="font-family:Inter,Arial,sans-serif;color:#1a1a2e;line-height:1.6;">
+  const svenskt = d.body && !d.intro && !d.weekInfo && !d.keyDates && !d.outro
+    ? `<div style="font-family:Inter,Arial,sans-serif;color:#1a1a2e;line-height:1.55;">${esc(d.body)}</div>`
+    : `<div style="font-family:Inter,Arial,sans-serif;color:#1a1a2e;line-height:1.6;">
     ${d.subject ? `<h1 style="font-family:'Playfair Display',Georgia,serif;font-size:24px;margin:0 0 16px;">${esc(d.subject)}</h1>` : ''}
     ${d.intro ? `<p style="margin:0 0 12px;">${esc(d.intro)}</p>` : ''}
     ${d.weekInfo ? `<div style="margin:0 0 14px;padding:12px 16px;background:#faf7ee;border-left:3px solid #c9a96e;"><div style="font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:#a68a4e;font-weight:700;margin-bottom:4px;">Veckans information</div>${esc(d.weekInfo)}</div>` : ''}
     ${d.keyDates ? `<div style="margin:0 0 14px;padding:12px 16px;background:#f5f3ee;border-radius:6px;"><div style="font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:#a68a4e;font-weight:700;margin-bottom:4px;">Viktiga datum</div>${esc(d.keyDates)}</div>` : ''}
     ${d.outro ? `<p style="margin:12px 0 0;">${esc(d.outro)}</p>` : ''}
   </div>`;
+
+  if (d.translatedLanguage && d.translatedText?.trim()) {
+    const lang = TRANSLATION_LANGUAGES.find((l) => l.code === d.translatedLanguage);
+    return `${svenskt}
+      <hr style="margin:24px 0;border:none;border-top:1px dashed #c9a96e;" />
+      <div style="font-size:11px;color:#8b8578;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px;">${lang?.flag || ''} ${lang?.label || d.translatedLanguage}</div>
+      <div style="font-family:Inter,Arial,sans-serif;color:#1a1a2e;line-height:1.55;white-space:pre-wrap;">${esc(d.translatedText)}</div>`;
+  }
+  return svenskt;
 }
 
 function renderSmsPreview(d: Draft): string {
-  const text = d.body || [d.subject, d.intro, d.weekInfo, d.keyDates, d.outro].filter(Boolean).join('\n\n');
-  return `<div style="max-width:280px;margin:0 auto;padding:14px 18px;background:#f0f0f0;border-radius:18px;font-family:-apple-system,'SF Pro Text',sans-serif;font-size:14px;line-height:1.4;color:#000;white-space:pre-wrap;">${esc(text) || '<em style="color:#999;">Inget meddelande ännu</em>'}</div>`;
+  const svenskt = d.body || [d.subject, d.intro, d.weekInfo, d.keyDates, d.outro].filter(Boolean).join('\n\n');
+  const combined = d.translatedText?.trim()
+    ? `${svenskt}\n---\n${d.translatedText}`
+    : svenskt;
+  return `<div style="max-width:280px;margin:0 auto;padding:14px 18px;background:#f0f0f0;border-radius:18px;font-family:-apple-system,'SF Pro Text',sans-serif;font-size:14px;line-height:1.4;color:#000;white-space:pre-wrap;">${esc(combined) || '<em style="color:#999;">Inget meddelande ännu</em>'}</div>`;
 }
