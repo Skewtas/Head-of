@@ -16,6 +16,7 @@ import { z } from 'zod';
 import { prisma } from '../_lib/prisma.js';
 import { requireAuth, getUserId } from '../_lib/auth.js';
 import { getTimewaveToken, forceRefreshTimewaveToken } from '../_lib/timewaveAuth.js';
+import { computeSickLeaveByMonth } from '../_lib/sickLeaveService.js';
 import { clerkClient } from '@clerk/express';
 
 const router = express.Router();
@@ -161,107 +162,28 @@ router.post('/sick-leave/scan', async (req, res) => {
   const fromISO = `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}`;
   const toISO = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
 
-  let token = await getTimewaveToken();
+  // Hämta anställdas email via employees-endpoint (namnen kommer från servicen).
+  const token = await getTimewaveToken();
   const base = 'https://api.timewave.se/v3';
-
-  // Hämta anställda för namn
   const empResp = await fetch(`${base}/employees?page[size]=200`, {
     headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
   });
   const empData = await empResp.json();
-  const employees = new Map<number, { name: string; email: string | null }>();
+  const employeeNames = new Map<number, string>();
+  const employeeEmails = new Map<number, string | null>();
   for (const e of empData.data || []) {
-    employees.set(e.id, {
-      name: `${e.first_name || ''} ${e.last_name || ''}`.trim(),
-      email: e.email || null,
-    });
+    employeeNames.set(e.id, `${e.first_name || ''} ${e.last_name || ''}`.trim());
+    employeeEmails.set(e.id, e.email || null);
   }
 
-  type Row = { name: string; email: string | null; days: Set<string>; monthCounts: Record<string, number>; missions: any[] };
-  const perEmp = new Map<number, Row>();
+  // ─── DELAD KÄLLA: använd computeSickLeaveByMonth från sickLeaveService ─
+  // Samma logik som Översikten. Enda source of truth.
+  const sickData = await computeSickLeaveByMonth(start, today, employeeNames);
+  const monthKeys = sickData.months;
+  const sickMissionsFound = sickData.sickMissionsFound;
+  const allMissionsLength = sickData.totalMissions;
 
-  // Timewave returnerar inget datum PER mission i list-svaret. Vi filtrerar
-  // därför per MÅNAD så vi vet vilken månad varje mission tillhör.
-  const monthKeysToScan: Array<{ key: string; from: string; to: string }> = [];
-  {
-    const cur = new Date(start.getFullYear(), start.getMonth(), 1);
-    while (cur <= today) {
-      const y = cur.getFullYear();
-      const m = cur.getMonth();
-      const monthStart = `${y}-${pad(m + 1)}-01`;
-      const monthEnd = `${y}-${pad(m + 1)}-${pad(new Date(y, m + 1, 0).getDate())}`;
-      monthKeysToScan.push({ key: `${y}-${pad(m + 1)}`, from: monthStart, to: monthEnd });
-      cur.setMonth(cur.getMonth() + 1);
-    }
-  }
-
-  const fetchPageForRange = async (mFrom: string, mTo: string, p: number, retry = true): Promise<any> => {
-    const url = `${base}/missions?filter[startdate]=${mFrom}&filter[enddate]=${mTo}&page[size]=200&page[number]=${p}`;
-    const r = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
-    });
-    if (r.status === 403 && retry) {
-      token = await forceRefreshTimewaveToken();
-      return fetchPageForRange(mFrom, mTo, p, false);
-    }
-    if (!r.ok) throw new Error(`Timewave missions ${mFrom}..${mTo} p${p} → ${r.status}`);
-    return r.json();
-  };
-
-  let sickMissionsFound = 0;
-  let allMissions: any[] = []; // för svaret bara — vi räknar per-månad
-
-  for (const { key: mk, from: mFrom, to: mTo } of monthKeysToScan) {
-    const first = await fetchPageForRange(mFrom, mTo, 1);
-    const totalPages = first.last_page || 1;
-    let monthMissions: any[] = first.data || [];
-    if (totalPages > 1) {
-      const PAR = 4;
-      for (let p = 2; p <= totalPages; p += PAR) {
-        const batch: number[] = [];
-        for (let i = 0; i < PAR && p + i <= totalPages; i++) batch.push(p + i);
-        const results = await Promise.all(batch.map((pn) => fetchPageForRange(mFrom, mTo, pn).catch(() => ({ data: [] }))));
-        for (const r of results) monthMissions = monthMissions.concat(r.data || []);
-      }
-    }
-    allMissions = allMissions.concat(monthMissions);
-
-    for (const m of monthMissions) {
-      const services = m.services || [];
-      const isSick = services.some((s: any) => {
-        const sid = s.service_id || s.id;
-        return sid === SICK_SERVICE_ID;
-      });
-      if (!isSick) continue;
-      sickMissionsFound++;
-      for (const emp of m.employees || []) {
-        const empId = emp.employee_id || emp.id;
-        if (!empId) continue;
-        const info = employees.get(empId);
-        if (!info) continue;
-        let row = perEmp.get(empId);
-        if (!row) {
-          row = { name: info.name, email: info.email, days: new Set(), monthCounts: {}, missions: [] };
-          perEmp.set(empId, row);
-        }
-        // Vi vet inte exakt dag men vi vet MÅNAD (från fetch-filter)
-        row.monthCounts[mk] = (row.monthCounts[mk] || 0) + 1;
-        row.missions.push({ month: mk, missionId: m.id, cancelled: emp.cancelled });
-      }
-    }
-  }
-
-  // Räkna episoder: sammanhängande sjukdagar (dag n+1 räknas som samma episod)
-  // Bygg lista av månader i fönstret (YYYY-MM)
-  const monthKeys: string[] = [];
-  {
-    const cur = new Date(start.getFullYear(), start.getMonth(), 1);
-    while (cur <= today) {
-      monthKeys.push(`${cur.getFullYear()}-${pad(cur.getMonth() + 1)}`);
-      cur.setMonth(cur.getMonth() + 1);
-    }
-  }
-
+  // Bygg summary per anställd baserat på delad service-data
   const summary: Array<{
     timewaveEmployeeId: number;
     name: string;
@@ -270,33 +192,30 @@ router.post('/sick-leave/scan', async (req, res) => {
     days: number;
     latest: string;
     triggeredThreshold: 'STRONG' | 'WARNING' | 'DAYS' | null;
-    byMonth: Record<string, number>;   // YYYY-MM → antal sjukdagar
+    byMonth: Record<string, number>;
   }> = [];
 
-  for (const [empId, row] of perEmp.entries()) {
-    // Månad-breakdown baseras nu på monthCounts (tillfällen), inte enskilda datum
+  for (const totalEntry of sickData.total) {
+    const empId = totalEntry.employeeId;
     const byMonth: Record<string, number> = {};
-    for (const k of monthKeys) byMonth[k] = row.monthCounts[k] || 0;
-
-    // Totalt antal tillfällen = summa över alla månader (varje mission = 1 tillfälle)
-    const totalCount = Object.values(byMonth).reduce((sum, n) => sum + n, 0);
-
-    // Episoder = distinkta månader med sjukfrånvaro (approximation utan
-    // dags-data — bättre än inget)
+    for (const k of monthKeys) {
+      const inMonth = sickData.perMonth[k]?.find((e) => e.employeeId === empId);
+      byMonth[k] = inMonth?.count || 0;
+    }
+    const totalCount = totalEntry.count;
     const episodeCount = Object.values(byMonth).filter((n) => n > 0).length;
-    const dayCount = totalCount; // "dagar" = tillfällen just nu
+    const dayCount = totalCount;
     let trigger: 'STRONG' | 'WARNING' | 'DAYS' | null = null;
     if (episodeCount >= THRESHOLD_EPISODES_STRONG) trigger = 'STRONG';
     else if (episodeCount >= THRESHOLD_EPISODES_WARNING) trigger = 'WARNING';
     else if (dayCount >= THRESHOLD_TOTAL_DAYS) trigger = 'DAYS';
 
-    // Senaste månaden med frånvaro
     const latestMonth = monthKeys.slice().reverse().find((k) => (byMonth[k] || 0) > 0) || '';
     summary.push({
       byMonth,
       timewaveEmployeeId: empId,
-      name: row.name,
-      email: row.email,
+      name: totalEntry.name,
+      email: employeeEmails.get(empId) || null,
       episodes: episodeCount,
       days: dayCount,
       latest: latestMonth,
@@ -369,7 +288,7 @@ router.post('/sick-leave/scan', async (req, res) => {
     windowEnd: toISO,
     months: monthKeys,
     monthlyTotals,
-    totalMissions: allMissions.length,
+    totalMissions: allMissionsLength,
     sickMissionsFound,
     employeesWithSickness: perEmp.size,
     scanned: summary.length,
