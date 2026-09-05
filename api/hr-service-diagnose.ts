@@ -86,17 +86,40 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       /sjuk|frånvar|frånv/i.test(s.name || '')
     );
 
+    // Hitta första 5 sjuk-missions (service_id=3) och dumpa hela objekten
+    const sickMissions = missions
+      .filter((m: any) => (m.services || []).some((s: any) => (s.service_id || s.id) === 3))
+      .slice(0, 5)
+      .map((m: any) => ({
+        id: m.id,
+        startdate: m.startdate,
+        date: m.date,
+        client_id: m.client?.id,
+        services: m.services,
+        employees: (m.employees || []).map((e: any) => ({
+          id: e.id,
+          employee_id: e.employee_id,
+          starttime: e.starttime,
+          endtime: e.endtime,
+          cancelled: e.cancelled,
+        })),
+      }));
+
     res.json({
       windowStart: fromISO,
       windowEnd: toISO,
       totalMissions: missions.length,
       distinctServiceIds: services.length,
+      sickMissionsCount: sickMissions.length + (missions.filter((m: any) => (m.services || []).some((s: any) => (s.service_id || s.id) === 3)).length - sickMissions.length),
+      firstMissionAnyType: missions[0] ? {
+        id: missions[0].id,
+        keys: Object.keys(missions[0]),
+        services: missions[0].services,
+      } : null,
+      firstFiveSickMissions: sickMissions,
       allServicesFromCatalog: Array.from(serviceById.entries()).map(([id, name]) => ({ id, name })).sort((a, b) => a.id - b.id),
       serviceUsageInMissions: services,
       sickCandidatesByName: sickCandidates,
-      recommendation: sickCandidates.length > 0
-        ? `Använd SICK_SERVICE_ID = ${sickCandidates[0].id} (${sickCandidates[0].name})`
-        : 'Inget service-namn innehåller "sjuk"/"frånvar" — kolla listan manuellt.',
     });
   } catch (err: any) {
     res.status(500).json({ error: err?.message, stack: err?.stack });
