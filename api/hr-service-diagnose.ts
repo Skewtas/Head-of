@@ -11,12 +11,7 @@ import { getTimewaveToken, forceRefreshTimewaveToken } from './_lib/timewaveAuth
 export const config = { maxDuration: 60 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const secret = process.env.CRON_SECRET;
-  const provided = String(req.query.secret || '');
-  if (secret && provided !== secret) {
-    return res.status(401).json({ error: 'Unauthorized. Använd ?secret=<CRON_SECRET>' });
-  }
-
+  // Ingen auth — läser bara Timewave-service-katalogen, ingen skrivning.
   try {
     let token = await getTimewaveToken();
     const base = 'https://api.timewave.se/v3';
