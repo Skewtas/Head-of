@@ -86,24 +86,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       /sjuk|frånvar|frånv/i.test(s.name || '')
     );
 
-    // Hitta första 5 sjuk-missions (service_id=3) och dumpa hela objekten
+    // Hitta första 5 sjuk-missions (service_id=3) och dumpa HELA objekten
+    // så vi ser var datum egentligen ligger.
     const sickMissions = missions
       .filter((m: any) => (m.services || []).some((s: any) => (s.service_id || s.id) === 3))
-      .slice(0, 5)
-      .map((m: any) => ({
-        id: m.id,
-        startdate: m.startdate,
-        date: m.date,
-        client_id: m.client?.id,
-        services: m.services,
-        employees: (m.employees || []).map((e: any) => ({
-          id: e.id,
-          employee_id: e.employee_id,
-          starttime: e.starttime,
-          endtime: e.endtime,
-          cancelled: e.cancelled,
-        })),
-      }));
+      .slice(0, 3)
+      .map((m: any) => m); // full dump — inga fält bortfiltrerade
 
     res.json({
       windowStart: fromISO,
