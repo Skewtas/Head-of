@@ -292,17 +292,22 @@ function KpiGoalRow({
     return abs;
   };
 
-  let diffLabel: React.ReactNode = null;
-  if (hasSnapshot && diff !== null && diff !== undefined) {
-    if (Math.abs(diff) < 0.5) {
-      diffLabel = <span className="text-brand-muted">— Ingen förändring sedan igår</span>;
-    } else if (diff > 0) {
+  // Delta VISAS ALLTID — även 0 (som "±0"). Om ingen historisk snapshot
+  // finns visas "–" så användaren vet att jämförelse saknas
+  // (får aldrig blandas med diff = 0). Explicit null-check så inte 0
+  // behandlas som falsy.
+  let diffLabel: React.ReactNode;
+  if (!hasSnapshot || diff === null || diff === undefined) {
+    diffLabel = <span className="text-brand-muted">– ingen jämförelse mot igår ännu</span>;
+  } else {
+    const rounded = Math.round(diff);
+    if (rounded === 0) {
+      diffLabel = <span className="text-brand-muted font-medium">±0 {unit} sedan igår</span>;
+    } else if (rounded > 0) {
       diffLabel = <span className="text-emerald-600 font-medium">↑ +{fmtDiff(diff)} {unit} sedan igår</span>;
     } else {
       diffLabel = <span className="text-red-600 font-medium">↓ −{fmtDiff(diff)} {unit} sedan igår</span>;
     }
-  } else if (todayCount != null && todayCount > 0 && !hasSnapshot) {
-    diffLabel = <span className="text-emerald-600 font-medium">+{todayCount} idag</span>;
   }
 
   return (
@@ -319,7 +324,7 @@ function KpiGoalRow({
           style={{ width: `${pct}%` }}
         />
       </div>
-      {diffLabel && <div className="mt-1 text-[11px]">{diffLabel}</div>}
+      <div className="mt-1 text-[11px]">{diffLabel}</div>
     </div>
   );
 }
