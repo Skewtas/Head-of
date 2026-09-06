@@ -66,6 +66,7 @@ import ImportView from './ImportView';
 import OpsView from './OpsView';
 import ContractsView from './ContractsView';
 import HRView from './HRView';
+import SjukfranvaroTestView from './SjukfranvaroTestView';
 import PersonalbrevView from './PersonalbrevView';
 import OnlineBookingsTrend from './OnlineBookingsTrend';
 import SigningView from './SigningView';
@@ -2052,6 +2053,7 @@ export default function App() {
     { id: 'ops', label: 'VECKOUPPFÖLJNING', icon: ListChecks },
     { id: 'contracts', label: 'AVTAL', icon: FileText },
     { id: 'hr', label: 'HR', icon: Heart },
+    { id: 'sjukfranvaro-test', label: 'SJUKFRÅNVARO (NY)', icon: Heart },
     { id: 'personalbrev', label: 'PERSONALBREV', icon: Send },
     { id: 'email', label: 'E-POST UTSKICK', icon: Mail },
     { id: 'import', label: 'IMPORTERA FRÅN TIMEWAVE', icon: RefreshCw },
@@ -2140,6 +2142,7 @@ export default function App() {
               {activeTab === 'ops' && <OpsView />}
               {activeTab === 'contracts' && <ContractsView />}
               {activeTab === 'hr' && <HRView />}
+              {activeTab === 'sjukfranvaro-test' && <SjukfranvaroTestView />}
               {activeTab === 'personalbrev' && <PersonalbrevView />}
               {activeTab === 'import' && <ImportView />}
             </div>
