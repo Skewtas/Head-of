@@ -5,7 +5,7 @@
  * "Öppna mall" visar innehållet i ett förhandsgranskningspanel.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { Heart, RefreshCw, AlertTriangle, Loader, X, ShieldAlert, MessageCircle, FileCheck, Eye } from 'lucide-react';
+import { Heart, RefreshCw, AlertTriangle, Loader, X, ShieldAlert, MessageCircle, FileCheck, Eye, Languages, Send, History } from 'lucide-react';
 import { api } from './lib/api';
 
 type Status =
@@ -32,6 +32,8 @@ type Case = {
   notes: string | null;
   dismissReason: string | null;
   meetingDate: string | null;
+  intygStartDate: string | null;
+  intygEndDate: string | null;
   metadata: any;
   createdAt: string;
   updatedAt: string;
@@ -356,6 +358,15 @@ function CaseDrawer({
   const [notes, setNotes] = useState('');
   const [previewEmail, setPreviewEmail] = useState<'email1' | 'email2' | null>(null);
   const [preview, setPreview] = useState<any>(null);
+  const [previewLang, setPreviewLang] = useState<string>('sv');
+  const [translatedSubject, setTranslatedSubject] = useState<string>('');
+  const [translatedBody, setTranslatedBody] = useState<string>('');
+  const [translating, setTranslating] = useState(false);
+  const [recipientRaw, setRecipientRaw] = useState<string>('');
+  const [sending, setSending] = useState(false);
+  const [sendResult, setSendResult] = useState<{ ok: boolean; sent: string[]; failed: { email: string; error: string }[] } | null>(null);
+  const [intygMonths, setIntygMonths] = useState<number>(6);
+  const [history, setHistory] = useState<{ previous: any[]; intygCount: number } | null>(null);
 
   useEffect(() => {
     if (id == null) return;
@@ -363,6 +374,10 @@ function CaseDrawer({
       const r = await api<{ case: Case & { events: any[] } }>(`/api/hr/sick-leave/cases/${id}`);
       setData({ case: r.case, events: r.case.events || [] });
       setNotes(r.case.notes || '');
+      try {
+        const h = await api<{ previous: any[]; intygCount: number }>(`/api/hr/sick-leave/cases/${id}/history`);
+        setHistory(h);
+      } catch { /* icke-kritiskt */ }
     })();
   }, [id]);
 
@@ -391,8 +406,92 @@ function CaseDrawer({
   const openPreview = async (which: 'email1' | 'email2') => {
     setPreviewEmail(which);
     setPreview(null);
+    setPreviewLang('sv');
+    setTranslatedSubject('');
+    setTranslatedBody('');
+    setSendResult(null);
     const r = await api<any>(`/api/hr/sick-leave/cases/${id}/email-preview?which=${which}`);
     setPreview(r);
+  };
+
+  const translatePreview = async (lang: string) => {
+    if (!preview || lang === 'sv') {
+      setPreviewLang('sv');
+      setTranslatedSubject('');
+      setTranslatedBody('');
+      return;
+    }
+    setTranslating(true);
+    setPreviewLang(lang);
+    try {
+      const [subjRes, bodyRes] = await Promise.all([
+        api<{ translated: string }>('/api/personalbrev-translate', {
+          method: 'POST',
+          body: JSON.stringify({ text: preview.subject, targetLanguage: lang }),
+        }),
+        api<{ translated: string }>('/api/personalbrev-translate', {
+          method: 'POST',
+          body: JSON.stringify({ text: preview.body, targetLanguage: lang }),
+        }),
+      ]);
+      setTranslatedSubject(subjRes.translated || '');
+      setTranslatedBody(bodyRes.translated || '');
+    } finally {
+      setTranslating(false);
+    }
+  };
+
+  const sendEmail = async () => {
+    if (!preview || !previewEmail || id == null) return;
+    const toList = recipientRaw
+      .split(/[\s,;]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (toList.length === 0) {
+      alert('Fyll i minst en mottagares e-post.');
+      return;
+    }
+    if (!toList.every((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e))) {
+      alert('Kontrollera e-postadresserna — någon verkar felaktig.');
+      return;
+    }
+    const finalSubject = translatedSubject || preview.subject;
+    const finalBody = translatedBody || preview.body;
+    if (
+      !confirm(
+        `Skickar ${previewEmail === 'email1' ? 'omtankesmejl' : 'BESLUT om förstadagsintyg'} till:\n\n${toList.join(', ')}\n\nÄmne: ${finalSubject}\n\nFortsätt?`,
+      )
+    )
+      return;
+    setSending(true);
+    setSendResult(null);
+    try {
+      const r = await api<{ ok: boolean; sent: string[]; failed: any[]; newStatus?: string }>(
+        `/api/hr/sick-leave/cases/${id}/send-email`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            which: previewEmail,
+            to: toList,
+            subject: finalSubject,
+            bodyText: finalBody,
+            language: previewLang,
+            ...(previewEmail === 'email2' ? { intygPeriodMonths: intygMonths } : {}),
+          }),
+        },
+      );
+      setSendResult(r);
+      if (r.ok) {
+        // Uppdatera vyn så statusen syns
+        const c = await api<{ case: Case & { events: any[] } }>(`/api/hr/sick-leave/cases/${id}`);
+        setData({ case: c.case, events: c.case.events || [] });
+        onChanged();
+      }
+    } catch (e: any) {
+      setSendResult({ ok: false, sent: [], failed: [{ email: '(nätverk)', error: e?.body?.error || e?.message || 'okänt fel' }] });
+    } finally {
+      setSending(false);
+    }
   };
 
   // Ingen case-rad ännu — visa "skapa"-vy
@@ -465,6 +564,33 @@ function CaseDrawer({
         </div>
 
         <div className="px-6 py-6 space-y-6">
+          {/* Historik-notis */}
+          {history && history.intygCount > 0 && (
+            <div className="flex items-start gap-2 p-3 rounded-lg border border-orange-200 bg-orange-50 text-xs text-orange-900">
+              <History size={14} className="mt-0.5" />
+              <div>
+                <strong>{history.intygCount}</strong> tidigare beslut om förstadagsintyg för denna anställd.
+                {' '}Väg in det när du fattar nytt beslut.
+              </div>
+            </div>
+          )}
+          {history && history.previous.length > 0 && history.intygCount === 0 && (
+            <div className="flex items-start gap-2 p-3 rounded-lg border border-gray-200 bg-gray-50 text-xs text-brand-muted">
+              <History size={14} className="mt-0.5" />
+              <div>
+                {history.previous.length} tidigare HR-ärende{history.previous.length === 1 ? '' : 'n'} (utan förstadagsintyg-beslut).
+              </div>
+            </div>
+          )}
+
+          {/* Aktivt förstadagsintyg */}
+          {c.status === 'EMAIL2_SENT' && (c as any).intygEndDate && (
+            <div className="p-3 rounded-lg border border-orange-300 bg-orange-100 text-xs text-orange-900">
+              <strong>Förstadagsintyg aktivt</strong> — kräv läkarintyg från dag 1.
+              {' '}Gäller till <strong>{new Date((c as any).intygEndDate).toLocaleDateString('sv-SE')}</strong>.
+            </div>
+          )}
+
           {/* Fakta */}
           <div className="grid grid-cols-3 gap-4 text-sm">
             <div>
@@ -504,7 +630,8 @@ function CaseDrawer({
               </button>
             </div>
             <p className="mt-2 text-[11px] text-brand-muted">
-              Fas 1 — mallarna visas för läsning. Sändning aktiveras i Fas 2 efter arbetsrättsjuristgranskning.
+              Öppna en mall → välj språk → fyll i mottagare → skicka. BCC:as alltid till info@stodona.se.
+              {' '}Beslutsmejlet aktiverar automatiskt förstadagsintyg i angiven period.
             </p>
           </div>
 
@@ -521,14 +648,99 @@ function CaseDrawer({
               {!preview ? (
                 <div className="p-4 text-sm text-brand-muted">Laddar…</div>
               ) : (
-                <div className="p-4 space-y-2 text-sm">
-                  <div><span className="text-[10px] uppercase tracking-wide text-brand-muted">Ämne</span><br />{preview.subject}</div>
-                  <pre className="mt-2 whitespace-pre-wrap font-sans text-sm text-brand-dark bg-white p-3 rounded border border-gray-200">
-{preview.body}
+                <div className="p-4 space-y-3 text-sm">
+                  {/* Språkval */}
+                  <div className="flex items-center gap-2 text-xs">
+                    <Languages size={14} className="text-brand-muted" />
+                    <span className="text-brand-muted">Språk:</span>
+                    <select
+                      value={previewLang}
+                      onChange={(e) => translatePreview(e.target.value)}
+                      disabled={translating}
+                      className="border border-gray-200 rounded px-2 py-1 text-xs"
+                    >
+                      <option value="sv">Svenska (original)</option>
+                      <option value="en">English</option>
+                      <option value="uk">Українська</option>
+                      <option value="es">Español</option>
+                      <option value="sq">Shqip</option>
+                      <option value="pl">Polski</option>
+                      <option value="ar">العربية</option>
+                      <option value="ru">Русский</option>
+                      <option value="ro">Română</option>
+                    </select>
+                    {translating && <Loader size={12} className="animate-spin text-brand-muted" />}
+                  </div>
+
+                  <div>
+                    <span className="text-[10px] uppercase tracking-wide text-brand-muted">Ämne</span>
+                    <br />
+                    {translatedSubject || preview.subject}
+                  </div>
+                  <pre className="whitespace-pre-wrap font-sans text-sm text-brand-dark bg-white p-3 rounded border border-gray-200">
+{translatedBody || preview.body}
                   </pre>
+
                   <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded p-2">
                     <strong>Obs:</strong> {preview.disclaimer}
                   </p>
+
+                  {/* Skicka */}
+                  <div className="border-t border-gray-200 pt-3 space-y-2">
+                    <label className="text-[10px] uppercase tracking-wide text-brand-muted">
+                      Mottagare (kommaseparerade)
+                    </label>
+                    <input
+                      type="text"
+                      value={recipientRaw}
+                      onChange={(e) => setRecipientRaw(e.target.value)}
+                      placeholder="anställd@exempel.se, info@stodona.se"
+                      className="w-full border border-gray-200 rounded px-2 py-1.5 text-sm"
+                    />
+                    {previewEmail === 'email2' && (
+                      <div className="flex items-center gap-2 text-xs">
+                        <span className="text-brand-muted">Förstadagsintyg gäller i:</span>
+                        <select
+                          value={intygMonths}
+                          onChange={(e) => setIntygMonths(Number(e.target.value))}
+                          className="border border-gray-200 rounded px-2 py-1 text-xs"
+                        >
+                          <option value={3}>3 månader</option>
+                          <option value={6}>6 månader</option>
+                          <option value={12}>12 månader</option>
+                        </select>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={sendEmail}
+                        disabled={sending || !recipientRaw.trim()}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium text-white disabled:opacity-50 ${
+                          previewEmail === 'email2' ? 'bg-orange-600 hover:bg-orange-700' : 'bg-brand-dark hover:bg-brand-dark/90'
+                        }`}
+                      >
+                        {sending ? <Loader size={12} className="animate-spin" /> : <Send size={12} />}
+                        {previewEmail === 'email1' ? 'Skicka omtankesmejl' : 'Skicka beslut om förstadagsintyg'}
+                      </button>
+                      <span className="text-[11px] text-brand-muted">
+                        BCC info@stodona.se · via Resend
+                      </span>
+                    </div>
+                    {sendResult && (
+                      <div className={`mt-2 text-xs p-2 rounded border ${sendResult.ok ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-rose-50 border-rose-200 text-rose-800'}`}>
+                        {sendResult.ok ? (
+                          <>✓ Skickat till {sendResult.sent.join(', ')}</>
+                        ) : (
+                          <>
+                            <div>✗ Misslyckades:</div>
+                            {sendResult.failed.map((f, i) => (
+                              <div key={i} className="mt-0.5">· {f.email}: {f.error}</div>
+                            ))}
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>

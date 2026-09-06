@@ -472,4 +472,140 @@ router.get('/sick-leave/cases/:id/email-preview', async (req, res) => {
   }
 });
 
+// ─── HISTORIK: tidigare förstadagsintyg-beslut för denna anställd ──────
+router.get('/sick-leave/cases/:id/history', async (req, res) => {
+  if (!(await requireHR(req, res))) return;
+  const id = Number(req.params.id);
+  const c = await prisma.sickLeaveCase.findUnique({ where: { id } });
+  if (!c) return res.status(404).json({ error: 'not found' });
+
+  const previous = await prisma.sickLeaveCase.findMany({
+    where: {
+      timewaveEmployeeId: c.timewaveEmployeeId,
+      id: { not: id },
+    },
+    orderBy: { createdAt: 'desc' },
+    select: {
+      id: true,
+      status: true,
+      episodesCount: true,
+      daysCount: true,
+      windowStartDate: true,
+      windowEndDate: true,
+      intygStartDate: true,
+      intygEndDate: true,
+      createdAt: true,
+    },
+    take: 20,
+  });
+
+  const intygCount = previous.filter(
+    (p) => p.status === 'EMAIL2_SENT' || p.intygStartDate != null,
+  ).length;
+
+  res.json({ previous, intygCount });
+});
+
+// ─── SKICKA MEJL (Fas 2) — email1 eller email2 via Resend ──────────────
+router.post('/sick-leave/cases/:id/send-email', async (req, res) => {
+  if (!(await requireHR(req, res))) return;
+  const id = Number(req.params.id);
+  const body = z
+    .object({
+      which: z.enum(['email1', 'email2']),
+      to: z.array(z.string().email()).min(1).max(5),
+      subject: z.string().min(1).max(300),
+      bodyText: z.string().min(1),                        // ren-text (kan vara översatt)
+      language: z.string().optional(),                    // språkkod för logg
+      intygPeriodMonths: z.number().int().min(1).max(24).optional(),
+    })
+    .parse(req.body);
+
+  const c = await prisma.sickLeaveCase.findUnique({ where: { id } });
+  if (!c) return res.status(404).json({ error: 'not found' });
+
+  if (!process.env.RESEND_API_KEY) {
+    return res.status(500).json({
+      error: 'RESEND_API_KEY saknas i Vercel-env. Lägg till nyckeln + redeploy.',
+    });
+  }
+
+  const fromAddress = process.env.SMTP_FROM || process.env.SMTP_USER || 'info@stodona.se';
+  const escapeHtml = (s: string) =>
+    String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const html = `<pre style="font-family:inherit;white-space:pre-wrap;font-size:15px;line-height:1.55">${escapeHtml(
+    body.bodyText,
+  )}</pre>`;
+
+  const sent: string[] = [];
+  const failed: { email: string; error: string }[] = [];
+  for (const to of body.to) {
+    try {
+      const r = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: `"Stodona HR" <${fromAddress}>`,
+          to,
+          reply_to: 'info@stodona.se',
+          bcc: 'info@stodona.se',
+          subject: body.subject,
+          html,
+          text: body.bodyText,
+        }),
+      });
+      if (!r.ok) {
+        const errData = await r.json().catch(() => ({}));
+        throw new Error((errData as any).message || r.statusText);
+      }
+      sent.push(to);
+    } catch (e: any) {
+      failed.push({ email: to, error: e?.message ?? String(e) });
+    }
+  }
+
+  // Uppdatera case-status + logga
+  const dataUpdate: any = {};
+  if (sent.length > 0 && body.which === 'email1') {
+    dataUpdate.status = 'EMAIL1_SENT';
+  }
+  if (sent.length > 0 && body.which === 'email2') {
+    dataUpdate.status = 'EMAIL2_SENT';
+    const months = body.intygPeriodMonths ?? 6;
+    dataUpdate.intygStartDate = new Date();
+    dataUpdate.intygEndDate = new Date(Date.now() + months * 30 * 24 * 60 * 60 * 1000);
+  }
+  if (Object.keys(dataUpdate).length > 0) {
+    await prisma.sickLeaveCase.update({ where: { id }, data: dataUpdate });
+  }
+
+  await prisma.sickLeaveCaseEvent.create({
+    data: {
+      caseId: id,
+      actorClerkId: getUserId(req),
+      action: body.which === 'email1' ? 'email1_sent' : 'email2_sent',
+      metadata: {
+        to: body.to,
+        sent,
+        failed,
+        subject: body.subject,
+        language: body.language || 'sv',
+        intygPeriodMonths: body.which === 'email2' ? body.intygPeriodMonths ?? 6 : undefined,
+      },
+    },
+  });
+
+  res.json({
+    ok: failed.length === 0,
+    sent,
+    failed,
+    newStatus: dataUpdate.status,
+    intygStartDate: dataUpdate.intygStartDate,
+    intygEndDate: dataUpdate.intygEndDate,
+  });
+});
+
 export default router;

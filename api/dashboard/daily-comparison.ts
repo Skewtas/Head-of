@@ -1,6 +1,13 @@
 /**
  * Läser senaste snapshot + dagens värden och returnerar diff per KPI.
  * Används av översikten för "↑ +X sedan igår"-visning.
+ *
+ * VIKTIGT: skriver ALDRIG till dagens snapshot. Bara cron
+ * (save-daily-snapshot, 23:55) sparar dagliga värden. Att skriva på varje
+ * read gav flip-flop-deltan (fake -36 st, -211 944 kr) när Timewave-cachen
+ * bytte värde mellan requests.
+ *
+ * Om ingen tidigare snapshot finns → diff = null (frontend visar ±0).
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { prisma } from '../_lib/prisma.js';
@@ -42,88 +49,49 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       onlineBookingsToday: Number(trend?.totals?.today ?? 0),
     };
 
-    // 1) Auto-upsert dagens snapshot så vi alltid har senaste värdet sparat.
-    //    Har vi redan en snapshot för idag så uppdateras den.
-    await prisma.dailyKpiSnapshot.upsert({
-      where: { date: todayDateObj },
-      create: {
-        date: todayDateObj,
-        bookedRevenue: current.bookedRevenue,
-        invoicedRevenue: current.invoicedRevenue,
-        avgPricePerHour: current.avgPricePerHour,
-        recurringPrivateClients: current.recurringPrivateClients,
-        recurringCompanyClients: current.recurringCompanyClients,
-        staffCount: current.staffCount,
-        onlineBookings: current.onlineBookings,
-        metadata: { source: 'daily-comparison-auto' } as any,
-      },
-      update: {
-        bookedRevenue: current.bookedRevenue,
-        invoicedRevenue: current.invoicedRevenue,
-        avgPricePerHour: current.avgPricePerHour,
-        recurringPrivateClients: current.recurringPrivateClients,
-        recurringCompanyClients: current.recurringCompanyClients,
-        staffCount: current.staffCount,
-        onlineBookings: current.onlineBookings,
-        updatedAt: new Date(),
-      },
-    });
-
-    // 2) Hämta senaste snapshot från TIDIGARE datum
-    let prevSnap = await prisma.dailyKpiSnapshot.findFirst({
+    // Hämta senaste snapshot från TIDIGARE datum (< idag). Skriver aldrig.
+    // Filtrera bort artificiella baselines från den gamla koden — de skapades
+    // med DAGENS värde vid random-tidpunkt och gav flip-flop-deltan.
+    const candidates = await prisma.dailyKpiSnapshot.findMany({
       where: { date: { lt: todayDateObj } },
       orderBy: { date: 'desc' },
+      take: 10,
     });
+    const prevSnap = candidates.find((s) => {
+      const src = (s.metadata as any)?.source;
+      return src !== 'baseline-backfill' && src !== 'daily-comparison-auto';
+    }) || null;
 
-    // 3) Om ingen tidigare snapshot finns alls: skapa en "gårdagens" baseline
-    //    med dagens värden så delta = ±0 första dagen istället för "saknas".
-    //    Från imorgon blir det riktig jämförelse.
-    if (!prevSnap) {
-      const yesterdayDateObj = new Date(todayDateObj.getTime() - 24 * 60 * 60 * 1000);
-      prevSnap = await prisma.dailyKpiSnapshot.upsert({
-        where: { date: yesterdayDateObj },
-        create: {
-          date: yesterdayDateObj,
-          bookedRevenue: current.bookedRevenue,
-          invoicedRevenue: current.invoicedRevenue,
-          avgPricePerHour: current.avgPricePerHour,
-          recurringPrivateClients: current.recurringPrivateClients,
-          recurringCompanyClients: current.recurringCompanyClients,
-          staffCount: current.staffCount,
-          onlineBookings: current.onlineBookings,
-          metadata: { source: 'baseline-backfill' } as any,
-        },
-        update: {}, // om finns redan, rör inte
-      });
+    let previous: any = null;
+    let diff: any = null;
+
+    if (prevSnap) {
+      previous = {
+        date: prevSnap.date,
+        bookedRevenue: prevSnap.bookedRevenue,
+        invoicedRevenue: prevSnap.invoicedRevenue,
+        avgPricePerHour: prevSnap.avgPricePerHour,
+        recurringPrivateClients: prevSnap.recurringPrivateClients,
+        recurringCompanyClients: prevSnap.recurringCompanyClients,
+        staffCount: prevSnap.staffCount,
+        onlineBookings: prevSnap.onlineBookings,
+      };
+      diff = {
+        bookedRevenue: current.bookedRevenue - previous.bookedRevenue,
+        invoicedRevenue: current.invoicedRevenue - previous.invoicedRevenue,
+        avgPricePerHour: current.avgPricePerHour - previous.avgPricePerHour,
+        recurringPrivateClients: current.recurringPrivateClients - previous.recurringPrivateClients,
+        recurringCompanyClients: current.recurringCompanyClients - previous.recurringCompanyClients,
+        staffCount: current.staffCount - previous.staffCount,
+        onlineBookings: current.onlineBookings - previous.onlineBookings,
+      };
     }
-
-    const previous = {
-      date: prevSnap.date,
-      bookedRevenue: prevSnap.bookedRevenue,
-      invoicedRevenue: prevSnap.invoicedRevenue,
-      avgPricePerHour: prevSnap.avgPricePerHour,
-      recurringPrivateClients: prevSnap.recurringPrivateClients,
-      recurringCompanyClients: prevSnap.recurringCompanyClients,
-      staffCount: prevSnap.staffCount,
-      onlineBookings: prevSnap.onlineBookings,
-    };
-
-    const diff = {
-      bookedRevenue: current.bookedRevenue - previous.bookedRevenue,
-      invoicedRevenue: current.invoicedRevenue - previous.invoicedRevenue,
-      avgPricePerHour: current.avgPricePerHour - previous.avgPricePerHour,
-      recurringPrivateClients: current.recurringPrivateClients - previous.recurringPrivateClients,
-      recurringCompanyClients: current.recurringCompanyClients - previous.recurringCompanyClients,
-      staffCount: current.staffCount - previous.staffCount,
-      onlineBookings: current.onlineBookings - previous.onlineBookings,
-    };
 
     res.json({
       current,
       previous,
       diff,
-      hasTodaySnapshot: true,
-      previousSnapshotDate: prevSnap.date,
+      previousSnapshotDate: prevSnap?.date ?? null,
     });
   } catch (err: any) {
     console.error('[daily-comparison]', err?.message);
