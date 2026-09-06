@@ -290,7 +290,7 @@ router.post('/sick-leave/scan', async (req, res) => {
     monthlyTotals,
     totalMissions: allMissionsLength,
     sickMissionsFound,
-    employeesWithSickness: perEmp.size,
+    employeesWithSickness: sickData.total.length,
     scanned: summary.length,
     triggered: summary.filter((s) => s.triggeredThreshold).length,
     created: created.length,

@@ -292,22 +292,17 @@ function KpiGoalRow({
     return abs;
   };
 
-  // Delta VISAS ALLTID — även 0 (som "±0"). Om ingen historisk snapshot
-  // finns visas "–" så användaren vet att jämförelse saknas
-  // (får aldrig blandas med diff = 0). Explicit null-check så inte 0
-  // behandlas som falsy.
+  // Delta VISAS ALLTID. Om jämförelse saknas visas ±0 (regel Mikaela).
+  // Explicit null-check så inte 0 behandlas som falsy.
+  const effectiveDiff = (diff === null || diff === undefined) ? 0 : diff;
   let diffLabel: React.ReactNode;
-  if (!hasSnapshot || diff === null || diff === undefined) {
-    diffLabel = <span className="text-brand-muted">– ingen jämförelse mot igår ännu</span>;
+  const rounded = Math.round(effectiveDiff);
+  if (rounded === 0) {
+    diffLabel = <span className="text-brand-muted font-medium">±0 {unit} sedan igår</span>;
+  } else if (rounded > 0) {
+    diffLabel = <span className="text-emerald-600 font-medium">↑ +{fmtDiff(effectiveDiff)} {unit} sedan igår</span>;
   } else {
-    const rounded = Math.round(diff);
-    if (rounded === 0) {
-      diffLabel = <span className="text-brand-muted font-medium">±0 {unit} sedan igår</span>;
-    } else if (rounded > 0) {
-      diffLabel = <span className="text-emerald-600 font-medium">↑ +{fmtDiff(diff)} {unit} sedan igår</span>;
-    } else {
-      diffLabel = <span className="text-red-600 font-medium">↓ −{fmtDiff(diff)} {unit} sedan igår</span>;
-    }
+    diffLabel = <span className="text-red-600 font-medium">↓ −{fmtDiff(effectiveDiff)} {unit} sedan igår</span>;
   }
 
   return (
