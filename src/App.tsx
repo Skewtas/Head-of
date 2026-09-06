@@ -2066,8 +2066,9 @@ export default function App() {
     { id: 'schedule2', label: 'SCHEMA', icon: CalendarDays },
     { id: 'ops', label: 'VECKOUPPFÖLJNING', icon: ListChecks },
     { id: 'contracts', label: 'AVTAL', icon: FileText },
-    { id: 'hr', label: 'HR', icon: Heart },
-    { id: 'sjukfranvaro-test', label: 'SJUKFRÅNVARO (NY)', icon: Heart },
+    // Dold: HR / SJUKFRÅNVARO — inga utskick ska ske än, tomma vyer förvirrar.
+    // { id: 'hr', label: 'HR', icon: Heart },
+    // { id: 'sjukfranvaro-test', label: 'SJUKFRÅNVARO (NY)', icon: Heart },
     { id: 'personalbrev', label: 'PERSONALBREV', icon: Send },
     { id: 'email', label: 'E-POST UTSKICK', icon: Mail },
     { id: 'import', label: 'IMPORTERA FRÅN TIMEWAVE', icon: RefreshCw },
