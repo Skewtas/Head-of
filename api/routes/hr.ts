@@ -582,6 +582,62 @@ router.post('/sick-leave/cases/:id/send-email', async (req, res) => {
     await prisma.sickLeaveCase.update({ where: { id }, data: dataUpdate });
   }
 
+  // Fas 2: notifiera lönehantering när förstadagsintyg aktiveras.
+  // Så att lön INTE betalas ut om intyg saknas dag 1 framåt.
+  if (sent.length > 0 && body.which === 'email2') {
+    const payrollRecipients = (
+      process.env.PAYROLL_NOTIFICATION_EMAILS ||
+      'info@stodona.se,mikaela.wigert@stodona.se'
+    )
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const months = body.intygPeriodMonths ?? 6;
+    const endStr = new Date(Date.now() + months * 30 * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .split('T')[0];
+    const escapeH = (s: string) =>
+      String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const payrollHtml = `
+      <div style="font-family:-apple-system,sans-serif;max-width:640px;margin:0 auto;padding:20px">
+        <h2 style="margin:0 0 8px">Förstadagsintyg AKTIVERAT</h2>
+        <p style="margin:0 0 16px;color:#555;font-size:14px">
+          Detta påverkar löneutbetalning direkt. Sjuklön får ENDAST betalas ut om läkarintyg finns från dag 1.
+        </p>
+        <table style="width:100%;border-collapse:collapse;font-size:14px;border:1px solid #eee">
+          <tr><td style="padding:8px 12px;background:#fafafa;font-weight:600">Anställd</td><td style="padding:8px 12px">${escapeH(c.employeeName)}</td></tr>
+          <tr><td style="padding:8px 12px;background:#fafafa;font-weight:600">Timewave-ID</td><td style="padding:8px 12px">${c.timewaveEmployeeId}</td></tr>
+          <tr><td style="padding:8px 12px;background:#fafafa;font-weight:600">Beslut skickat</td><td style="padding:8px 12px">${new Date().toLocaleDateString('sv-SE')}</td></tr>
+          <tr><td style="padding:8px 12px;background:#fafafa;font-weight:600">Gäller till</td><td style="padding:8px 12px"><strong>${endStr}</strong> (${months} mån)</td></tr>
+          <tr><td style="padding:8px 12px;background:#fafafa;font-weight:600">Bakgrund</td><td style="padding:8px 12px">${c.episodesCount} sjukfrånvarotillfällen, ${c.daysCount} dagar</td></tr>
+          <tr><td style="padding:8px 12px;background:#fafafa;font-weight:600">HR-ärende</td><td style="padding:8px 12px">#${c.id}</td></tr>
+        </table>
+        <p style="margin-top:20px;font-size:12px;color:#999">
+          Automatiskt genererad från Head Office när HR skickar beslutsmejl. Vid frågor: kontakta HR.
+        </p>
+      </div>
+    `;
+    for (const to of payrollRecipients) {
+      try {
+        await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            from: `"Stodona HR" <${fromAddress}>`,
+            to,
+            subject: `LÖN: Förstadagsintyg aktivt — ${c.employeeName} till ${endStr}`,
+            html: payrollHtml,
+          }),
+        });
+      } catch (e: any) {
+        console.error('[hr] payroll notification failed:', e?.message);
+      }
+    }
+  }
+
   await prisma.sickLeaveCaseEvent.create({
     data: {
       caseId: id,
