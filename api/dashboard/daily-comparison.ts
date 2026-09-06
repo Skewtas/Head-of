@@ -20,18 +20,11 @@ function ymdSthlm(d: Date): string {
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const baseUrl = process.env.APP_URL || `https://${req.headers.host}`;
+    const todayDateObj = new Date(`${ymdSthlm(new Date())}T00:00:00.000Z`);
 
-    const [statsRes, trendRes, todaySnap, prevSnap] = await Promise.all([
+    const [statsRes, trendRes] = await Promise.all([
       fetch(`${baseUrl}/api/dashboard/overview-stats`),
       fetch(`${baseUrl}/api/dashboard/online-bookings-trend`),
-      (async () => {
-        const today = new Date(`${ymdSthlm(new Date())}T00:00:00.000Z`);
-        return prisma.dailyKpiSnapshot.findUnique({ where: { date: today } });
-      })(),
-      prisma.dailyKpiSnapshot.findFirst({
-        where: { date: { lt: new Date(`${ymdSthlm(new Date())}T00:00:00.000Z`) } },
-        orderBy: { date: 'desc' },
-      }),
     ]);
 
     if (!statsRes.ok) throw new Error(`overview-stats: ${statsRes.status}`);
@@ -49,7 +42,62 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       onlineBookingsToday: Number(trend?.totals?.today ?? 0),
     };
 
-    const previous = prevSnap ? {
+    // 1) Auto-upsert dagens snapshot så vi alltid har senaste värdet sparat.
+    //    Har vi redan en snapshot för idag så uppdateras den.
+    await prisma.dailyKpiSnapshot.upsert({
+      where: { date: todayDateObj },
+      create: {
+        date: todayDateObj,
+        bookedRevenue: current.bookedRevenue,
+        invoicedRevenue: current.invoicedRevenue,
+        avgPricePerHour: current.avgPricePerHour,
+        recurringPrivateClients: current.recurringPrivateClients,
+        recurringCompanyClients: current.recurringCompanyClients,
+        staffCount: current.staffCount,
+        onlineBookings: current.onlineBookings,
+        metadata: { source: 'daily-comparison-auto' } as any,
+      },
+      update: {
+        bookedRevenue: current.bookedRevenue,
+        invoicedRevenue: current.invoicedRevenue,
+        avgPricePerHour: current.avgPricePerHour,
+        recurringPrivateClients: current.recurringPrivateClients,
+        recurringCompanyClients: current.recurringCompanyClients,
+        staffCount: current.staffCount,
+        onlineBookings: current.onlineBookings,
+        updatedAt: new Date(),
+      },
+    });
+
+    // 2) Hämta senaste snapshot från TIDIGARE datum
+    let prevSnap = await prisma.dailyKpiSnapshot.findFirst({
+      where: { date: { lt: todayDateObj } },
+      orderBy: { date: 'desc' },
+    });
+
+    // 3) Om ingen tidigare snapshot finns alls: skapa en "gårdagens" baseline
+    //    med dagens värden så delta = ±0 första dagen istället för "saknas".
+    //    Från imorgon blir det riktig jämförelse.
+    if (!prevSnap) {
+      const yesterdayDateObj = new Date(todayDateObj.getTime() - 24 * 60 * 60 * 1000);
+      prevSnap = await prisma.dailyKpiSnapshot.upsert({
+        where: { date: yesterdayDateObj },
+        create: {
+          date: yesterdayDateObj,
+          bookedRevenue: current.bookedRevenue,
+          invoicedRevenue: current.invoicedRevenue,
+          avgPricePerHour: current.avgPricePerHour,
+          recurringPrivateClients: current.recurringPrivateClients,
+          recurringCompanyClients: current.recurringCompanyClients,
+          staffCount: current.staffCount,
+          onlineBookings: current.onlineBookings,
+          metadata: { source: 'baseline-backfill' } as any,
+        },
+        update: {}, // om finns redan, rör inte
+      });
+    }
+
+    const previous = {
       date: prevSnap.date,
       bookedRevenue: prevSnap.bookedRevenue,
       invoicedRevenue: prevSnap.invoicedRevenue,
@@ -58,9 +106,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       recurringCompanyClients: prevSnap.recurringCompanyClients,
       staffCount: prevSnap.staffCount,
       onlineBookings: prevSnap.onlineBookings,
-    } : null;
+    };
 
-    const diff = previous ? {
+    const diff = {
       bookedRevenue: current.bookedRevenue - previous.bookedRevenue,
       invoicedRevenue: current.invoicedRevenue - previous.invoicedRevenue,
       avgPricePerHour: current.avgPricePerHour - previous.avgPricePerHour,
@@ -68,14 +116,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       recurringCompanyClients: current.recurringCompanyClients - previous.recurringCompanyClients,
       staffCount: current.staffCount - previous.staffCount,
       onlineBookings: current.onlineBookings - previous.onlineBookings,
-    } : null;
+    };
 
     res.json({
       current,
       previous,
       diff,
-      hasTodaySnapshot: !!todaySnap,
-      previousSnapshotDate: prevSnap?.date ?? null,
+      hasTodaySnapshot: true,
+      previousSnapshotDate: prevSnap.date,
     });
   } catch (err: any) {
     console.error('[daily-comparison]', err?.message);
