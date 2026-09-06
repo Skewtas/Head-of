@@ -273,7 +273,7 @@ const fmt = (val: number) => new Intl.NumberFormat('sv-SE').format(val);
  * dygnsförändring om diff finns.
  */
 function KpiGoalRow({
-  label, actual, goal, unit, diff, todayCount, hasSnapshot,
+  label, actual, goal, unit, diff, todayCount, hasSnapshot, revenueExVat,
 }: {
   label: string;
   actual: number;
@@ -282,6 +282,7 @@ function KpiGoalRow({
   diff: number | null;
   todayCount?: number | null;
   hasSnapshot: boolean;
+  revenueExVat?: number | null;
 }) {
   const pct = goal > 0 ? Math.min(100, Math.round((actual / goal) * 100)) : 0;
   const isOver = actual >= goal;
@@ -320,7 +321,14 @@ function KpiGoalRow({
           style={{ width: `${pct}%` }}
         />
       </div>
-      <div className="mt-1 text-[11px]">{diffLabel}</div>
+      <div className="mt-1 text-[11px] flex flex-wrap items-center gap-x-3 gap-y-0.5">
+        {diffLabel}
+        {revenueExVat != null && revenueExVat > 0 && (
+          <span className="text-brand-muted tabular-nums">
+            · {new Intl.NumberFormat('sv-SE').format(Math.round(revenueExVat))} kr ex. moms
+          </span>
+        )}
+      </div>
     </div>
   );
 }
@@ -344,6 +352,8 @@ const OverviewView = () => {
     sickLeave3Months: { name: string; count: number }[];
     recurringPrivateClients: number;
     recurringCompanyClients: number;
+    recurringPrivateRevenue: number;
+    recurringCompanyRevenue: number;
     customers: number;
     employees: number;
     issues: number;
@@ -365,6 +375,8 @@ const OverviewView = () => {
     sickLeave3Months: [],
     recurringPrivateClients: 0,
     recurringCompanyClients: 0,
+    recurringPrivateRevenue: 0,
+    recurringCompanyRevenue: 0,
     customers: 0,
     employees: 0,
     issues: 0,
@@ -577,6 +589,8 @@ const OverviewView = () => {
           sickLeave3Months: missionsSummary.sickLeave3Months || [],
           recurringPrivateClients,
           recurringCompanyClients,
+          recurringPrivateRevenue: missionsSummary.recurringPrivateRevenue || 0,
+          recurringCompanyRevenue: missionsSummary.recurringCompanyRevenue || 0,
           customers: missionsSummary.billableClients || 0,
           employees: employeesRes?.total || employeesRes?.data?.length || 0,
           issues: issuesRes?.total || issuesRes?.data?.length || 0,
@@ -696,8 +710,8 @@ const OverviewView = () => {
               { label: 'Bokad försäljning', actual: stats.totalRevenueExVat, goal: 850000, unit: 'kr', diff: dailyDiff?.diff?.bookedRevenue ?? null },
               { label: 'Fakturerad försäljning', actual: stats.totalInvoicedNet, goal: 850000, unit: 'kr', diff: dailyDiff?.diff?.invoicedRevenue ?? null },
               { label: 'Snittpris', actual: stats.avgPricePerHour, goal: 550, unit: 'kr/h', diff: dailyDiff?.diff?.avgPricePerHour ?? null },
-              { label: 'Återkommande kunder — privat', actual: stats.recurringPrivateClients, goal: 250, unit: 'st', diff: dailyDiff?.diff?.recurringPrivateClients ?? null },
-              { label: 'Återkommande kunder — företag', actual: stats.recurringCompanyClients, goal: 50, unit: 'st', diff: dailyDiff?.diff?.recurringCompanyClients ?? null },
+              { label: 'Återkommande kunder — privat', actual: stats.recurringPrivateClients, goal: 250, unit: 'st', diff: dailyDiff?.diff?.recurringPrivateClients ?? null, revenueExVat: stats.recurringPrivateRevenue },
+              { label: 'Återkommande kunder — företag', actual: stats.recurringCompanyClients, goal: 50, unit: 'st', diff: dailyDiff?.diff?.recurringCompanyClients ?? null, revenueExVat: stats.recurringCompanyRevenue },
               { label: 'Personal bas', actual: stats.employees, goal: 20, unit: 'st', diff: dailyDiff?.diff?.staffCount ?? null },
               { label: 'Bokningar online', actual: dailyDiff?.current?.onlineBookings ?? stats.onlineBookings, goal: 60, unit: 'st', diff: dailyDiff?.diff?.onlineBookings ?? null, todayCount: dailyDiff?.current?.onlineBookingsToday ?? null },
             ].map((item, i) => (

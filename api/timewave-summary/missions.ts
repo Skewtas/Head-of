@@ -104,6 +104,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const recurringPrivateClients = new Set<number>();
     const recurringCompanyClients = new Set<number>();
+    let recurringPrivateRevenue = 0;
+    let recurringCompanyRevenue = 0;
     const billableClientIds = new Set<number>();
     const uniqueWorkorderIds = new Set<number>();
 
@@ -221,8 +223,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (m.type === 'reccurent' && m.client?.id) {
         if (m.client.type === 1 || (!m.client.companyname && m.client.type !== 2)) {
           recurringPrivateClients.add(m.client.id);
+          recurringPrivateRevenue += missionRevenue;
         } else {
           recurringCompanyClients.add(m.client.id);
+          recurringCompanyRevenue += missionRevenue;
         }
       }
 
@@ -382,6 +386,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       avgPricePerHour: Math.round(avgPricePerHour),
       recurringPrivateClients: recurringPrivateClients.size,
       recurringCompanyClients: recurringCompanyClients.size,
+      recurringPrivateRevenue: Math.round(recurringPrivateRevenue),
+      recurringCompanyRevenue: Math.round(recurringCompanyRevenue),
       billableClients: billableClientIds.size,
       newWorkOrdersThisMonth,
       followUpCount,
