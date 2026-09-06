@@ -42,10 +42,6 @@
     {
       "path": "/api/dashboard/save-daily-snapshot",
       "schedule": "55 21 * * *"
-    },
-    {
-      "path": "/api/hr-intyg-reminders",
-      "schedule": "0 7 * * *"
     }
   ],
   "rewrites": [

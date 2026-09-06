@@ -506,9 +506,18 @@ router.get('/sick-leave/cases/:id/history', async (req, res) => {
   res.json({ previous, intygCount });
 });
 
-// ─── SKICKA MEJL (Fas 2) — email1 eller email2 via Resend ──────────────
+// ─── SKICKA MEJL — HÅRT AVSTÄNGT ───────────────────────────────────────
+// Regel: INGENTING från HR-modulen får skickas. Alla utskick är blockerade
+// tills Mikaela explicit sätter HR_EMAIL_ENABLED=true i Vercel-env.
+// Cronen /api/hr-intyg-reminders är också borttagen från vercel.json.
 router.post('/sick-leave/cases/:id/send-email', async (req, res) => {
   if (!(await requireHR(req, res))) return;
+  if (process.env.HR_EMAIL_ENABLED !== 'true') {
+    return res.status(423).json({
+      error: 'HR-utskick är avstängt. Inga mail skickas. Kontakta Mikaela för att aktivera.',
+      code: 'HR_EMAIL_DISABLED',
+    });
+  }
   const id = Number(req.params.id);
   const body = z
     .object({

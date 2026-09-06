@@ -43,6 +43,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
+  // HÅRT AVSTÄNGT: inga HR-mail får skickas. Kräver HR_EMAIL_ENABLED=true
+  // i env (sätts av Mikaela explicit när/om utskick ska aktiveras).
+  if (process.env.HR_EMAIL_ENABLED !== 'true') {
+    return res.status(423).json({
+      ok: false,
+      disabled: true,
+      reason: 'HR-utskick är avstängt. Inga mail skickas.',
+    });
+  }
+
   try {
     const now = new Date();
 
