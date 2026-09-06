@@ -7,6 +7,7 @@
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getTimewaveToken, forceRefreshTimewaveToken } from './_lib/timewaveAuth.js';
+import { computeSickLeaveByMonth } from './_lib/sickLeaveService.js';
 
 export const config = { maxDuration: 60 };
 
@@ -93,7 +94,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .slice(0, 3)
       .map((m: any) => m); // full dump — inga fält bortfiltrerade
 
+    // Kör den nya delade servicen och rapportera exakt vad den returnerar
+    let serviceResult: any = null;
+    let serviceError: string | null = null;
+    try {
+      const empResp2 = await fetch(`${base}/employees?page[size]=200`, {
+        headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+      });
+      const empData2 = await empResp2.json();
+      const nameMap = new Map<number, string>();
+      for (const e of empData2.data || []) {
+        nameMap.set(e.id, `${e.first_name || ''} ${e.last_name || ''}`.trim());
+      }
+      const startD = new Date(today);
+      startD.setMonth(startD.getMonth() - 3);
+      startD.setDate(1);
+      serviceResult = await computeSickLeaveByMonth(startD, today, nameMap);
+    } catch (e: any) {
+      serviceError = e?.message || String(e);
+    }
+
     res.json({
+      sharedServiceResult: {
+        error: serviceError,
+        months: serviceResult?.months,
+        totalCount: serviceResult?.total?.length,
+        top10: serviceResult?.total?.slice(0, 10),
+      },
       windowStart: fromISO,
       windowEnd: toISO,
       totalMissions: missions.length,
