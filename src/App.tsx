@@ -417,10 +417,19 @@ const OverviewView = () => {
     previousSnapshotDate: string | null;
   };
   const [dailyDiff, setDailyDiff] = React.useState<DailyDiff | null>(null);
+  const [bokisBookings, setBokisBookings] = React.useState<{
+    today: number; thisWeek: number; thisMonth: number; total: number; cancelled: number;
+  } | null>(null);
   React.useEffect(() => {
     fetch('/api/dashboard/daily-comparison')
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => d && setDailyDiff(d))
+      .catch(() => {});
+  }, []);
+  React.useEffect(() => {
+    fetch('/api/dashboard/bokis-bookings')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d && d.totals) setBokisBookings(d.totals); })
       .catch(() => {});
   }, []);
   React.useEffect(() => {
@@ -708,12 +717,11 @@ const OverviewView = () => {
           <div className="space-y-4">
             {[
               { label: 'Bokad försäljning', actual: stats.totalRevenueExVat, goal: 850000, unit: 'kr', diff: dailyDiff?.diff?.bookedRevenue ?? null },
-              { label: 'Fakturerad försäljning', actual: stats.totalInvoicedNet, goal: 850000, unit: 'kr', diff: dailyDiff?.diff?.invoicedRevenue ?? null },
               { label: 'Snittpris', actual: stats.avgPricePerHour, goal: 550, unit: 'kr/h', diff: dailyDiff?.diff?.avgPricePerHour ?? null },
               { label: 'Återkommande kunder — privat', actual: stats.recurringPrivateClients, goal: 250, unit: 'st', diff: dailyDiff?.diff?.recurringPrivateClients ?? null, revenueExVat: stats.recurringPrivateRevenue },
               { label: 'Återkommande kunder — företag', actual: stats.recurringCompanyClients, goal: 50, unit: 'st', diff: dailyDiff?.diff?.recurringCompanyClients ?? null, revenueExVat: stats.recurringCompanyRevenue },
               { label: 'Personal bas', actual: stats.employees, goal: 20, unit: 'st', diff: dailyDiff?.diff?.staffCount ?? null },
-              { label: 'Bokningar online', actual: dailyDiff?.current?.onlineBookings ?? stats.onlineBookings, goal: 60, unit: 'st', diff: dailyDiff?.diff?.onlineBookings ?? null, todayCount: dailyDiff?.current?.onlineBookingsToday ?? null },
+              { label: 'Bokningar online (Bokis)', actual: bokisBookings?.thisMonth ?? 0, goal: 60, unit: 'st', diff: null, todayCount: bokisBookings?.today ?? null },
             ].map((item, i) => (
               <KpiGoalRow key={i} {...item} hasSnapshot={!!dailyDiff?.previous} />
             ))}
