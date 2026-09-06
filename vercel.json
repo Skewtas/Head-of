@@ -68,6 +68,6 @@
     { "source": "/api/hr/:path*", "destination": "/api/hf-handler" },
     { "source": "/api/personalbrev/:path*", "destination": "/api/hf-handler" },
     { "source": "/api/admin/:path*", "destination": "/api/hf-handler" },
-    { "source": "/((?!api/).*)", "destination": "/index.html" }
+    { "source": "/((?!api/|assets/).*)", "destination": "/index.html" }
   ]
 }
