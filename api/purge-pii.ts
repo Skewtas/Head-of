@@ -30,7 +30,11 @@ import { getPrisma } from './_lib/prisma.js';
 
 export const config = { maxDuration: 300 };
 
-const TARGET_EMAILS = ['nubiafabian9@gmail.com', 'tobias.purkin@hotmail.com'];
+const TARGET_EMAILS = [
+  'nubiafabian9@gmail.com',
+  'tobias.purkin@hotmail.com',
+  'charlotta.lund21@gmail.com',
+];
 const TARGET_DOMAIN = '@kleer.se';
 const TARGET_PHONE_DIGITS = '707878510';
 

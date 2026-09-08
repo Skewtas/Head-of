@@ -26,6 +26,7 @@ import { getPrisma } from '../api/_lib/prisma.js';
 const TARGET_EMAILS = [
   'nubiafabian9@gmail.com',
   'tobias.purkin@hotmail.com',
+  'charlotta.lund21@gmail.com',
 ].map((e) => e.toLowerCase());
 
 const TARGET_DOMAIN = '@kleer.se';
