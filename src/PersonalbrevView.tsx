@@ -671,14 +671,22 @@ function ComposeView({ existingId, onDone }: { existingId: string | null; onDone
   }, [draft.recipientMode, draft.recipientTeamId, resolvedIds]);
 
   const send = async () => {
-    if (!draft.id) return;
+    if (!draft.id) {
+      alert('Utkastet är inte sparat än — vänta någon sekund och försök igen.');
+      return;
+    }
+    if (resolvedIds.length === 0) {
+      alert('Inga mottagare valda. Gå tillbaka till steg 4 och välj minst en person.');
+      return;
+    }
     setSending(true);
     try {
       const r = await api<{ sent: number; failed: number }>(`/api/personalbrev/${draft.id}/send`, { method: 'POST' });
       setSentResult(r);
       setConfirmSend(false);
     } catch (e: any) {
-      alert('Kunde inte skicka: ' + (e?.message || 'okänt fel'));
+      const msg = e?.body?.error || e?.message || 'okänt fel';
+      alert('Kunde inte skicka: ' + msg);
     } finally {
       setSending(false);
     }
@@ -1288,7 +1296,7 @@ function ConfirmDialog({
           </button>
           <button
             onClick={onConfirm}
-            disabled={sending || missingContent || missingRecipients}
+            disabled={sending}
             className="inline-flex items-center gap-2 px-5 py-2 bg-brand-dark text-white rounded-lg text-sm font-semibold hover:bg-brand-dark/90 disabled:opacity-50"
           >
             {sending && <Loader className="w-4 h-4 animate-spin" />}
