@@ -173,11 +173,19 @@ export async function deliverNewsletter(opts: SendNewsletterOpts): Promise<SendN
   const buildBatch = (slice: string[]) =>
     slice.map((email) => {
       const b64 = Buffer.from(email).toString('base64');
+      const unsubUrl = `${appUrl}/api/newsletter/optout?id=${b64}&type=EMAIL`;
       return {
         from: `"Stodona" <${fromAddress}>`,
         to: email,
         subject,
         html: renderHtml(b64),
+        // RFC 2369 + RFC 8058 — Gmail/Outlook renderar "Unsubscribe"-knapp
+        // direkt i inkorgen och kräver dessa headers för att inte klassa
+        // marknadsutskick som spam. Utan detta klassas vi som spam.
+        headers: {
+          'List-Unsubscribe': `<mailto:info@stodona.se?subject=unsubscribe%20${encodeURIComponent(email)}>, <${unsubUrl}>`,
+          'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+        },
       };
     });
 

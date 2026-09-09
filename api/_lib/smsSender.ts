@@ -69,7 +69,10 @@ export async function sendSms(opts: SendSmsOpts): Promise<SendSmsResult> {
     if (optOutSet.has(phone)) { optedOut++; continue; }
 
     let text = message.replace(/\{\{name\}\}/gi, (r.name || '').split(' ')[0] || '');
-    if (includeOptOutLink && r.email) {
+    // Marknadsförings-SMS måste enligt lag inkludera avregistreringsinfo.
+    // Vi kortar med app.stodona.se + b64(phone) — mottagaren behöver ingen
+    // e-post för att kunna avanmäla sig.
+    if (includeOptOutLink) {
       const b64 = Buffer.from(phone).toString('base64');
       text += `\n\nAvanmäl: app.stodona.se/api/newsletter/optout?id=${b64}&type=SMS`;
     }

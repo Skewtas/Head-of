@@ -305,6 +305,7 @@ router.post('/:id/send', async (req, res) => {
         message: row.htmlContent || row.introText || '',
         recipients: contacts.map((c) => ({ name: c.name, phone: c.phone!, email: c.email })),
         sender: 'Stodona',
+        includeOptOutLink: true, // Marknads-SMS måste enligt lag ha avanmälnings-info
       });
       await prisma.newsletter.update({
         where: { id: row.id },
