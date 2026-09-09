@@ -34,6 +34,7 @@ const TARGET_EMAILS = [
   'nubiafabian9@gmail.com',
   'tobias.purkin@hotmail.com',
   'charlotta.lund21@gmail.com',
+  'malin.andersson120@hotmail.com',
 ];
 const TARGET_DOMAIN = '@kleer.se';
 const TARGET_PHONE_DIGITS = '707878510';
