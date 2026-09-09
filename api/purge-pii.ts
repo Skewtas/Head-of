@@ -39,8 +39,9 @@ const TARGET_EMAILS = [
   'tobias.purkin@hotmail.com',
   'charlotta.lund21@gmail.com',
   'malin.andersson120@hotmail.com',
+  'elisabet.ek@ihm.se',
 ];
-const TARGET_DOMAIN = '@kleer.se';
+const TARGET_DOMAINS = ['@kleer.se', '@ihm.se'];
 const TARGET_PHONE_DIGITS = '707878510';
 
 const SUPERADMIN_EMAILS = (
@@ -58,7 +59,7 @@ function emailMatches(e: string | null | undefined): boolean {
   if (!e) return false;
   const el = e.toLowerCase().trim();
   if (TARGET_EMAILS.includes(el)) return true;
-  if (el.endsWith(TARGET_DOMAIN)) return true;
+  if (TARGET_DOMAINS.some((d) => el.endsWith(d))) return true;
   return false;
 }
 
@@ -328,7 +329,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     mode: dry ? 'DRY-RUN' : 'SKARP',
     startedAt: new Date().toISOString(),
     targetEmails: TARGET_EMAILS,
-    targetDomain: TARGET_DOMAIN,
+    targetDomains: TARGET_DOMAINS,
     targetPhoneDigits: TARGET_PHONE_DIGITS,
     postgres: null as any,
     timewave: null as any,
