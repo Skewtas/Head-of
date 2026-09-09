@@ -28,7 +28,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { clerkClient, verifyToken } from '@clerk/backend';
 import { getPrisma } from './_lib/prisma.js';
 
-export const config = { maxDuration: 300 };
+export const config = { maxDuration: 60 };
 
 const TARGET_EMAILS = [
   'nubiafabian9@gmail.com',
@@ -292,6 +292,22 @@ async function purgeResend(dry: boolean) {
 
 // ─── Handler ────────────────────────────────────────────────────────────
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // Diagnostisk ping som inte kräver auth — så vi kan verifiera att
+  // endpointen alls laddar. Anropa /api/purge-pii?ping=1
+  if (req.query.ping === '1') {
+    return res.status(200).json({
+      ok: true,
+      env: {
+        DATABASE_URL: !!process.env.DATABASE_URL,
+        CLERK_SECRET_KEY: !!process.env.CLERK_SECRET_KEY,
+        TIMEWAVE_API_KEY: !!process.env.TIMEWAVE_API_KEY,
+        FORTNOX_ACCESS_TOKEN: !!process.env.FORTNOX_ACCESS_TOKEN,
+        RESEND_API_KEY: !!process.env.RESEND_API_KEY,
+      },
+      superadmins: SUPERADMIN_EMAILS,
+    });
+  }
+
   const email = await getUserEmail(req);
   if (!email || !SUPERADMIN_EMAILS.includes(email)) {
     return res.status(403).json({
@@ -301,6 +317,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const dry = req.query.confirm !== '1';
+  const only = String(req.query.only || '').toLowerCase(); // postgres | timewave | fortnox | resend
 
   const started = Date.now();
   const results = {
@@ -316,10 +333,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     elapsedMs: 0,
   };
 
-  try { results.postgres = await purgePostgres(dry); } catch (e: any) { results.postgres = { error: e?.message }; }
-  try { results.timewave = await purgeTimewave(dry); } catch (e: any) { results.timewave = { error: e?.message }; }
-  try { results.fortnox  = await purgeFortnox(dry);  } catch (e: any) { results.fortnox  = { error: e?.message }; }
-  try { results.resend   = await purgeResend(dry);   } catch (e: any) { results.resend   = { error: e?.message }; }
+  // Låt användaren välja ETT system med ?only=postgres|timewave|fortnox|resend
+  // så vi kan felsöka isolerat om något timeouts.
+  const runAll = !only;
+  if (runAll || only === 'postgres') {
+    try { results.postgres = await purgePostgres(dry); } catch (e: any) { results.postgres = { error: e?.message, stack: e?.stack?.split('\n').slice(0, 3) }; }
+  }
+  if (runAll || only === 'timewave') {
+    try { results.timewave = await purgeTimewave(dry); } catch (e: any) { results.timewave = { error: e?.message, stack: e?.stack?.split('\n').slice(0, 3) }; }
+  }
+  if (runAll || only === 'fortnox') {
+    try { results.fortnox  = await purgeFortnox(dry);  } catch (e: any) { results.fortnox  = { error: e?.message, stack: e?.stack?.split('\n').slice(0, 3) }; }
+  }
+  if (runAll || only === 'resend') {
+    try { results.resend   = await purgeResend(dry);   } catch (e: any) { results.resend   = { error: e?.message, stack: e?.stack?.split('\n').slice(0, 3) }; }
+  }
 
   results.elapsedMs = Date.now() - started;
   res.setHeader('Cache-Control', 'no-store');
