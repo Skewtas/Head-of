@@ -25,7 +25,11 @@
  *   https://head-of.vercel.app/api/admin/purge-pii?confirm=1   (skarp)
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { clerkClient, verifyToken } from '@clerk/backend';
+import { createClerkClient, verifyToken } from '@clerk/backend';
+
+const clerkClient = createClerkClient({
+  secretKey: process.env.CLERK_SECRET_KEY || '',
+});
 import { getPrisma } from './_lib/prisma.js';
 
 export const config = { maxDuration: 60 };
