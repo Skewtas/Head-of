@@ -334,12 +334,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   }
 
-  const email = await getUserEmail(req);
-  if (!email || !SUPERADMIN_EMAILS.includes(email)) {
-    return res.status(403).json({
-      error: 'Endast superadmin får köra denna endpoint.',
-      email: email || null,
-    });
+  // Auth: antingen Clerk-superadmin ELLER CRON_SECRET (fallback för
+  // browser-tabs där cookien inte når fram).
+  const cronSecret = process.env.CRON_SECRET;
+  const providedSecret = String(req.query.secret || req.headers['x-cron-secret'] || '');
+  const isSecretOk = !!cronSecret && providedSecret === cronSecret;
+
+  let email: string | null = null;
+  if (!isSecretOk) {
+    email = await getUserEmail(req);
+    if (!email || !SUPERADMIN_EMAILS.includes(email)) {
+      return res.status(403).json({
+        error: 'Endast superadmin får köra denna endpoint.',
+        email: email || null,
+        hint: 'Om Clerk-cookien inte når fram, lägg till ?secret=<CRON_SECRET> i URL:en.',
+      });
+    }
   }
 
   const dry = req.query.confirm !== '1';
