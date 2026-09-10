@@ -420,6 +420,25 @@ const OverviewView = () => {
   const [bokisBookings, setBokisBookings] = React.useState<{
     today: number; thisWeek: number; thisMonth: number; total: number; cancelled: number;
   } | null>(null);
+  const [revenueTrend, setRevenueTrend] = React.useState<{
+    days: number;
+    todayDate: string;
+    hasSnapshotToday: boolean;
+    rows: Array<{
+      date: string;
+      isToday: boolean;
+      source: 'snapshot' | 'live';
+      bookedRevenue: number;
+      delta: { bookedRevenue: number | null; percent: number | null };
+      comparedTo: string | null;
+    }>;
+  } | null>(null);
+  React.useEffect(() => {
+    fetch('/api/dashboard/revenue-trend?days=7')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && !d.error && setRevenueTrend(d))
+      .catch(() => {});
+  }, []);
   React.useEffect(() => {
     fetch('/api/dashboard/daily-comparison')
       .then((r) => (r.ok ? r.json() : null))
@@ -709,6 +728,78 @@ const OverviewView = () => {
           </Card>
         ))}
       </div>
+
+      {/* Intäktstrend — senaste 7 dagarna med dygns-delta */}
+      {revenueTrend && revenueTrend.rows.length > 0 && (
+        <Card>
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h4 className="text-sm font-semibold text-brand-dark">Intäkter per dag — senaste veckan</h4>
+                <p className="text-[11px] text-brand-muted mt-0.5">
+                  {revenueTrend.hasSnapshotToday
+                    ? 'Idag sparad. Cron kör 23:55 varje kväll.'
+                    : 'Idag = livesiffra (cron 23:55 sparar dagsvärdet).'}
+                </p>
+              </div>
+              {revenueTrend.rows[0]?.delta.bookedRevenue !== null && (
+                <div className="text-right">
+                  <div className="text-[10px] text-brand-muted uppercase tracking-wide">Sedan igår</div>
+                  <div className={`text-xl font-semibold tabular-nums ${
+                    (revenueTrend.rows[0].delta.bookedRevenue ?? 0) > 0 ? 'text-emerald-600' :
+                    (revenueTrend.rows[0].delta.bookedRevenue ?? 0) < 0 ? 'text-red-600' : 'text-brand-muted'
+                  }`}>
+                    {(revenueTrend.rows[0].delta.bookedRevenue ?? 0) >= 0 ? '↑ +' : '↓ −'}
+                    {new Intl.NumberFormat('sv-SE').format(Math.abs(revenueTrend.rows[0].delta.bookedRevenue ?? 0))} kr
+                  </div>
+                  {revenueTrend.rows[0].delta.percent !== null && (
+                    <div className="text-[11px] text-brand-muted tabular-nums">
+                      {revenueTrend.rows[0].delta.percent >= 0 ? '+' : ''}{revenueTrend.rows[0].delta.percent}%
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-[10px] text-brand-muted uppercase tracking-wider border-b border-gray-200">
+                  <th className="text-left pb-2 font-medium">Datum</th>
+                  <th className="text-right pb-2 font-medium">Bokad försäljning</th>
+                  <th className="text-right pb-2 font-medium">Δ dygn</th>
+                  <th className="text-right pb-2 font-medium">%</th>
+                </tr>
+              </thead>
+              <tbody>
+                {revenueTrend.rows.map((r) => {
+                  const d = new Date(r.date + 'T00:00:00');
+                  const weekday = new Intl.DateTimeFormat('sv-SE', { weekday: 'short', timeZone: 'Europe/Stockholm' }).format(d);
+                  const dm = new Intl.DateTimeFormat('sv-SE', { day: 'numeric', month: 'short', timeZone: 'Europe/Stockholm' }).format(d);
+                  const delta = r.delta.bookedRevenue;
+                  const deltaCls = delta === null ? 'text-gray-300' : delta > 0 ? 'text-emerald-600' : delta < 0 ? 'text-red-600' : 'text-brand-muted';
+                  return (
+                    <tr key={r.date} className={`border-t border-gray-100 ${r.isToday ? 'bg-amber-50/40' : ''}`}>
+                      <td className="py-2 font-medium text-brand-dark">
+                        <span className="capitalize">{weekday}</span> {dm}
+                        {r.isToday && <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-brand-accent/20 text-brand-accent uppercase tracking-wide">idag</span>}
+                        {r.source === 'live' && <span className="ml-1 text-[10px] text-brand-muted">(live)</span>}
+                      </td>
+                      <td className="py-2 text-right tabular-nums text-brand-dark">
+                        {new Intl.NumberFormat('sv-SE').format(Math.round(r.bookedRevenue))} kr
+                      </td>
+                      <td className={`py-2 text-right tabular-nums font-medium ${deltaCls}`}>
+                        {delta === null ? '—' : `${delta >= 0 ? '+' : '−'}${new Intl.NumberFormat('sv-SE').format(Math.abs(Math.round(delta)))} kr`}
+                      </td>
+                      <td className={`py-2 text-right tabular-nums text-xs ${deltaCls}`}>
+                        {r.delta.percent === null ? '—' : `${r.delta.percent >= 0 ? '+' : ''}${r.delta.percent}%`}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Månadsmål — enhetlig design, inkl. dygnsförändring */}
       <Card>
