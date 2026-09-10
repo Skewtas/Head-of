@@ -1,6 +1,7 @@
 import { prisma } from '../_lib/prisma.js';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getTimewaveCustomers } from '../_lib/timewaveData.js';
+import { isBlockedEmail } from '../_lib/suppressionList.js';
 
 function getDaysUntilBirthday(personalNumber: string | null): number | null {
   if (!personalNumber) return null;
@@ -48,6 +49,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     let sentWelcome = 0;
     let sentBirthday = 0;
+    let blockedCount = 0;
 
     // Load templates mapped by their Event triggers
     const welcomeTemplate = await prisma.automatedTemplate.findUnique({ where: { id: "welcome" } });
@@ -58,6 +60,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Process each customer individually
     for (const c of customers) {
       if (!c.email || !c.email.includes('@')) continue;
+
+      // Central suppression: hårda block + system_optouts. Automationerna
+      // postar direkt mot Resend och går inte via deliverNewsletter, så
+      // spärren måste ske här.
+      if (await isBlockedEmail(c.email)) { blockedCount++; continue; }
 
       // --- 1. BIRTHDAY AUTOMATION ---
       if (birthdayTemplate) {
@@ -173,7 +180,8 @@ h1, h2, h3, h4, h5, h6 { font-family: 'Outfit', 'Segoe UI', Tahoma, Geneva, Verd
     return res.json({ 
       success: true, 
       scanned: customers.length, 
-      sent: { welcome: sentWelcome, birthday: sentBirthday } 
+      sent: { welcome: sentWelcome, birthday: sentBirthday },
+      blocked: blockedCount 
     });
 
   } catch (err: any) {

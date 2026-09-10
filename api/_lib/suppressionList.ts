@@ -23,11 +23,16 @@ const HARD_BLOCK_EMAILS = new Set<string>([
   'charlotta.lund21@gmail.com',
   'malin.andersson120@hotmail.com',
   'elisabet.ek@ihm.se',
+  'gabriellanehme95@gmail.com',
 ].map((e) => e.toLowerCase()));
 
 const HARD_BLOCK_EMAIL_DOMAINS = ['@kleer.se', '@ihm.se'];
 
-const HARD_BLOCK_PHONE_DIGITS = ['707878510']; // Tobias Purkin
+// Lagras utan ledande 0 så att både 07xxxxxxxx och +467xxxxxxxx matchar
+const HARD_BLOCK_PHONE_DIGITS = [
+  '707878510', // Tobias Purkin
+  '736549445', // Gabriella Nehme (0736549445)
+];
 
 // ─── Normalisering ──────────────────────────────────────────────────────
 export function normalizeEmail(e: string | null | undefined): string {
