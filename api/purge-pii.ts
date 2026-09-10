@@ -104,14 +104,14 @@ async function purgePostgres(dry: boolean) {
 
   await scanAndClean(
     'Employee',
-    () => prisma.employee.findMany({ select: { id: true, firstName: true, lastName: true, email: true, phone: true, timewaveId: true } }),
+    () => prisma.employee.findMany({ select: { id: true, firstName: true, lastName: true, email: true, phone: true, fortnoxEmployeeId: true } }),
     (r) => emailMatches(r.email) || phoneMatches(r.phone),
     (ids) => prisma.employee.updateMany({ where: { id: { in: ids } }, data: { email: null, phone: null, personalNumber: null } }).then((r) => r.count),
   );
 
   await scanAndClean(
     'Client',
-    () => prisma.client.findMany({ select: { id: true, name: true, email: true, phone: true, timewaveId: true } }),
+    () => prisma.client.findMany({ select: { id: true, name: true, email: true, phone: true, clientNumber: true, fortnoxCustomerId: true } }),
     (r) => emailMatches(r.email) || phoneMatches(r.phone),
     (ids) => prisma.client.updateMany({ where: { id: { in: ids } }, data: { email: null, phone: null, personalNumber: null } }).then((r) => r.count),
   );
