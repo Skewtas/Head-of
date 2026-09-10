@@ -35,13 +35,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: 'SMS-meddelandet är för långt (max 918 tecken / 6 SMS-delar)' });
   }
 
-  // Fetch opt-outs
-  const optOutDoc = await prisma.automatedTemplate.findUnique({ where: { id: 'system_optouts' } });
-  let optOutData: { emails: string[], phones: string[] } = { emails: [], phones: [] };
-  if (optOutDoc && optOutDoc.blocks && typeof optOutDoc.blocks === 'object') {
-    optOutData = optOutDoc.blocks as any;
-  }
-  const optOutSet = new Set(optOutData.phones || []);
+  // Central suppression: hard blocks + system_optouts + domän/telefon-matchning
+  const { isBlockedPhone } = await import('../_lib/suppressionList.js');
 
   const fromName = sender || 'Stodona.se';
 
@@ -69,8 +64,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       failed.push({ phone: '(saknas)', error: 'Inget telefonnummer' });
       continue;
     }
-    if (optOutSet.has(phone)) {
-      continue; // Skip opted out phones silently or log them, we just skip them here.
+    if (await isBlockedPhone(phone)) {
+      continue; // Skip opted-out eller hårdblockerade telefonnummer.
     }
 
     // Personalize message with {{name}} placeholder

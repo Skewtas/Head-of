@@ -6,6 +6,7 @@
  * resultat. Skapar/uppdaterar INGEN databas-rad — det gör kallaren.
  */
 import { prisma } from './prisma.js';
+import { isBlockedPhone } from './suppressionList.js';
 
 export interface SmsRecipient {
   name: string;
@@ -50,11 +51,6 @@ export async function sendSms(opts: SendSmsOpts): Promise<SendSmsResult> {
     throw new Error(`SMS-meddelandet är för långt (${message.length}/${MAX_SMS_CHARS} tecken).`);
   }
 
-  // Hämta opt-outs
-  const optOutDoc = await prisma.automatedTemplate.findUnique({ where: { id: 'system_optouts' } });
-  const optOutData = (optOutDoc?.blocks as any) ?? { phones: [] };
-  const optOutSet = new Set<string>(optOutData.phones || []);
-
   const fromName = sender || 'Stodona.se';
   let sent = 0;
   let optedOut = 0;
@@ -66,7 +62,8 @@ export async function sendSms(opts: SendSmsOpts): Promise<SendSmsResult> {
       failed.push({ phone: '(saknas)', error: 'Inget telefonnummer' });
       continue;
     }
-    if (optOutSet.has(phone)) { optedOut++; continue; }
+    // Central suppression: hårda block + system_optouts
+    if (await isBlockedPhone(phone)) { optedOut++; continue; }
 
     let text = message.replace(/\{\{name\}\}/gi, (r.name || '').split(' ')[0] || '');
     // Marknadsförings-SMS måste enligt lag inkludera avregistreringsinfo.

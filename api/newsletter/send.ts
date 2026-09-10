@@ -48,14 +48,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: 'Nyhetsbrevet behöver innehåll.' });
   }
 
-  // Filter out opted-out emails
-  const optOutDoc = await prisma.automatedTemplate.findUnique({ where: { id: 'system_optouts' } });
-  let optOutData: { emails: string[]; phones: string[] } = { emails: [], phones: [] };
-  if (optOutDoc && optOutDoc.blocks && typeof optOutDoc.blocks === 'object') {
-    optOutData = optOutDoc.blocks as any;
-  }
-  const optOutSet = new Set(optOutData.emails || []);
-  const validRecipients = recipients.filter((email: string) => !optOutSet.has(email));
+  // Filter out blocked/opted-out emails via central suppressionList
+  // (hårda block + system_optouts + domän-suffix som @kleer.se/@ihm.se).
+  const { filterAllowedEmails } = await import('../_lib/suppressionList.js');
+  const validRecipients = await filterAllowedEmails(recipients);
 
   if (validRecipients.length === 0) {
     return res.status(400).json({ error: 'Alla valda mottagare har avregistrerat sig från e-post.' });

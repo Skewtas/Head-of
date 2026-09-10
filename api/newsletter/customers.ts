@@ -112,18 +112,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const uniqueCustomers = dbContacts;
     
-    // Fetch opt-outs from system_optouts document
-    const optOutDoc = await prisma.automatedTemplate.findUnique({
-      where: { id: 'system_optouts' }
-    });
-    
-    let optOutData: { emails: string[], phones: string[] } = { emails: [], phones: [] };
-    if (optOutDoc && optOutDoc.blocks && typeof optOutDoc.blocks === 'object') {
-      optOutData = optOutDoc.blocks as any;
-    }
-    
-    const optedOutEmails = new Set(optOutData.emails || []);
-    const optedOutPhones = new Set(optOutData.phones || []);
+    // Central suppression (hard blocks + system_optouts + domän-suffix)
+    const { isBlockedEmail, isBlockedPhone } = await import('../_lib/suppressionList.js');
 
     // Build segments summary
     const areaCounts: Record<string, number> = {};
@@ -135,21 +125,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const internalKeywords = ['emma selenius', 'mikaela wigert', 'rani shakir', 'annika wigert', '@stodona.se'];
     let internalCount = 0;
 
-    uniqueCustomers.forEach((c: any) => {
+    for (const c of uniqueCustomers as any[]) {
       areaCounts[c.area] = (areaCounts[c.area] || 0) + 1;
       typeCounts[c.clientType] = (typeCounts[c.clientType] || 0) + 1;
       c.serviceTypes.forEach((s: string) => serviceCounts[s] = (serviceCounts[s] || 0) + 1);
       const pat = c.pattern || 'Okänd historik';
       patternCounts[pat] = (patternCounts[pat] || 0) + 1;
-      
+
       const isInternal = internalKeywords.some(kw => c.name.toLowerCase().includes(kw) || c.email.toLowerCase().includes(kw));
       if (isInternal) {
         c.clientType = 'Internt Team (Test)';
         internalCount++;
       }
-      c.optedOutEmail = optedOutEmails.has(c.email);
-      c.optedOutSms = c.phone ? optedOutPhones.has(c.phone) : false;
-    });
+      c.optedOutEmail = await isBlockedEmail(c.email);
+      c.optedOutSms = c.phone ? await isBlockedPhone(c.phone) : false;
+    }
     
     // Add internal team to type counts explicitly if found
     if (internalCount > 0) {

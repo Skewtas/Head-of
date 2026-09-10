@@ -118,8 +118,14 @@ export interface SendNewsletterResult {
  * Does NOT create or update any Newsletter row — caller is responsible.
  */
 export async function deliverNewsletter(opts: SendNewsletterOpts): Promise<SendNewsletterResult> {
-  const { newsletterId, recipients, subject, introText, imageData, embedUrl, htmlContent, appUrl } = opts;
+  const { newsletterId, recipients: rawRecipients, subject, introText, imageData, embedUrl, htmlContent, appUrl } = opts;
   const fromAddress = process.env.SMTP_FROM || process.env.SMTP_USER || 'info@stodona.se';
+
+  // SISTA-CHANSEN filter: även om upstream missat att filtrera bort blockade
+  // adresser så stoppas de här. Ingen kod-väg kan skicka utan att passera
+  // denna funktion.
+  const { filterAllowedEmails } = await import('./suppressionList.js');
+  const recipients = await filterAllowedEmails(rawRecipients);
 
   let sent = 0;
   const failedRecipients: string[] = [];

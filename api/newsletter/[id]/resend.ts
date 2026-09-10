@@ -27,11 +27,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: 'Alla mottagare har redan öppnat nyhetsbrevet.' });
   }
 
-  // Filtrera bort opt-outs
-  const optOutDoc = await prisma.automatedTemplate.findUnique({ where: { id: 'system_optouts' } });
-  const optOutEmails: string[] = (optOutDoc?.blocks as any)?.emails || [];
-  const optOutSet = new Set(optOutEmails);
-  const targets = unopened.filter((e) => !optOutSet.has(e));
+  // Filtrera bort blockerade via central suppressionList
+  const { filterAllowedEmails } = await import('../../_lib/suppressionList.js');
+  const targets = await filterAllowedEmails(unopened);
   if (targets.length === 0) {
     return res.status(400).json({ error: 'Alla återstående mottagare har avregistrerat sig.' });
   }
