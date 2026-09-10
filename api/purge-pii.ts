@@ -313,6 +313,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   }
 
+  // Auth-diagnostik: /api/purge-pii?whoami=1
+  if (req.query.whoami === '1') {
+    const cookieHdr = req.headers.cookie || '';
+    const cookieNames = cookieHdr.split(';').map(c => c.trim().split('=')[0]).filter(Boolean);
+    const sessionMatch = cookieHdr.match(/__session=([^;]+)/);
+    const clerkSessMatch = cookieHdr.match(/__clerk_db_jwt=([^;]+)/);
+    const email = await getUserEmail(req);
+    return res.status(200).json({
+      cookieNames,
+      hasSessionCookie: !!sessionMatch,
+      hasClerkDbJwt: !!clerkSessMatch,
+      resolvedEmail: email,
+      superadmins: SUPERADMIN_EMAILS,
+      isSuperadmin: !!email && SUPERADMIN_EMAILS.includes(email),
+    });
+  }
+
   const email = await getUserEmail(req);
   if (!email || !SUPERADMIN_EMAILS.includes(email)) {
     return res.status(403).json({
