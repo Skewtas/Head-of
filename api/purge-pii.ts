@@ -31,6 +31,7 @@ const clerkClient = createClerkClient({
   secretKey: process.env.CLERK_SECRET_KEY || '',
 });
 import { getPrisma } from './_lib/prisma.js';
+import { getTimewaveToken } from './_lib/timewaveAuth.js';
 
 export const config = { maxDuration: 60 };
 
@@ -103,7 +104,7 @@ async function purgePostgres(dry: boolean) {
 
   await scanAndClean(
     'Employee',
-    () => prisma.employee.findMany({ select: { id: true, name: true, email: true, phone: true, timewaveId: true } }),
+    () => prisma.employee.findMany({ select: { id: true, firstName: true, lastName: true, email: true, phone: true, timewaveId: true } }),
     (r) => emailMatches(r.email) || phoneMatches(r.phone),
     (ids) => prisma.employee.updateMany({ where: { id: { in: ids } }, data: { email: null, phone: null, personalNumber: null } }).then((r) => r.count),
   );
@@ -161,11 +162,14 @@ async function purgePostgres(dry: boolean) {
 
 // ─── 2. Timewave ────────────────────────────────────────────────────────
 async function purgeTimewave(dry: boolean) {
-  const clientId = process.env.TIMEWAVE_CLIENT_ID;
   const apiKey = process.env.TIMEWAVE_API_KEY;
-  if (!clientId || !apiKey) return { skipped: 'TIMEWAVE_CLIENT_ID/API_KEY saknas' };
-  const base = `https://cleaning.timewaveapp.com/api/v2/${clientId}`;
-  const hdr = { Authorization: `Bearer ${apiKey}`, Accept: 'application/json', 'Content-Type': 'application/json' };
+  if (!apiKey) return { skipped: 'TIMEWAVE_API_KEY saknas' };
+
+  // Timewave använder OAuth2 client_credentials — inte statisk Bearer.
+  // getTimewaveToken() cachar per serverless-instans (samma som resten av appen).
+  const token = await getTimewaveToken();
+  const base = 'https://api.timewave.se/v3';
+  const hdr = { Authorization: `Bearer ${token}`, Accept: 'application/json', 'Content-Type': 'application/json' };
 
   async function fetchAll(path: string) {
     const rows: any[] = [];
