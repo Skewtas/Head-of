@@ -680,13 +680,6 @@ const OverviewView = () => {
   return (
     <div className="space-y-8">
       {/* Logo */}
-      {/* Quick links */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-        <a href="https://timewave.se" target="_blank" rel="noopener noreferrer" className="flex items-center justify-center h-11 bg-[#faf8f5] border border-[#eae4d9] rounded-xl text-xs font-bold text-[#5c5750] tracking-widest uppercase shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md hover:bg-white">TIMEWAVE</a>
-        <a href="https://fortnox.se" target="_blank" rel="noopener noreferrer" className="flex items-center justify-center h-11 bg-[#faf8f5] border border-[#eae4d9] rounded-xl text-xs font-bold text-[#5c5750] tracking-widest uppercase shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md hover:bg-white">FORTNOX</a>
-        <a href="https://beambop.com" target="_blank" rel="noopener noreferrer" className="flex items-center justify-center h-11 bg-[#faf8f5] border border-[#eae4d9] rounded-xl text-xs font-bold text-[#5c5750] tracking-widest uppercase shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md hover:bg-white">BEAMBOP</a>
-        <a href="https://skatteverket.se" target="_blank" rel="noopener noreferrer" className="flex items-center justify-center h-11 bg-[#faf8f5] border border-[#eae4d9] rounded-xl text-xs font-bold text-[#5c5750] tracking-widest uppercase shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md hover:bg-white">SKATTEVERKET</a>
-      </div>
 
       {/* Month overview heading + freshness indicator */}
       <div className="flex items-baseline justify-between gap-3 flex-wrap">
@@ -733,6 +726,30 @@ const OverviewView = () => {
           </button>
         </div>
       </div>
+
+      {/* Månadsmål — ligger alltid överst så du ser målen direkt när sidan öppnas */}
+      <Card>
+        <CardContent className="p-5">
+          <h4 className="text-sm font-semibold text-brand-dark mb-4">Månadsmål — {currentMonthName}</h4>
+          <div className="space-y-4">
+            {[
+              { label: 'Bokad försäljning', actual: stats.totalRevenueExVat, goal: 850000, unit: 'kr', diff: dailyDiff?.diff?.bookedRevenue ?? null },
+              { label: 'Snittpris', actual: stats.avgPricePerHour, goal: 550, unit: 'kr/h', diff: dailyDiff?.diff?.avgPricePerHour ?? null },
+              { label: 'Återkommande kunder — privat', actual: stats.recurringPrivateClients, goal: 250, unit: 'st', diff: dailyDiff?.diff?.recurringPrivateClients ?? null, revenueExVat: stats.recurringPrivateRevenue },
+              { label: 'Återkommande kunder — företag', actual: stats.recurringCompanyClients, goal: 50, unit: 'st', diff: dailyDiff?.diff?.recurringCompanyClients ?? null, revenueExVat: stats.recurringCompanyRevenue },
+              { label: 'Personal bas', actual: stats.employees, goal: 20, unit: 'st', diff: dailyDiff?.diff?.staffCount ?? null },
+              { label: 'Bokningar online (Bokis)', actual: bokisBookings?.thisMonth ?? 0, goal: 60, unit: 'st', diff: null, todayCount: bokisBookings?.today ?? null },
+            ].map((item, i) => (
+              <KpiGoalRow key={i} {...item} hasSnapshot={!!dailyDiff?.previous} />
+            ))}
+          </div>
+          {!dailyDiff?.previous && (
+            <div className="mt-4 text-[11px] text-brand-muted italic text-center">
+              Dygnsförändring visas från morgondagen — första snapshot sparas i natt kl. 23:55.
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Main KPIs - 5 columns */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
@@ -917,30 +934,6 @@ const OverviewView = () => {
           </CardContent>
         </Card>
       )}
-
-      {/* Månadsmål — enhetlig design, inkl. dygnsförändring */}
-      <Card>
-        <CardContent className="p-5">
-          <h4 className="text-sm font-semibold text-brand-dark mb-4">Månadsmål — {currentMonthName}</h4>
-          <div className="space-y-4">
-            {[
-              { label: 'Bokad försäljning', actual: stats.totalRevenueExVat, goal: 850000, unit: 'kr', diff: dailyDiff?.diff?.bookedRevenue ?? null },
-              { label: 'Snittpris', actual: stats.avgPricePerHour, goal: 550, unit: 'kr/h', diff: dailyDiff?.diff?.avgPricePerHour ?? null },
-              { label: 'Återkommande kunder — privat', actual: stats.recurringPrivateClients, goal: 250, unit: 'st', diff: dailyDiff?.diff?.recurringPrivateClients ?? null, revenueExVat: stats.recurringPrivateRevenue },
-              { label: 'Återkommande kunder — företag', actual: stats.recurringCompanyClients, goal: 50, unit: 'st', diff: dailyDiff?.diff?.recurringCompanyClients ?? null, revenueExVat: stats.recurringCompanyRevenue },
-              { label: 'Personal bas', actual: stats.employees, goal: 20, unit: 'st', diff: dailyDiff?.diff?.staffCount ?? null },
-              { label: 'Bokningar online (Bokis)', actual: bokisBookings?.thisMonth ?? 0, goal: 60, unit: 'st', diff: null, todayCount: bokisBookings?.today ?? null },
-            ].map((item, i) => (
-              <KpiGoalRow key={i} {...item} hasSnapshot={!!dailyDiff?.previous} />
-            ))}
-          </div>
-          {!dailyDiff?.previous && (
-            <div className="mt-4 text-[11px] text-brand-muted italic text-center">
-              Dygnsförändring visas från morgondagen — första snapshot sparas i natt kl. 23:55.
-            </div>
-          )}
-        </CardContent>
-      </Card>
 
       {/* Team Breakdown */}
       <Card>
