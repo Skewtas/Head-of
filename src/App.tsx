@@ -429,6 +429,26 @@ const OverviewView = () => {
     estimatedPrice: number | null; date: string | null;
   }>>([]);
   const [nyaSedanSenast, setNyaSedanSenast] = React.useState(0);
+  const [personalbas, setPersonalbas] = React.useState<{
+    antalAktiva: number; antalDeleted: number; antalInaktiva: number; totalt: number;
+  } | null>(null);
+  const [dubletter, setDubletter] = React.useState<{
+    antalDubletter: number; totalExtraSumma: number;
+    dubletter: Array<{ arbetsorder: number; klientNamn: string; tjanst: string; qty: number; pricePerUnit: number; radbelopp: number; antalKopior: number; missionIds: number[]; extraSumma: number }>;
+  } | null>(null);
+
+  React.useEffect(() => {
+    fetch('/api/dashboard/personalbas')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && !d.error && setPersonalbas(d))
+      .catch(() => {});
+  }, []);
+  React.useEffect(() => {
+    fetch('/api/dashboard/duplicate-missions')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && !d.error && setDubletter(d))
+      .catch(() => {});
+  }, []);
   const [revenueTrend, setRevenueTrend] = React.useState<{
     days: number;
     todayDate: string;
@@ -737,7 +757,7 @@ const OverviewView = () => {
               { label: 'Snittpris', actual: stats.avgPricePerHour, goal: 550, unit: 'kr/h', diff: dailyDiff?.diff?.avgPricePerHour ?? null },
               { label: 'Återkommande kunder — privat', actual: stats.recurringPrivateClients, goal: 250, unit: 'st', diff: dailyDiff?.diff?.recurringPrivateClients ?? null, revenueExVat: stats.recurringPrivateRevenue },
               { label: 'Återkommande kunder — företag', actual: stats.recurringCompanyClients, goal: 50, unit: 'st', diff: dailyDiff?.diff?.recurringCompanyClients ?? null, revenueExVat: stats.recurringCompanyRevenue },
-              { label: 'Personal bas', actual: stats.employees, goal: 20, unit: 'st', diff: dailyDiff?.diff?.staffCount ?? null },
+              { label: 'Personalbas (aktiva i Timewave)', actual: personalbas?.antalAktiva ?? stats.employees, goal: 20, unit: 'st', diff: dailyDiff?.diff?.staffCount ?? null },
               { label: 'Bokningar online (Bokis)', actual: bokisBookings?.thisMonth ?? 0, goal: 60, unit: 'st', diff: null, todayCount: bokisBookings?.today ?? null },
             ].map((item, i) => (
               <KpiGoalRow key={i} {...item} hasSnapshot={!!dailyDiff?.previous} />
@@ -751,6 +771,53 @@ const OverviewView = () => {
         </CardContent>
       </Card>
 
+      {/* Dublett-larm — flaggar arbetsordrar med identiska missioner i Timewave */}
+      {dubletter && dubletter.antalDubletter > 0 && (
+        <Card>
+          <CardContent className="p-5 border-l-4 border-amber-500 bg-amber-50/40">
+            <div className="flex items-start gap-3 mb-3">
+              <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <h4 className="text-sm font-semibold text-amber-900">
+                  {dubletter.antalDubletter} dublett{dubletter.antalDubletter === 1 ? '' : 'er'} i Timewave denna månad
+                </h4>
+                <p className="text-[12px] text-amber-800 mt-0.5">
+                  Samma arbetsorder har flera identiska missioner (tjänst, timmar, pris). Totalt <strong>{new Intl.NumberFormat('sv-SE').format(dubletter.totalExtraSumma)} kr</strong> för mycket i intäkter — radera dubletterna i Timewave.
+                </p>
+              </div>
+            </div>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-[10px] text-brand-muted uppercase tracking-wider border-b border-amber-200">
+                  <th className="text-left pb-1.5">Kund</th>
+                  <th className="text-left pb-1.5">Arbetsorder</th>
+                  <th className="text-left pb-1.5">Tjänst</th>
+                  <th className="text-right pb-1.5">Kopior</th>
+                  <th className="text-right pb-1.5">Extra kr</th>
+                  <th className="text-left pb-1.5 pl-3">Mission-ID</th>
+                </tr>
+              </thead>
+              <tbody>
+                {dubletter.dubletter.slice(0, 10).map((d) => (
+                  <tr key={d.arbetsorder + '-' + d.missionIds.join('-')} className="border-b border-amber-100">
+                    <td className="py-1.5 font-medium text-brand-dark">{d.klientNamn}</td>
+                    <td className="py-1.5 text-brand-muted tabular-nums">#{d.arbetsorder}</td>
+                    <td className="py-1.5 text-brand-muted">{d.tjanst}</td>
+                    <td className="py-1.5 text-right tabular-nums text-amber-800 font-semibold">{d.antalKopior}×</td>
+                    <td className="py-1.5 text-right tabular-nums font-semibold text-red-700">
+                      +{new Intl.NumberFormat('sv-SE').format(d.extraSumma)} kr
+                    </td>
+                    <td className="py-1.5 pl-3 text-[11px] text-brand-muted tabular-nums">
+                      {d.missionIds.join(', ')}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Main KPIs - 5 columns */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         {[
@@ -760,7 +827,7 @@ const OverviewView = () => {
           { icon: ClipboardList, label: 'Nya Arbetsordrar (AO)', value: stats.newWorkOrdersThisMonth, color: 'text-brand-accent' },
           { icon: Users, label: 'Återk. Privat', value: stats.recurringPrivateClients, color: 'text-brand-accent' },
           { icon: Building2, label: 'Återk. Företag', value: stats.recurringCompanyClients, color: 'text-brand-accent' },
-          { icon: Users, label: 'Anställda', value: stats.employees, color: 'text-brand-accent' },
+          { icon: Users, label: 'Personalbas', value: personalbas?.antalAktiva ?? stats.employees, color: 'text-brand-accent' },
           { icon: CalendarDays, label: 'Bokningar Online', value: stats.onlineBookings, color: 'text-blue-500' },
           { icon: RefreshCw, label: 'Follow Up Cleaning', value: stats.followUpCount, color: 'text-blue-500' },
           { icon: AlertTriangle, label: 'Öppna Ärenden', value: stats.issues, color: 'text-amber-500' },
