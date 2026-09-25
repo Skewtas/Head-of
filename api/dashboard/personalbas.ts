@@ -22,6 +22,7 @@ interface Payload {
   antalAktiva: number;
   antalDeleted: number;
   antalInaktiva: number;
+  antalSystempost: number;
   totalt: number;
   computedAt: string;
   namn?: Array<{ id: number; firstName: string; lastName: string; email: string | null }>;
@@ -52,11 +53,25 @@ async function beraknaPersonalbas(): Promise<Payload> {
   let antalAktiva = 0;
   let antalDeleted = 0;
   let antalInaktiva = 0;
+  let antalSystempost = 0;
   const aktivaLista: Payload['namn'] = [];
+
+  // Timewave-databasen innehåller några dummy-poster som räknas som
+  // "anställd" fast de aldrig städar (avbokningsposten m.fl.). Samma filter
+  // som TimewaveScheduleGrid använder för schemat, så personalbasen matchar
+  // vad man faktiskt ser i schemat.
+  const blockedNamePatterns = ['avbok', 'aa -', 'aa-', 'ebenazer', 'ebenezer', 'test'];
 
   for (const e of alla) {
     if (e.deleted) { antalDeleted++; continue; }
     if (e.status && e.status !== 'active') { antalInaktiva++; continue; }
+    const fullName = `${e.first_name || ''} ${e.last_name || ''}`.toLowerCase().trim();
+    const isSystem =
+      fullName === 'aa' ||
+      e.first_name?.toLowerCase().trim() === 'aa' ||
+      e.last_name?.toLowerCase().trim() === 'aa' ||
+      blockedNamePatterns.some((p) => fullName.includes(p));
+    if (isSystem) { antalSystempost++; continue; }
     antalAktiva++;
     aktivaLista!.push({
       id: e.id,
@@ -74,6 +89,7 @@ async function beraknaPersonalbas(): Promise<Payload> {
     antalAktiva,
     antalDeleted,
     antalInaktiva,
+    antalSystempost,
     totalt: alla.length,
     computedAt: new Date().toISOString(),
     namn: aktivaLista,
