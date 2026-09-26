@@ -85,7 +85,12 @@ async function synkaIdag(): Promise<void> {
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
-  if (!(await inloggad(req))) return res.status(401).json({ error: 'Unauthorized' });
+  // Auth: Clerk-session ELLER ?secret=<CRON_SECRET> (för felsökning från
+  // URL utan att behöva vara inloggad i browsern)
+  const cronSecret = process.env.CRON_SECRET;
+  const providedSecret = String(req.query.secret || '');
+  const isSecretOk = !!cronSecret && providedSecret === cronSecret;
+  if (!isSecretOk && !(await inloggad(req))) return res.status(401).json({ error: 'Unauthorized' });
 
   const enId = typeof req.query.id === 'string' ? req.query.id : null;
 
