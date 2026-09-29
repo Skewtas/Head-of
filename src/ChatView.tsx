@@ -289,14 +289,15 @@ function DialogSokning() {
     return () => clearTimeout(t);
   }, [q, dagar]);
 
-  // Live: hämta listan igen var 30:e sekund medan fliken är öppen och synlig.
+  // Live: hämta listan igen var 10:e sekund medan fliken är öppen och synlig
+  // (Mikaela 2026-09-29: ALLT live).
   useEffect(() => {
     const id = setInterval(() => {
       if (document.visibilityState !== 'visible') return;
       const params = new URLSearchParams({ dagar: String(dagar) });
       if (q.trim()) params.set('q', q.trim());
       api<DialogSvar>(`/api/chatt/dialoger?${params}`).then(setData).catch(() => {});
-    }, 30_000);
+    }, 10_000);
     return () => clearInterval(id);
   }, [q, dagar]);
 

@@ -70,9 +70,9 @@ async function hamtaLive(query: string): Promise<LiveDialog[] | null> {
 }
 
 let senasteSynk = 0;
-/** Dagens samtal från stodona.se – högst var 20:e sekund. Ett fel stoppar aldrig listan. */
+/** Dagens samtal från stodona.se – högst var 5:e sekund (Mikaela 2026-09-29: ALLT live). */
 async function synkaIdag(): Promise<void> {
-  if (Date.now() - senasteSynk < 20_000) return;
+  if (Date.now() - senasteSynk < 5_000) return;
   senasteSynk = Date.now();
   try {
     const dag = ymdSthlm(new Date());

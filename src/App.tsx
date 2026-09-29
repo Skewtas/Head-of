@@ -477,8 +477,8 @@ const OverviewView = () => {
       .catch(() => {});
   }, []);
   React.useEffect(() => {
-    // Live-poll var 30 sekund så nya återkommande bokningar dyker upp
-    // inom ~60-90 sekunder efter kunden bokade.
+    // Live-poll var 10 sekund så nya återkommande bokningar dyker upp
+    // inom ~10-15 sekunder efter kunden bokade (Mikaela 2026-09-29: ALLT live).
     const senastKandaId = { current: null as string | null };
     const hamta = () => {
       fetch('/api/dashboard/bokis-bookings')
@@ -501,7 +501,7 @@ const OverviewView = () => {
         .catch(() => {});
     };
     hamta();
-    const timer = setInterval(hamta, 30_000);
+    const timer = setInterval(hamta, 10_000);
     return () => clearInterval(timer);
   }, []);
   React.useEffect(() => {

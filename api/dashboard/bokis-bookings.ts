@@ -17,10 +17,10 @@ import { prisma } from '../_lib/prisma.js';
 export const config = { maxDuration: 30 };
 
 const KEY = 'bokis_bookings_counts';
-// 60 sekunder cache — så "LIVE återkommande" känns live men vi inte pumpar
-// Convex vid varje polling. Frontend pollar var 30 sekund → ny bokning
-// dyker upp inom ~60-90 s.
-const STALE_SECONDS = 60;
+// 5 sekunder cache — Mikaela 2026-09-29: 'vill ha ALLT live'. Frontend
+// pollar var 10 sek → ny bokning dyker upp inom ~15 sek. Convex-kostnaden
+// är minimal jämfört med värdet av att se abonnemang direkt.
+const STALE_SECONDS = 5;
 
 function ymdSthlm(d: Date): string {
   const parts = new Intl.DateTimeFormat('sv-SE', {
