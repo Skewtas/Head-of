@@ -421,7 +421,9 @@ const OverviewView = () => {
   const [dailyDiff, setDailyDiff] = React.useState<DailyDiff | null>(null);
   const [bokisBookings, setBokisBookings] = React.useState<{
     today: number; last24h?: number; thisWeek: number; thisMonth: number; total: number; cancelled: number;
-    recurringToday: number; recurringLast24h?: number; recurringThisWeek: number; recurringThisMonth: number; recurringTotal: number;
+    recurringToday: number; recurringLast24h?: number; recurringPrev24h?: number;
+    recurringDeltaSinceYesterday?: number;
+    recurringThisWeek: number; recurringThisMonth: number; recurringTotal: number;
   } | null>(null);
   const [senasteAterkommande, setSenasteAterkommande] = React.useState<Array<{
     id: string; createdAt: number | null; customerName: string; city: string | null;
@@ -843,17 +845,34 @@ const OverviewView = () => {
             )}
           </div>
 
-          {/* KPI-rad över återkommande */}
+          {/* KPI-rad över återkommande + delta jämfört med föregående dygn */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
-            {[
-              { label: 'Senaste 24 tim', value: bokisBookings?.recurringLast24h ?? bokisBookings?.recurringToday ?? 0, accent: 'text-emerald-600' },
-              { label: 'Denna vecka', value: bokisBookings?.recurringThisWeek ?? 0, accent: 'text-brand-dark' },
-              { label: 'Denna månad', value: bokisBookings?.recurringThisMonth ?? 0, accent: 'text-brand-dark' },
-              { label: 'Totalt', value: bokisBookings?.recurringTotal ?? 0, accent: 'text-brand-muted' },
-            ].map((k) => (
+            {(() => {
+              const senaste = bokisBookings?.recurringLast24h ?? bokisBookings?.recurringToday ?? 0;
+              const forra = bokisBookings?.recurringPrev24h ?? null;
+              const delta = bokisBookings?.recurringDeltaSinceYesterday;
+              let deltaText: React.ReactNode = null;
+              if (delta != null && forra != null) {
+                if (delta > 0) deltaText = <span className="text-emerald-700">↑ +{delta} mot igår</span>;
+                else if (delta < 0) deltaText = <span className="text-red-600">↓ {delta} mot igår</span>;
+                else deltaText = <span className="text-brand-muted">±0 mot igår</span>;
+              }
+              return [
+                {
+                  label: 'Senaste 24 tim',
+                  value: senaste,
+                  accent: 'text-emerald-600',
+                  sub: deltaText,
+                },
+                { label: 'Föregående dygn', value: forra ?? 0, accent: 'text-brand-muted', sub: <span className="text-brand-muted">24–48 tim bakåt</span> },
+                { label: 'Denna vecka', value: bokisBookings?.recurringThisWeek ?? 0, accent: 'text-brand-dark', sub: null },
+                { label: 'Denna månad', value: bokisBookings?.recurringThisMonth ?? 0, accent: 'text-brand-dark', sub: null },
+              ];
+            })().map((k) => (
               <div key={k.label} className="bg-white border border-gray-100 rounded-xl p-3 text-center">
                 <div className={`text-2xl font-semibold tabular-nums ${k.accent}`}>{k.value}</div>
                 <div className="text-[10px] text-brand-muted uppercase tracking-wider mt-0.5">{k.label}</div>
+                {k.sub && <div className="text-[11px] mt-1 font-medium">{k.sub}</div>}
               </div>
             ))}
           </div>

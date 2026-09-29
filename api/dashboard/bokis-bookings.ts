@@ -102,14 +102,14 @@ function computeCounts(bookings: BokisBooking[]) {
   const weekStartKey = ymdSthlm(weekStart);
 
   // Rullande fönster istället för kalenderdag — så gårdagens bokning
-  // fortfarande syns kl 08:00 nästa morgon (Mikaelas fråga 2026-09-29:
-  // 5 abonnemang igår men Idag = 0). Nu räknar 'Senaste 24 tim' bakåt
-  // från just NU.
+  // fortfarande syns kl 08:00 nästa morgon.
   const nowMs = now.getTime();
   const dayAgo = nowMs - 24 * 3600 * 1000;
+  const twoDaysAgo = nowMs - 48 * 3600 * 1000;
 
-  let today = 0;              // kalenderdag (för bakåt-kompatibilitet)
-  let last24h = 0;            // rullande 24 tim
+  let today = 0;
+  let last24h = 0;
+  let last24hToPrev24h = 0;   // 24-48h bakåt = "igår" rullande
   let thisWeek = 0;
   let thisMonth = 0;
   let total = 0;
@@ -117,6 +117,7 @@ function computeCounts(bookings: BokisBooking[]) {
 
   let recurringToday = 0;
   let recurringLast24h = 0;
+  let recurringPrev24h = 0;   // 24-48h bakåt för delta-räkning
   let recurringThisWeek = 0;
   let recurringThisMonth = 0;
   let recurringTotal = 0;
@@ -130,7 +131,11 @@ function computeCounts(bookings: BokisBooking[]) {
     if (!createdAt) continue;
     const createdKey = ymdSthlm(new Date(createdAt));
     if (createdKey === todayKey) { today++; if (recurring) recurringToday++; }
-    if (createdAt >= dayAgo) { last24h++; if (recurring) recurringLast24h++; }
+    if (createdAt >= dayAgo) {
+      last24h++; if (recurring) recurringLast24h++;
+    } else if (createdAt >= twoDaysAgo) {
+      last24hToPrev24h++; if (recurring) recurringPrev24h++;
+    }
     if (createdKey >= weekStartKey) { thisWeek++; if (recurring) recurringThisWeek++; }
     if (monthKey(createdKey) === thisMonthKey) {
       thisMonth++; if (recurring) recurringThisMonth++;
@@ -138,8 +143,11 @@ function computeCounts(bookings: BokisBooking[]) {
   }
 
   return {
-    today, last24h, thisWeek, thisMonth, total, cancelled,
-    recurringToday, recurringLast24h, recurringThisWeek, recurringThisMonth, recurringTotal,
+    today, last24h, last24hToPrev24h, thisWeek, thisMonth, total, cancelled,
+    recurringToday, recurringLast24h, recurringPrev24h,
+    recurringThisWeek, recurringThisMonth, recurringTotal,
+    // Delta: hur många fler (eller färre) abonnemang senaste 24 tim vs 24-48h
+    recurringDeltaSinceYesterday: recurringLast24h - recurringPrev24h,
   };
 }
 
