@@ -127,13 +127,21 @@ function computeCounts(bookings: BokisBooking[]) {
     if (b.status === 'cancelled') cancelled++;
     const recurring = isRecurring(b);
     if (recurring) recurringTotal++;
-    const createdAt = b._creationTime ?? b.createdAt;
-    if (!createdAt) continue;
-    const createdKey = ymdSthlm(new Date(createdAt));
+    // Convex kan returnera _creationTime som number (ms) ELLER ISO-string
+    // via /api/query — normalisera till ms så jämförelsen mot dayAgo/twoDaysAgo
+    // faktiskt fungerar (buggen 2026-09-29: Martina bokat kl 08:28 idag men
+    // recurringLast24h = 0 pga sträng-vs-nummer-jämförelse).
+    const rawCreatedAt = b._creationTime ?? b.createdAt;
+    if (!rawCreatedAt) continue;
+    const createdMs = typeof rawCreatedAt === 'string'
+      ? Date.parse(rawCreatedAt)
+      : Number(rawCreatedAt);
+    if (!Number.isFinite(createdMs)) continue;
+    const createdKey = ymdSthlm(new Date(createdMs));
     if (createdKey === todayKey) { today++; if (recurring) recurringToday++; }
-    if (createdAt >= dayAgo) {
+    if (createdMs >= dayAgo) {
       last24h++; if (recurring) recurringLast24h++;
-    } else if (createdAt >= twoDaysAgo) {
+    } else if (createdMs >= twoDaysAgo) {
       last24hToPrev24h++; if (recurring) recurringPrev24h++;
     }
     if (createdKey >= weekStartKey) { thisWeek++; if (recurring) recurringThisWeek++; }
@@ -151,15 +159,23 @@ function computeCounts(bookings: BokisBooking[]) {
   };
 }
 
+/** Konverterar Convex _creationTime (kan vara ms-number eller ISO-string) till ms. */
+function toMs(x: number | string | null | undefined): number {
+  if (x == null) return 0;
+  if (typeof x === 'string') return Date.parse(x) || 0;
+  return Number(x) || 0;
+}
+
 /** De senaste N återkommande bokningarna för live-feed på dashboarden. */
 function latestRecurring(bookings: BokisBooking[], n: number) {
   return bookings
     .filter((b) => isRecurring(b) && b.status !== 'cancelled')
-    .sort((a, b) => (b._creationTime ?? b.createdAt ?? 0) - (a._creationTime ?? a.createdAt ?? 0))
+    .sort((a, b) => toMs(b._creationTime ?? b.createdAt) - toMs(a._creationTime ?? a.createdAt))
     .slice(0, n)
     .map((b) => ({
       id: b.id,
-      createdAt: b._creationTime ?? b.createdAt ?? null,
+      // Skicka som ms-number till frontend så 'X min sen' inte trasar med sträng
+      createdAt: toMs(b._creationTime ?? b.createdAt) || null,
       customerName:
         b.customerName ||
         [b.firstName, b.lastName].filter(Boolean).join(' ').trim() ||
