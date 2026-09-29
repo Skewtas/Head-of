@@ -117,7 +117,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       </div>
     `;
 
-    const recipients = Array.from(new Set([employeeEmail.toLowerCase(), 'mikaela.wigert@stodona.se']));
+    // Bara den anställde får signeringslänken. Arbetsgivaren får en separat,
+    // tydligt märkt kopia utan knapp — annars ser det ut som att mailet är
+    // riktat till arbetsgivaren ("Hej <anställd>") och länken leder till den
+    // anställdes signeringssida.
+    const recipients = [employeeEmail.toLowerCase()];
+    const copyRecipient = 'mikaela.wigert@stodona.se';
+    const copyHtml = `
+      <div style="font-family:Inter,Arial,sans-serif;color:#1a1a2e;line-height:1.6;max-width:560px;margin:0 auto;padding:24px;">
+        <div style="padding:12px 16px;background:#f5f1ea;border-radius:8px;font-size:13px;margin:0 0 16px;">
+          <strong>Kopia till dig.</strong> Signeringslänken har skickats till
+          <strong>${escapeHtml(employeeName)}</strong> (${escapeHtml(employeeEmail)}).
+          Du får ett eget mail med din signeringslänk som arbetsgivare när ${escapeHtml(contract.person.firstName)} har signerat.
+        </div>
+        <p style="margin:0;font-size:13px;color:#4b4a55;">Avtal: ${escapeHtml(contract.title)}</p>
+      </div>
+    `;
     const fromAddr = process.env.SMTP_FROM || 'info@stodona.se';
 
     let deliverResult: any = null;
@@ -135,6 +150,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       deliverError = e?.message || String(e);
     }
 
+    if (copyRecipient !== employeeEmail.toLowerCase()) {
+      try {
+        await deliverNewsletter({
+          newsletterId: `sign-copy-${id}-${employeeSigner.id}-${Date.now()}`,
+          recipients: [copyRecipient],
+          subject: `Kopia: signeringslänk skickad till ${employeeName}`,
+          htmlContent: copyHtml,
+          appUrl,
+          transactional: true,
+        });
+      } catch (e) {
+        console.error('[contract-send-for-signing] copy mail failed', e);
+      }
+    }
+
     // Kontrollera SPECIFIKT att den anställdes mail gick iväg — inte bara
     // Mikaelas kopia. En tidigare bugg lät oss räkna 'skickat' när bara
     // Mikaela fick mailet och den anställdes del blockerades tyst.
@@ -145,7 +175,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!mailSent) {
       return res.status(500).json({
         error: employeeMailFailed
-          ? `❌ Mailet gick INTE iväg till anställd (${employeeEmail}) — Mikaelas kopia kom fram men mottagaren blockerades.`
+          ? `❌ Mailet gick INTE iväg till anställd (${employeeEmail}) — mottagaren blockerades.`
           : '❌ Mailet gick inte iväg.',
         debug: {
           resendConfigured: !!process.env.RESEND_API_KEY,
@@ -170,7 +200,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       recipients,
       fromAddress: fromAddr,
       deliverResult,
-      note: `✓ Signeringslänk skickad till ${recipients.join(', ')} från ${fromAddr}.`,
+      note: `✓ Signeringslänk skickad till ${employeeEmail} från ${fromAddr} (kopia till ${copyRecipient}).`,
     });
   } catch (err: any) {
     console.error('[contract-send-for-signing]', err?.message, err?.stack);

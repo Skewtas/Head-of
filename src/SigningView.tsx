@@ -28,6 +28,8 @@ export default function SigningView() {
   const [accepted, setAccepted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
+  const [alreadySigned, setAlreadySigned] = useState(false);
+  const [allSigned, setAllSigned] = useState(false);
 
   useEffect(() => {
     if (!token) { setError('Ingen signeringstoken.'); setLoading(false); return; }
@@ -37,7 +39,8 @@ export default function SigningView() {
         const j = await r.json();
         if (!r.ok) throw new Error(j.error || 'Kunde inte hämta avtalet.');
         setData(j);
-        if (j.signer.status === 'SIGNED') setDone(true);
+        if (j.signer.status === 'SIGNED') { setDone(true); setAlreadySigned(true); }
+        if (j.contract.status === 'SIGNED') setAllSigned(true);
       } catch (e: any) {
         setError(e.message);
       } finally {
@@ -58,6 +61,7 @@ export default function SigningView() {
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || 'Signeringen misslyckades.');
+      setAllSigned(!!j.allSigned);
       setDone(true);
     } catch (e: any) {
       setError(e.message);
@@ -87,19 +91,34 @@ export default function SigningView() {
     );
   }
 
+  const isEmployer = data?.signer.signingOrder === 2;
+  const signerDisplayName = isEmployer
+    ? data?.signer.name
+    : `${data?.person?.firstName ?? ''} ${data?.person?.lastName ?? ''}`.trim();
+
   if (done) {
+    const signedAtText = data?.signer.signedAt ? new Date(data.signer.signedAt).toLocaleString('sv-SE') : 'nu';
     return (
       <div className="min-h-screen bg-brand-bg flex items-center justify-center p-6">
         <div className="max-w-md text-center">
           <div className="w-20 h-20 mx-auto bg-emerald-100 rounded-full flex items-center justify-center">
             <CheckCircle className="w-10 h-10 text-emerald-600" />
           </div>
-          <h1 className="mt-6 text-2xl font-serif text-brand-dark">Tack — avtalet är signerat!</h1>
+          <h1 className="mt-6 text-2xl font-serif text-brand-dark">
+            {alreadySigned ? 'Du har redan signerat det här avtalet' : 'Tack — avtalet är signerat!'}
+          </h1>
           <p className="mt-2 text-sm text-brand-muted">
-            Din signatur har registrerats {data?.signer.signedAt ? `${new Date(data.signer.signedAt).toLocaleString('sv-SE')}` : 'nu'}.
+            {data?.contract.title}
+          </p>
+          <p className="mt-2 text-sm text-brand-muted">
+            Din signatur{isEmployer ? ' som arbetsgivare' : ''} registrerades {signedAtText}.
           </p>
           <p className="mt-4 text-sm text-brand-muted">
-            När arbetsgivaren också har signerat får du en bekräftelse via mail. Du kan stänga denna sida.
+            {allSigned
+              ? 'Båda parter har signerat — avtalet är låst och klart. Du kan stänga denna sida.'
+              : isEmployer
+                ? 'Avtalet väntar nu på att den anställde signerar. Ni får båda en bekräftelse via mail när det är klart.'
+                : 'När arbetsgivaren också har signerat får du en bekräftelse via mail. Du kan stänga denna sida.'}
           </p>
         </div>
       </div>
@@ -128,7 +147,7 @@ export default function SigningView() {
           <div className="p-6 space-y-4 bg-brand-bg/20">
             <div className="flex items-center gap-2 text-sm text-brand-dark font-semibold">
               <Shield className="w-4 h-4 text-brand-accent" />
-              Bekräfta din identitet och signera
+              {isEmployer ? `Signera som arbetsgivare för ${data?.company.name}` : 'Bekräfta din identitet och signera'}
             </div>
             <p className="text-xs text-brand-muted">
               Genom att fylla i uppgifterna nedan och kryssa i rutan signerar du avtalet elektroniskt.
@@ -177,7 +196,8 @@ export default function SigningView() {
               />
               <span>
                 Jag har läst hela avtalet och godkänner det. Jag intygar att jag är
-                <strong> {data?.person?.firstName} {data?.person?.lastName}</strong>.
+                <strong> {signerDisplayName}</strong>
+                {isEmployer && <> och har rätt att teckna {data?.company.name}</>}.
               </span>
             </label>
 

@@ -108,22 +108,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'Fyll i namn, personnummer och mobilnummer.' });
     }
 
-    // Verifiera mot ContractPerson: BÅDE personnummer OCH telefon måste matcha.
-    // Generisk felmeddelande — visa inte vilken uppgift som är fel (säkerhet).
+    const isEmployer = signer.signingOrder === 2;
     const person = contract.person;
     const GENERIC_MISMATCH = 'Uppgifterna stämmer inte överens med mottagaren av avtalet. Kontrollera personnummer och telefonnummer.';
 
-    if (!person?.personalNumber || !person?.phone) {
-      return res.status(400).json({
-        error: 'Avtalets mottagare har inte personnummer och/eller telefon registrerat. Kontakta arbetsgivaren.',
-      });
-    }
-    const providedPnr = normalizePnr(body.personalNumber);
-    const expectedPnr = normalizePnr(person.personalNumber);
-    const providedPhone = normalizePhone(body.phone);
-    const expectedPhone = normalizePhone(person.phone);
-    if (providedPnr !== expectedPnr || providedPhone !== expectedPhone) {
-      return res.status(400).json({ error: GENERIC_MISMATCH });
+    if (isEmployer) {
+      // Arbetsgivarens personnummer/telefon finns inte i systemet — länken gick
+      // till firmatecknarens mail, så vi kräver att namnet matchar signeraren.
+      const norm = (x: string) => x.trim().toLowerCase().replace(/\s+/g, ' ');
+      if (norm(body.fullName) !== norm(signer.name)) {
+        return res.status(400).json({ error: `Namnet stämmer inte med firmatecknaren (${signer.name}).` });
+      }
+    } else {
+      // Verifiera mot ContractPerson: BÅDE personnummer OCH telefon måste matcha.
+      // Generisk felmeddelande — visa inte vilken uppgift som är fel (säkerhet).
+      if (!person?.personalNumber || !person?.phone) {
+        return res.status(400).json({
+          error: 'Avtalets mottagare har inte personnummer och/eller telefon registrerat. Kontakta arbetsgivaren.',
+        });
+      }
+      const providedPnr = normalizePnr(body.personalNumber);
+      const expectedPnr = normalizePnr(person.personalNumber);
+      const providedPhone = normalizePhone(body.phone);
+      const expectedPhone = normalizePhone(person.phone);
+      if (providedPnr !== expectedPnr || providedPhone !== expectedPhone) {
+        return res.status(400).json({ error: GENERIC_MISMATCH });
+      }
     }
 
     const ip = String(
