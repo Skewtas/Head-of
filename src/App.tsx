@@ -818,32 +818,6 @@ const OverviewView = () => {
         </Card>
       )}
 
-      {/* Main KPIs - 5 columns */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        {[
-          { icon: CalendarDays, label: 'Inbokade Jobb', value: stats.bookedJobsThisMonth, color: 'text-brand-accent' },
-          { icon: Clock, label: 'Timmar Totalt', value: fmt(Math.round(stats.totalHoursThisMonth)), color: 'text-brand-accent' },
-          { icon: TrendingUp, label: 'Intäkter (ex. moms)', value: `${fmt(Math.round(stats.totalRevenueExVat))} kr`, color: 'text-emerald-500' },
-          { icon: ClipboardList, label: 'Nya Arbetsordrar (AO)', value: stats.newWorkOrdersThisMonth, color: 'text-brand-accent' },
-          { icon: Users, label: 'Återk. Privat', value: stats.recurringPrivateClients, color: 'text-brand-accent' },
-          { icon: Building2, label: 'Återk. Företag', value: stats.recurringCompanyClients, color: 'text-brand-accent' },
-          { icon: Users, label: 'Personalbas', value: personalbas?.antalAktiva ?? stats.employees, color: 'text-brand-accent' },
-          { icon: CalendarDays, label: 'Bokningar Online', value: stats.onlineBookings, color: 'text-blue-500' },
-          { icon: RefreshCw, label: 'Follow Up Cleaning', value: stats.followUpCount, color: 'text-blue-500' },
-          { icon: AlertTriangle, label: 'Öppna Ärenden', value: stats.issues, color: 'text-amber-500' },
-        ].map((kpi, i) => (
-          <Card key={i}>
-            <CardContent className="p-4 flex flex-col items-center justify-center text-center">
-              <kpi.icon className={`w-5 h-5 ${kpi.color} mb-1.5`} />
-              <div className="text-2xl font-light text-brand-dark mb-0.5">
-                {stats.isLoading ? <RefreshCw className="w-5 h-5 animate-spin text-gray-400 mx-auto" /> : kpi.value}
-              </div>
-              <div className="text-[9px] text-brand-muted uppercase tracking-wider font-medium leading-tight">{kpi.label}</div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
       {/* LIVE — återkommande bokningar som just kommit in */}
       <Card>
         <CardContent className="p-5">
