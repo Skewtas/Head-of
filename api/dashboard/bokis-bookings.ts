@@ -101,15 +101,22 @@ function computeCounts(bookings: BokisBooking[]) {
   weekStart.setDate(weekStart.getDate() - 6);
   const weekStartKey = ymdSthlm(weekStart);
 
-  let today = 0;
+  // Rullande fönster istället för kalenderdag — så gårdagens bokning
+  // fortfarande syns kl 08:00 nästa morgon (Mikaelas fråga 2026-09-29:
+  // 5 abonnemang igår men Idag = 0). Nu räknar 'Senaste 24 tim' bakåt
+  // från just NU.
+  const nowMs = now.getTime();
+  const dayAgo = nowMs - 24 * 3600 * 1000;
+
+  let today = 0;              // kalenderdag (för bakåt-kompatibilitet)
+  let last24h = 0;            // rullande 24 tim
   let thisWeek = 0;
   let thisMonth = 0;
   let total = 0;
   let cancelled = 0;
 
-  // Återkommande = abonnemang (veckovis/varannan vecka osv). Engångs-bokningar
-  // räknas separat så vi ser den viktigare KPI:n (abonnemang = intäkt över tid).
   let recurringToday = 0;
+  let recurringLast24h = 0;
   let recurringThisWeek = 0;
   let recurringThisMonth = 0;
   let recurringTotal = 0;
@@ -123,6 +130,7 @@ function computeCounts(bookings: BokisBooking[]) {
     if (!createdAt) continue;
     const createdKey = ymdSthlm(new Date(createdAt));
     if (createdKey === todayKey) { today++; if (recurring) recurringToday++; }
+    if (createdAt >= dayAgo) { last24h++; if (recurring) recurringLast24h++; }
     if (createdKey >= weekStartKey) { thisWeek++; if (recurring) recurringThisWeek++; }
     if (monthKey(createdKey) === thisMonthKey) {
       thisMonth++; if (recurring) recurringThisMonth++;
@@ -130,8 +138,8 @@ function computeCounts(bookings: BokisBooking[]) {
   }
 
   return {
-    today, thisWeek, thisMonth, total, cancelled,
-    recurringToday, recurringThisWeek, recurringThisMonth, recurringTotal,
+    today, last24h, thisWeek, thisMonth, total, cancelled,
+    recurringToday, recurringLast24h, recurringThisWeek, recurringThisMonth, recurringTotal,
   };
 }
 

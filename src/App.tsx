@@ -420,8 +420,8 @@ const OverviewView = () => {
   };
   const [dailyDiff, setDailyDiff] = React.useState<DailyDiff | null>(null);
   const [bokisBookings, setBokisBookings] = React.useState<{
-    today: number; thisWeek: number; thisMonth: number; total: number; cancelled: number;
-    recurringToday: number; recurringThisWeek: number; recurringThisMonth: number; recurringTotal: number;
+    today: number; last24h?: number; thisWeek: number; thisMonth: number; total: number; cancelled: number;
+    recurringToday: number; recurringLast24h?: number; recurringThisWeek: number; recurringThisMonth: number; recurringTotal: number;
   } | null>(null);
   const [senasteAterkommande, setSenasteAterkommande] = React.useState<Array<{
     id: string; createdAt: number | null; customerName: string; city: string | null;
@@ -872,7 +872,7 @@ const OverviewView = () => {
           {/* KPI-rad över återkommande */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
             {[
-              { label: 'Idag', value: bokisBookings?.recurringToday ?? 0, accent: 'text-emerald-600' },
+              { label: 'Senaste 24 tim', value: bokisBookings?.recurringLast24h ?? bokisBookings?.recurringToday ?? 0, accent: 'text-emerald-600' },
               { label: 'Denna vecka', value: bokisBookings?.recurringThisWeek ?? 0, accent: 'text-brand-dark' },
               { label: 'Denna månad', value: bokisBookings?.recurringThisMonth ?? 0, accent: 'text-brand-dark' },
               { label: 'Totalt', value: bokisBookings?.recurringTotal ?? 0, accent: 'text-brand-muted' },
