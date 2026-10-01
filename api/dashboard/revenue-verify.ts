@@ -54,11 +54,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Hämta alla missioner för månaden (paginerat)
     const missioner: any[] = [];
+    const hamtaFel: Array<{ page: number; status: number; body: string }> = [];
     let page = 1;
     while (true) {
       const url = `${base}/missions?filter[startdate]=${monthStart}&filter[enddate]=${monthEnd}&page[size]=200&page[number]=${page}`;
       const r = await fetch(url, { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' } });
-      if (!r.ok) break;
+      if (!r.ok) {
+        hamtaFel.push({ page, status: r.status, body: (await r.text()).substring(0, 300) });
+        // Vänta kort och försök igen vid 429 rate-limit
+        if (r.status === 429 && page === 1) {
+          await new Promise((res) => setTimeout(res, 2000));
+          continue;
+        }
+        break;
+      }
       const j = await r.json() as any;
       const chunk = j?.data || [];
       missioner.push(...chunk);
@@ -163,6 +172,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.json({
       period: monthKey,
       fonster: `${monthStart} → ${monthEnd}`,
+      hamtaFel: hamtaFel.length ? hamtaFel : undefined,
       antalMissioner: missioner.length,
       summor: {
         bruttoTotal: Math.round(bruttoTotal),
