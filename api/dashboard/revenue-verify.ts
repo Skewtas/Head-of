@@ -88,9 +88,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         missionRevenue += radbelopp;
         missionHasBillable = true;
 
-        // Dublett-nyckel: arbetsorder + service-signatur
+        // Dublett-nyckel: arbetsorder + DATUM + service-signatur
+        // Datum är kritiskt — annars flaggas abonnemangsstädningar (4 ggr/mån
+        // med identiska rader) som 'dubletter'. Riktig dublett = två missioner
+        // SAMMA DAG samma arbetsorder med samma pris (som Matlådor-fallet).
         if (m.workorder?.id) {
-          const nyckel = `${m.workorder.id}|${svc.id}|${qty}|${price}|${discount}`;
+          const dag = (m.startdate || m.date || 'okänt-datum').slice(0, 10);
+          const nyckel = `${m.workorder.id}|${dag}|${svc.id}|${qty}|${price}|${discount}`;
           if (!dubletterMap.has(nyckel)) dubletterMap.set(nyckel, []);
           dubletterMap.get(nyckel)!.push({ missionId: m.id, m, svc, radbelopp });
           workorderNamn.set(m.workorder.id, {
@@ -123,18 +127,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    // Dubletter: grupper med > 1 rad
+    // Dubletter: grupper med > 1 rad (dvs samma arbetsorder + DATUM + service)
     const dubletter: any[] = [];
     let dublettExtra = 0;
     for (const [nyckel, gruppen] of dubletterMap.entries()) {
       if (gruppen.length < 2) continue;
-      const [workorderId, serviceId, qty, price] = nyckel.split('|').map(Number);
+      const parts = nyckel.split('|');
+      const workorderId = Number(parts[0]);
+      const dag = parts[1];
+      const serviceId = Number(parts[2]);
+      const qty = Number(parts[3]);
+      const price = Number(parts[4]);
       const wo = workorderNamn.get(workorderId);
       const first = gruppen[0];
       const extra = first.radbelopp * (gruppen.length - 1);
       dublettExtra += extra;
       dubletter.push({
         arbetsorder: workorderId,
+        datum: dag,
         klientNamn: wo?.klientNamn || 'Okänd',
         tjanst: first.svc.name || first.svc.title || `Service ${serviceId}`,
         qty,
