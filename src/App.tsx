@@ -485,6 +485,20 @@ const OverviewView = () => {
       .then((d) => d && !d.error && setSnittPerTjanst(d))
       .catch(() => {});
   }, []);
+  const [timVarning, setTimVarning] = React.useState<{
+    threshold: number; antalVarningar: number; totalOverskott: number;
+    varningar: Array<{
+      missionId: number; arbetsorder: number | null; klientNamn: string;
+      datum: string | null; tjanst: string; revenue: number;
+      schemaladaTimmar: number; antalStadare: number; effektivtPris: number; overskott: number;
+    }>;
+  } | null>(null);
+  React.useEffect(() => {
+    fetch('/api/dashboard/mission-timmar-varning?threshold=400&weeks=2')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && !d.error && setTimVarning(d))
+      .catch(() => {});
+  }, []);
   React.useEffect(() => {
     fetch('/api/dashboard/revenue-trend?days=7')
       .then((r) => (r.ok ? r.json() : null))
@@ -1012,6 +1026,58 @@ const OverviewView = () => {
                 })}
               </tbody>
             </table>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Timmar-varning — missioner där schemalagda timmar inte matchar priset */}
+      {timVarning && timVarning.antalVarningar > 0 && (
+        <Card>
+          <CardContent className="p-5 border-l-4 border-rose-500 bg-rose-50/40">
+            <div className="flex items-start gap-3 mb-3">
+              <AlertTriangle className="w-5 h-5 text-rose-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <h4 className="text-sm font-semibold text-rose-900">
+                  {timVarning.antalVarningar} missioner med för många schemalagda timmar
+                </h4>
+                <p className="text-[12px] text-rose-800 mt-0.5">
+                  Dessa missioner (nästa {Math.round(timVarning.varningar.length ? 14 : 14)} dagarna) har färre än <strong>{timVarning.threshold} kr/h</strong> effektivt pris
+                  — städaren har schemalagts fler timmar än kundens pris täcker.
+                  Totalt &quot;förlorar&quot; vi <strong>{new Intl.NumberFormat('sv-SE').format(timVarning.totalOverskott)} kr</strong> jämfört med målet.
+                </p>
+              </div>
+            </div>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-[10px] text-rose-900 uppercase tracking-wider border-b border-rose-200">
+                  <th className="text-left pb-1.5">Datum</th>
+                  <th className="text-left pb-1.5">Kund</th>
+                  <th className="text-left pb-1.5">Tjänst</th>
+                  <th className="text-right pb-1.5">Städare</th>
+                  <th className="text-right pb-1.5">Tim</th>
+                  <th className="text-right pb-1.5">Pris</th>
+                  <th className="text-right pb-1.5">kr/h</th>
+                  <th className="text-right pb-1.5">Fattas</th>
+                </tr>
+              </thead>
+              <tbody>
+                {timVarning.varningar.slice(0, 15).map((v) => (
+                  <tr key={v.missionId} className="border-b border-rose-100">
+                    <td className="py-1.5 text-brand-muted tabular-nums text-xs">{v.datum || '—'}</td>
+                    <td className="py-1.5 font-medium text-brand-dark">{v.klientNamn}</td>
+                    <td className="py-1.5 text-brand-muted text-xs">{v.tjanst}</td>
+                    <td className="py-1.5 text-right tabular-nums text-brand-muted">{v.antalStadare}</td>
+                    <td className="py-1.5 text-right tabular-nums text-brand-muted">{v.schemaladaTimmar} h</td>
+                    <td className="py-1.5 text-right tabular-nums text-brand-muted">{new Intl.NumberFormat('sv-SE').format(v.revenue)} kr</td>
+                    <td className="py-1.5 text-right tabular-nums font-semibold text-rose-700">{v.effektivtPris} kr/h</td>
+                    <td className="py-1.5 text-right tabular-nums text-rose-700">−{new Intl.NumberFormat('sv-SE').format(v.overskott)} kr</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="mt-3 text-[11px] text-rose-800 italic">
+              Fix: justera schemalagda tider i Timewave (ta bort någon städare, kortare pass) eller höj priset. OBS: hemstäd med RUT visas lågt — verkligt pris är dubbelt mot vad som räknas här.
+            </p>
           </CardContent>
         </Card>
       )}
