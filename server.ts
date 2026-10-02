@@ -25,6 +25,7 @@ import notesRouter from "./api/routes/notes.js";
 import jobsRouter from "./api/routes/jobs.js";
 import importRouter from "./api/routes/import.js";
 import opsRouter from "./api/routes/ops.js";
+import ekonomiRouter from "./api/routes/ekonomi.js";
 import { errorMiddleware } from "./api/_lib/errors.js";
 
 const app = express();
@@ -49,6 +50,7 @@ app.use("/api/notes", notesRouter);
 app.use("/api/jobs", jobsRouter);
 app.use("/api/import", importRouter);
 app.use("/api/ops", opsRouter);
+app.use("/api/ekonomi", ekonomiRouter);
 
 // In-memory store for tokens (for prototype purposes)
 // In a real app, store this securely in a database associated with a user session

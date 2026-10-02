@@ -1309,3 +1309,132 @@ model TrafikDagStatistik {
   @@map("site_traffic_daily")
 }
 
+
+// ============================================================================
+// EKONOMI — gemensam ekonomisk uppföljning för Stodona AB och Stodona
+// Services AB (läser från respektive bolags Fortnox, skriver aldrig dit).
+// Se docs/ekonomi/. Belopp lagras i öre. Datum som YYYY-MM-DD-text.
+// ============================================================================
+
+/// En Fortnox-anslutning per bolag. Token lagras krypterad (AES-256-GCM).
+model FinConnection {
+  companyId         String    @id @map("company_id")
+  tokenEnc          String?   @map("token_enc") @db.Text
+  scopes            String?
+  fortnoxName       String?   @map("fortnox_name")
+  fortnoxOrgNumber  String?   @map("fortnox_org_number")
+  connectedAt       DateTime? @map("connected_at")
+  connectedBy       String?   @map("connected_by")
+  lastAttemptAt     DateTime? @map("last_attempt_at")
+  lastSuccessAt     DateTime? @map("last_success_at")
+  lastError         String?   @map("last_error") @db.Text
+  lockedUntil       String?   @map("locked_until")
+  ledgerSyncedAt    DateTime? @map("ledger_synced_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  @@map("fin_connections")
+}
+
+/// Räkenskapsår per bolag med Fortnox egna saldon från senaste uttaget.
+model FinFiscalYear {
+  companyId  String    @map("company_id")
+  fyId       Int       @map("fy_id")
+  fromDate   String    @map("from_date")
+  toDate     String    @map("to_date")
+  importedAt DateTime? @map("imported_at")
+  balances   Json?     // YearBalances: ib, ub, res, psaldo, apiUb, apiVoucherCount
+
+  @@id([companyId, fyId])
+  @@map("fin_fiscal_years")
+}
+
+model FinAccount {
+  companyId   String   @map("company_id")
+  number      String
+  name        String
+  sieType     String?  @map("sie_type")
+  firstSeenAt DateTime @default(now()) @map("first_seen_at")
+
+  @@id([companyId, number])
+  @@map("fin_accounts")
+}
+
+/// Verifikation. Nyckeln (bolag, räkenskapsår, serie, nummer) gör importen idempotent.
+model FinVoucher {
+  companyId String @map("company_id")
+  fyId      Int    @map("fy_id")
+  series    String
+  number    Int
+  date      String
+  text      String @db.Text
+  rows      Json   // [{account, amount(öre, debet +), text?, costCenter?, project?}]
+  hash      String
+  refType   String? @map("ref_type")
+  refNumber String? @map("ref_number")
+
+  @@id([companyId, fyId, series, number])
+  @@index([companyId, date])
+  @@map("fin_vouchers")
+}
+
+/// Kund- och leverantörsfakturor: obetalda samt alla mot systerbolaget.
+model FinLedgerItem {
+  companyId          String  @map("company_id")
+  kind               String  // customer | supplier
+  docNumber          String  @map("doc_number")
+  externalRef        String  @map("external_ref")
+  counterpartyNumber String  @map("counterparty_number")
+  counterpartyName   String  @map("counterparty_name")
+  invoiceDate        String  @map("invoice_date")
+  dueDate            String  @map("due_date")
+  total              BigInt
+  balance            BigInt
+  currency           String
+  booked             Boolean
+  cancelled          Boolean
+  isCredit           Boolean @map("is_credit")
+
+  @@id([companyId, kind, docNumber])
+  @@map("fin_ledger_items")
+}
+
+/// Ändringar i redan importerad bokföring (rättelser, efterregistreringar, borttag).
+model FinChange {
+  id           Int      @id @default(autoincrement())
+  companyId    String   @map("company_id")
+  fyId         Int      @map("fy_id")
+  series       String
+  number       Int
+  type         String   // ny | andrad | borttagen
+  date         String
+  previousDate String?  @map("previous_date")
+  delta        Json
+  detectedAt   DateTime @default(now()) @map("detected_at")
+
+  @@index([companyId, date])
+  @@index([detectedAt(sort: Desc)])
+  @@map("fin_changes")
+}
+
+model FinImportRun {
+  id         Int       @id @default(autoincrement())
+  companyId  String    @map("company_id")
+  startedAt  DateTime  @default(now()) @map("started_at")
+  finishedAt DateTime? @map("finished_at")
+  status     String    // running | ok | failed
+  error      String?   @db.Text
+  stats      Json?
+
+  @@index([companyId, startedAt(sort: Desc)])
+  @@map("fin_import_runs")
+}
+
+/// Regler och beslut: kontomappning, interna regler, justeringar, periodstatus, kartläggning.
+model FinConfig {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt @map("updated_at")
+  updatedBy String?  @map("updated_by")
+
+  @@map("fin_config")
+}

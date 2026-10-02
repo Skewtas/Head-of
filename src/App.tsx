@@ -39,6 +39,7 @@ import {
   CalendarSearch,
   Target,
   ListChecks,
+  Landmark,
   FileText,
   Heart,
   MessageCircle
@@ -72,6 +73,7 @@ import PersonalbrevView from './PersonalbrevView';
 import OnlineBookingsTrend from './OnlineBookingsTrend';
 import SigningView from './SigningView';
 import ChatView from './ChatView';
+import EkonomiView from './EkonomiView';
 
 // Utility for Tailwind classes
 function cn(...inputs: ClassValue[]) {
@@ -2499,6 +2501,7 @@ export default function App() {
     { id: 'overview', label: 'ÖVERSIKT', icon: LayoutDashboard },
     { id: 'schedule2', label: 'SCHEMA', icon: CalendarDays },
     { id: 'ops', label: 'VECKOUPPFÖLJNING', icon: ListChecks },
+    { id: 'ekonomi', label: 'EKONOMI', icon: Landmark },
     { id: 'contracts', label: 'AVTAL', icon: FileText },
     // Dold: HR — inga utskick ska ske än, tom vy förvirrar.
     // { id: 'hr', label: 'HR', icon: Heart },
@@ -2596,6 +2599,7 @@ export default function App() {
               {activeTab === 'personalbrev' && <PersonalbrevView />}
               {activeTab === 'import' && <ImportView />}
               {activeTab === 'chatt' && <ChatView />}
+              {activeTab === 'ekonomi' && <EkonomiView />}
             </div>
           </main>
         </div>
