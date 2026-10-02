@@ -1078,7 +1078,7 @@ const OverviewView = () => {
               </tbody>
             </table>
             <p className="mt-3 text-[11px] text-rose-800 italic">
-              Fix: justera schemalagda tider i Timewave (ta bort någon städare, kortare pass) eller höj priset. OBS: hemstäd med RUT visas lågt — verkligt pris är dubbelt mot vad som räknas här.
+              Fix: justera schemalagda tider i Timewave (ta bort en städare, korta pass) eller höj priset på avtalet. Alla priser är ex moms.
             </p>
           </CardContent>
         </Card>
