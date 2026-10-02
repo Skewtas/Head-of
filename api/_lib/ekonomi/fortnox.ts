@@ -249,6 +249,18 @@ export async function fortnoxList<T = any>(companyId: CompanyId, path: string, l
 
 /** Hämta SIE-fil (typ 4 = verifikationer, typ 2 = periodsaldon) för ett räkenskapsår. */
 export async function fortnoxSie(companyId: CompanyId, type: 2 | 4, fyId: number): Promise<Uint8Array> {
-  const resp = await request(companyId, withQuery(`/sie/${type}`, { financialyear: fyId, financialYear: fyId }));
-  return new Uint8Array(await resp.arrayBuffer());
+  // Fortnox dokumentation anger parametern som "financialYear", medan övriga
+  // ändpunkter använder "financialyear". Båda samtidigt avvisas (400), så de
+  // prövas en i taget. Att rätt år kom tillbaka kontrolleras mot #RAR vid importen.
+  let lastError: unknown;
+  for (const name of ['financialyear', 'financialYear']) {
+    try {
+      const resp = await request(companyId, withQuery(`/sie/${type}`, { [name]: fyId }));
+      return new Uint8Array(await resp.arrayBuffer());
+    } catch (err) {
+      if (!(err instanceof FortnoxError) || err.status !== 400) throw err;
+      lastError = err;
+    }
+  }
+  throw lastError;
 }
