@@ -50,6 +50,22 @@
     {
       "path": "/api/dashboard/save-daily-snapshot",
       "schedule": "55 21 * * *"
+    },
+    {
+      "path": "/api/ekonomi/cron-sync?company=stodona_ab&years=current",
+      "schedule": "30 3 * * *"
+    },
+    {
+      "path": "/api/ekonomi/cron-sync?company=stodona_services&years=current",
+      "schedule": "35 3 * * *"
+    },
+    {
+      "path": "/api/ekonomi/cron-sync?company=stodona_ab&years=previous",
+      "schedule": "40 3 * * *"
+    },
+    {
+      "path": "/api/ekonomi/cron-sync?company=stodona_services&years=previous",
+      "schedule": "45 3 * * *"
     }
   ],
   "rewrites": [
@@ -72,6 +88,7 @@
     { "source": "/api/hr/:path*", "destination": "/api/hf-handler" },
     { "source": "/api/personalbrev/:path*", "destination": "/api/hf-handler" },
     { "source": "/api/admin/:path*", "destination": "/api/hf-handler" },
+    { "source": "/api/ekonomi/:path*", "destination": "/api/hf-handler" },
     { "source": "/((?!api/|assets/).*)", "destination": "/index.html" }
   ]
 }
