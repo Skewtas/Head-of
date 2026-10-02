@@ -52,6 +52,10 @@
       "schedule": "55 21 * * *"
     },
     {
+      "path": "/api/dashboard/snittpris-weekly-email",
+      "schedule": "0 6 * * 1"
+    },
+    {
       "path": "/api/ekonomi/cron-sync?company=stodona_ab&years=current",
       "schedule": "30 3 * * *"
     },
