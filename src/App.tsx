@@ -464,6 +464,27 @@ const OverviewView = () => {
       comparedTo: string | null;
     }>;
   } | null>(null);
+  const [snittPerTjanst, setSnittPerTjanst] = React.useState<{
+    period: string;
+    totalSnittKrPerTim: number | null;
+    totalRevenue: number;
+    totalTimmar: number;
+    huvudtjanster: Array<{
+      tjanst: string;
+      antalMissioner: number;
+      totalRevenue: number;
+      totalTimmar: number;
+      snittKrPerTim: number | null;
+      snittPrisPerMission: number;
+    }>;
+    tillagg: Array<{ tjanst: string; antalMissioner: number; totalRevenue: number }>;
+  } | null>(null);
+  React.useEffect(() => {
+    fetch('/api/dashboard/snittpris-per-tjanst')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && !d.error && setSnittPerTjanst(d))
+      .catch(() => {});
+  }, []);
   React.useEffect(() => {
     fetch('/api/dashboard/revenue-trend?days=7')
       .then((r) => (r.ok ? r.json() : null))
@@ -991,6 +1012,84 @@ const OverviewView = () => {
                 })}
               </tbody>
             </table>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Snittpris per tjänstetyp — se vilken tjänst som drar ner / lyfter snittet */}
+      {snittPerTjanst && snittPerTjanst.huvudtjanster.length > 0 && (
+        <Card>
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+              <div>
+                <h4 className="text-sm font-semibold text-brand-dark">Snittpris per tjänstetyp</h4>
+                <p className="text-[11px] text-brand-muted mt-0.5">
+                  {snittPerTjanst.period} · {snittPerTjanst.antalMissioner ?? snittPerTjanst.huvudtjanster.reduce((n, r) => n + r.antalMissioner, 0)} missioner · räknar bort sjuk/ledig + tillägg visas separat
+                </p>
+              </div>
+              {snittPerTjanst.totalSnittKrPerTim != null && (
+                <div className="text-right">
+                  <div className="text-[10px] uppercase tracking-wide text-brand-muted">Totalt snitt</div>
+                  <div className={`text-2xl font-semibold tabular-nums ${
+                    snittPerTjanst.totalSnittKrPerTim >= 550 ? 'text-emerald-600' :
+                    snittPerTjanst.totalSnittKrPerTim >= 450 ? 'text-amber-600' : 'text-red-600'
+                  }`}>
+                    {new Intl.NumberFormat('sv-SE').format(snittPerTjanst.totalSnittKrPerTim)} kr/h
+                  </div>
+                  <div className="text-[11px] text-brand-muted">mål 550 kr/h</div>
+                </div>
+              )}
+            </div>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-[10px] text-brand-muted uppercase tracking-wider border-b border-gray-200">
+                  <th className="text-left pb-2">Tjänst</th>
+                  <th className="text-right pb-2">Antal</th>
+                  <th className="text-right pb-2">Timmar</th>
+                  <th className="text-right pb-2">Intäkter</th>
+                  <th className="text-right pb-2">Snitt kr/h</th>
+                </tr>
+              </thead>
+              <tbody>
+                {snittPerTjanst.huvudtjanster.map((r) => {
+                  const snitt = r.snittKrPerTim;
+                  const cls = snitt == null ? 'text-gray-400' :
+                    snitt >= 550 ? 'text-emerald-700 font-semibold' :
+                    snitt >= 450 ? 'text-amber-700 font-semibold' :
+                    'text-red-700 font-semibold';
+                  return (
+                    <tr key={r.tjanst} className="border-b border-gray-100 hover:bg-gray-50/50">
+                      <td className="py-2 text-brand-dark">{r.tjanst}</td>
+                      <td className="py-2 text-right text-brand-muted tabular-nums">{r.antalMissioner}</td>
+                      <td className="py-2 text-right text-brand-muted tabular-nums">{r.totalTimmar} h</td>
+                      <td className="py-2 text-right text-brand-dark tabular-nums">
+                        {new Intl.NumberFormat('sv-SE').format(r.totalRevenue)} kr
+                      </td>
+                      <td className={`py-2 text-right tabular-nums ${cls}`}>
+                        {snitt == null ? '—' : `${new Intl.NumberFormat('sv-SE').format(snitt)} kr/h`}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            {snittPerTjanst.tillagg.length > 0 && (
+              <div className="mt-4 pt-3 border-t border-gray-100">
+                <div className="text-[10px] uppercase tracking-wider text-brand-muted font-semibold mb-2">
+                  Tillägg (räknas inte i snittet — t.ex. framkörning, följdstädning, material)
+                </div>
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-brand-muted">
+                  {snittPerTjanst.tillagg.map((t) => (
+                    <span key={t.tjanst}>
+                      {t.tjanst}: <strong className="text-brand-dark tabular-nums">{new Intl.NumberFormat('sv-SE').format(t.totalRevenue)} kr</strong> ({t.antalMissioner} st)
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+            <p className="mt-4 text-[11px] text-brand-muted italic">
+              Grön ≥550 kr/h (mål), gul 450-549, röd &lt;450. Att höja: korta pass → framkörningsavgift, abonnemang &gt;1 år gamla → indexera, flera städare på ett jobb → kolla fakturerings-logiken.
+            </p>
           </CardContent>
         </Card>
       )}
