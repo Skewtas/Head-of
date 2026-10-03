@@ -124,7 +124,11 @@ async function berakna(days: number) {
   }
 
   const rader = [...perStadare.values()]
-    .filter((s) => s.missioner.size >= 3 && s.totalTimmar > 1)
+    // Filter: >= 3 missioner, > 1h totalt
+    // Filtrera även bort "ägare/schemaläggare" som bokas symboliskt — om snitt
+    // > 2000 kr/h är det inte en riktig städare utan nån som får mail-slurps
+    // (Mikaela har 12 miss på 6,2h = 6986 kr/h, inte riktig städar-data)
+    .filter((s) => s.missioner.size >= 3 && s.totalTimmar > 1 && (s.totalRevenueDel / s.totalTimmar) < 2000)
     .map((s) => ({
       employeeId: s.employeeId,
       namn: s.namn,
