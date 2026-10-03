@@ -501,6 +501,27 @@ const OverviewView = () => {
       .then((d) => d && !d.error && setTimVarning(d))
       .catch(() => {});
   }, []);
+  const [stadareSnitt, setStadareSnitt] = React.useState<{
+    period: string;
+    antalStadare: number;
+    bottom20: Array<{
+      employeeId: number; namn: string; antalMissioner: number;
+      totalTimmar: number; totalRevenue: number; snittKrPerTim: number;
+      antalLagaPass: number; andelLagaProc: number;
+    }>;
+    top20: Array<{
+      employeeId: number; namn: string; antalMissioner: number;
+      totalTimmar: number; totalRevenue: number; snittKrPerTim: number;
+      antalLagaPass: number; andelLagaProc: number;
+    }>;
+  } | null>(null);
+  const [visaTopStadare, setVisaTopStadare] = React.useState(false);
+  React.useEffect(() => {
+    fetch('/api/dashboard/stadare-snittpris?days=30')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && !d.error && setStadareSnitt(d))
+      .catch(() => {});
+  }, []);
   React.useEffect(() => {
     fetch('/api/dashboard/revenue-trend?days=7')
       .then((r) => (r.ok ? r.json() : null))
@@ -1157,6 +1178,77 @@ const OverviewView = () => {
             )}
             <p className="mt-4 text-[11px] text-brand-muted italic">
               Grön ≥550 kr/h (mål), gul 450-549, röd &lt;450. Att höja: korta pass → framkörningsavgift, abonnemang &gt;1 år gamla → indexera, flera städare på ett jobb → kolla fakturerings-logiken.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Städar-snittpris — vilka städare som jobbar på missioner med lågt snitt */}
+      {stadareSnitt && stadareSnitt.bottom20.length > 0 && (
+        <Card>
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+              <div>
+                <h4 className="text-sm font-semibold text-brand-dark">Snittpris per städare</h4>
+                <p className="text-[11px] text-brand-muted mt-0.5">
+                  Senaste 30 dagarna · {stadareSnitt.antalStadare} aktiva städare · snitt är per manna-timme
+                </p>
+              </div>
+              <div className="flex items-center gap-1 text-xs">
+                <button
+                  onClick={() => setVisaTopStadare(false)}
+                  className={`px-2.5 py-1 rounded ${!visaTopStadare ? 'bg-red-100 text-red-900 font-semibold' : 'bg-white border border-gray-200 text-brand-muted'}`}
+                >
+                  Bottom 20
+                </button>
+                <button
+                  onClick={() => setVisaTopStadare(true)}
+                  className={`px-2.5 py-1 rounded ${visaTopStadare ? 'bg-emerald-100 text-emerald-900 font-semibold' : 'bg-white border border-gray-200 text-brand-muted'}`}
+                >
+                  Top 20
+                </button>
+              </div>
+            </div>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-[10px] text-brand-muted uppercase tracking-wider border-b border-gray-200">
+                  <th className="text-left pb-2">Städare</th>
+                  <th className="text-right pb-2">Missioner</th>
+                  <th className="text-right pb-2">Timmar</th>
+                  <th className="text-right pb-2">Intäkt-del</th>
+                  <th className="text-right pb-2">Snitt kr/h</th>
+                  <th className="text-right pb-2">Låga pass</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(visaTopStadare ? stadareSnitt.top20 : stadareSnitt.bottom20).map((s) => {
+                  const snittCls = s.snittKrPerTim >= 550 ? 'text-emerald-700 font-semibold' :
+                    s.snittKrPerTim >= 400 ? 'text-amber-700 font-semibold' :
+                    'text-red-700 font-semibold';
+                  const lagaCls = s.andelLagaProc >= 40 ? 'text-red-700 font-semibold' :
+                    s.andelLagaProc >= 20 ? 'text-amber-700' : 'text-brand-muted';
+                  return (
+                    <tr key={s.employeeId} className="border-b border-gray-100 hover:bg-gray-50/50">
+                      <td className="py-2 text-brand-dark">{s.namn}</td>
+                      <td className="py-2 text-right text-brand-muted tabular-nums">{s.antalMissioner}</td>
+                      <td className="py-2 text-right text-brand-muted tabular-nums">{s.totalTimmar} h</td>
+                      <td className="py-2 text-right text-brand-muted tabular-nums">
+                        {new Intl.NumberFormat('sv-SE').format(s.totalRevenue)} kr
+                      </td>
+                      <td className={`py-2 text-right tabular-nums ${snittCls}`}>
+                        {new Intl.NumberFormat('sv-SE').format(s.snittKrPerTim)} kr/h
+                      </td>
+                      <td className={`py-2 text-right tabular-nums text-xs ${lagaCls}`}>
+                        {s.antalLagaPass}/{s.antalMissioner} ({s.andelLagaProc}%)
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <p className="mt-3 text-[11px] text-brand-muted italic">
+              <strong>"Låga pass"</strong> = antal missioner städaren varit med på där hela missionens snitt är &lt; 300 kr/h.
+              Hög andel = de schemaläggs ofta på pass med dåligt pris. Kan vara en kundgrupp med gamla avtal, inte nödvändigtvis städarens fel.
             </p>
           </CardContent>
         </Card>
