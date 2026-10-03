@@ -23,7 +23,10 @@ const RECIPIENTS = (
 
 const nonBillableServiceIds = new Set([3, 7, 401]);
 const TARGET_KR_PER_H = 550;
-const WARN_THRESHOLD = 400;
+// Varning triggar när snitt < 300 kr/h (räknat per manna-timme — dvs 2 städare × 2h = 4h).
+// 400 kr/h gav 135 varningar vilket blev brus. 300 kr/h fångar bara de riktigt
+// låga där nästan säkert något är fel (fel schemaläggning eller mycket gammalt avtal).
+const WARN_THRESHOLD = 300;
 
 function ymd(d: Date): string { return d.toISOString().slice(0, 10); }
 function escapeH(s: string): string { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
@@ -122,16 +125,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Månadens kund-aggregering (abonnemang): använd senaste 30 dagar
     const kundAggStart = new Date(now); kundAggStart.setDate(kundAggStart.getDate() - 30);
 
-    // Hämta: senaste 4 veckor + nästa 7 dagar
-    const [bakatMissions, framatMissions] = await Promise.all([
-      hamtaMissioner(ymd(fourWeeksStart), ymd(now), token),
+    // Timewave missions-list ger inte startdate på top-level → vi kan inte
+    // filtrera i kod. Lösning: separata API-anrop per period (URL:en filtrerar).
+    const [veckoMissions, fyraVMissions, framatMissions] = await Promise.all([
+      hamtaMissioner(ymd(lastWeekStart), ymd(lastWeekEnd), token),
+      hamtaMissioner(ymd(fourWeeksStart), ymd(lastWeekEnd), token),
       hamtaMissioner(ymd(now), ymd(next7End), token),
     ]);
-    const bakat = bakatMissions.map(parseMission);
+    const veckoParsed = veckoMissions.map(parseMission);
+    const bakat = fyraVMissions.map(parseMission);
     const framat = framatMissions.map(parseMission);
 
-    // Snitt: förra veckan + 4-veckors-rullande
-    const forraVeckan = snittPerVecka(bakat, lastWeekStart, lastWeekEnd);
+    const forraVeckan = { rev: 0, tim: 0, snitt: 0 };
+    for (const m of veckoParsed) {
+      if (m.timmar > 0) { forraVeckan.rev += m.revenue; forraVeckan.tim += m.timmar; }
+    }
+    forraVeckan.snitt = forraVeckan.tim > 0 ? forraVeckan.rev / forraVeckan.tim : 0;
+
     const fyraVeckor = { rev: 0, tim: 0, snitt: 0 };
     for (const m of bakat) {
       if (m.timmar > 0) { fyraVeckor.rev += m.revenue; fyraVeckor.tim += m.timmar; }
