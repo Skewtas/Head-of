@@ -56,6 +56,10 @@
       "schedule": "0 6 * * 1"
     },
     {
+      "path": "/api/dashboard/kommande-vecka-email",
+      "schedule": "0 17 * * 0"
+    },
+    {
       "path": "/api/ekonomi/cron-sync?company=stodona_ab&years=current",
       "schedule": "30 3 * * *"
     },
