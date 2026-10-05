@@ -276,6 +276,109 @@ const fmt = (val: number) => new Intl.NumberFormat('sv-SE').format(val);
  * Visar label, aktuellt värde / mål (unit), procent, progressbar och
  * dygnsförändring om diff finns.
  */
+function GoalsModal({
+  goals, currentMonthName, onClose, onSaved,
+}: {
+  goals: {
+    month: string;
+    bookedRevenue: number; avgPricePerHour: number;
+    recurringPrivateClients: number; recurringCompanyClients: number;
+    staffCount: number; onlineBookings: number;
+  } | null;
+  currentMonthName: string;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const d = goals || {
+    month: '', bookedRevenue: 850000, avgPricePerHour: 550,
+    recurringPrivateClients: 250, recurringCompanyClients: 50,
+    staffCount: 20, onlineBookings: 60,
+  };
+  const [bookedRevenue, setBookedRevenue] = React.useState<number>(d.bookedRevenue);
+  const [avgPricePerHour, setAvgPricePerHour] = React.useState<number>(d.avgPricePerHour);
+  const [recurringPrivateClients, setRecurringPrivateClients] = React.useState<number>(d.recurringPrivateClients);
+  const [recurringCompanyClients, setRecurringCompanyClients] = React.useState<number>(d.recurringCompanyClients);
+  const [staffCount, setStaffCount] = React.useState<number>(d.staffCount);
+  const [onlineBookings, setOnlineBookings] = React.useState<number>(d.onlineBookings);
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  const spara = async () => {
+    setSaving(true); setError(null);
+    try {
+      const r = await fetch('/api/dashboard/goals', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          month: d.month,
+          bookedRevenue, avgPricePerHour,
+          recurringPrivateClients, recurringCompanyClients,
+          staffCount, onlineBookings,
+        }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j?.error || `${r.status}`);
+      onSaved();
+    } catch (e: any) {
+      setError(e?.message ?? 'Kunde inte spara');
+    } finally { setSaving(false); }
+  };
+
+  const Row = ({ label, value, setValue, unit, step = 1 }: {
+    label: string; value: number; setValue: (n: number) => void; unit: string; step?: number;
+  }) => (
+    <div>
+      <label className="block text-xs font-semibold text-brand-muted mb-1 uppercase tracking-wide">{label}</label>
+      <div className="flex items-center gap-2">
+        <input
+          type="number"
+          value={value}
+          step={step}
+          onChange={(e) => setValue(Number(e.target.value) || 0)}
+          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm tabular-nums text-right"
+        />
+        <span className="text-sm text-brand-muted w-16">{unit}</span>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl p-6" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start justify-between mb-5">
+          <div>
+            <h3 className="text-lg font-serif text-brand-dark">Ändra månadsmål</h3>
+            <p className="text-xs text-brand-muted mt-1">{currentMonthName} ({d.month})</p>
+          </div>
+          <button onClick={onClose} className="text-brand-muted hover:text-brand-dark text-xl leading-none">×</button>
+        </div>
+        <div className="space-y-4">
+          <Row label="Bokad försäljning" value={bookedRevenue} setValue={setBookedRevenue} unit="kr" step={10000} />
+          <Row label="Snittpris" value={avgPricePerHour} setValue={setAvgPricePerHour} unit="kr/h" step={10} />
+          <Row label="Återkommande — privat" value={recurringPrivateClients} setValue={setRecurringPrivateClients} unit="st" />
+          <Row label="Återkommande — företag" value={recurringCompanyClients} setValue={setRecurringCompanyClients} unit="st" />
+          <Row label="Personalbas" value={staffCount} setValue={setStaffCount} unit="st" />
+          <Row label="Bokningar online" value={onlineBookings} setValue={setOnlineBookings} unit="st" />
+        </div>
+        {error && (
+          <div className="mt-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-2">{error}</div>
+        )}
+        <div className="mt-6 flex justify-end gap-2">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-brand-muted hover:text-brand-dark">Avbryt</button>
+          <button
+            onClick={spara}
+            disabled={saving}
+            className="px-5 py-2 bg-brand-dark text-white rounded-lg text-sm font-semibold hover:bg-brand-dark/90 disabled:opacity-50"
+          >
+            {saving ? 'Sparar…' : 'Spara mål'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function KpiGoalRow({
   label, actual, goal, unit, diff, todayCount, hasSnapshot, revenueExVat,
 }: {
@@ -501,6 +604,22 @@ const OverviewView = () => {
       .then((d) => d && !d.error && setTimVarning(d))
       .catch(() => {});
   }, []);
+  const [goals, setGoals] = React.useState<{
+    month: string;
+    bookedRevenue: number; avgPricePerHour: number;
+    recurringPrivateClients: number; recurringCompanyClients: number;
+    staffCount: number; onlineBookings: number;
+    updatedAt: string | null; updatedBy: string | null; isDefault: boolean;
+  } | null>(null);
+  const [goalsModalOpen, setGoalsModalOpen] = React.useState(false);
+  const laddaGoals = React.useCallback(() => {
+    fetch('/api/dashboard/goals')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && !d.error && setGoals(d))
+      .catch(() => {});
+  }, []);
+  React.useEffect(() => { laddaGoals(); }, [laddaGoals]);
+
   const [stadareSnitt, setStadareSnitt] = React.useState<{
     period: string;
     antalStadare: number;
@@ -810,15 +929,36 @@ const OverviewView = () => {
       {/* Månadsmål — ligger alltid överst så du ser målen direkt när sidan öppnas */}
       <Card>
         <CardContent className="p-5">
-          <h4 className="text-sm font-semibold text-brand-dark mb-4">Månadsmål — {currentMonthName}</h4>
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+            <div>
+              <h4 className="text-sm font-semibold text-brand-dark">Månadsmål — {currentMonthName}</h4>
+              {goals && !goals.isDefault && goals.updatedBy && (
+                <p className="text-[11px] text-brand-muted mt-0.5">
+                  Senast ändrat av {goals.updatedBy}
+                  {goals.updatedAt ? ` · ${new Date(goals.updatedAt).toLocaleDateString('sv-SE')}` : ''}
+                </p>
+              )}
+              {goals?.isDefault && (
+                <p className="text-[11px] text-amber-700 mt-0.5">
+                  Standardmål används — klicka "Ändra mål" för att sätta egna för denna månad
+                </p>
+              )}
+            </div>
+            <button
+              onClick={() => setGoalsModalOpen(true)}
+              className="text-xs px-3 py-1.5 border border-gray-300 text-brand-dark rounded-lg hover:bg-gray-50"
+            >
+              ✏️ Ändra mål
+            </button>
+          </div>
           <div className="space-y-4">
             {[
-              { label: 'Bokad försäljning', actual: stats.totalRevenueExVat, goal: 850000, unit: 'kr', diff: dailyDiff?.diff?.bookedRevenue ?? null },
-              { label: 'Snittpris', actual: stats.avgPricePerHour, goal: 550, unit: 'kr/h', diff: dailyDiff?.diff?.avgPricePerHour ?? null },
-              { label: 'Återkommande kunder — privat', actual: stats.recurringPrivateClients, goal: 250, unit: 'st', diff: dailyDiff?.diff?.recurringPrivateClients ?? null, revenueExVat: stats.recurringPrivateRevenue },
-              { label: 'Återkommande kunder — företag', actual: stats.recurringCompanyClients, goal: 50, unit: 'st', diff: dailyDiff?.diff?.recurringCompanyClients ?? null, revenueExVat: stats.recurringCompanyRevenue },
-              { label: 'Personalbas (aktiva i Timewave)', actual: personalbas?.antalAktiva ?? stats.employees, goal: 20, unit: 'st', diff: dailyDiff?.diff?.staffCount ?? null },
-              { label: 'Bokningar online (Bokis)', actual: bokisBookings?.thisMonth ?? 0, goal: 60, unit: 'st', diff: null, todayCount: bokisBookings?.today ?? null },
+              { label: 'Bokad försäljning', actual: stats.totalRevenueExVat, goal: goals?.bookedRevenue ?? 850000, unit: 'kr', diff: dailyDiff?.diff?.bookedRevenue ?? null },
+              { label: 'Snittpris', actual: stats.avgPricePerHour, goal: goals?.avgPricePerHour ?? 550, unit: 'kr/h', diff: dailyDiff?.diff?.avgPricePerHour ?? null },
+              { label: 'Återkommande kunder — privat', actual: stats.recurringPrivateClients, goal: goals?.recurringPrivateClients ?? 250, unit: 'st', diff: dailyDiff?.diff?.recurringPrivateClients ?? null, revenueExVat: stats.recurringPrivateRevenue },
+              { label: 'Återkommande kunder — företag', actual: stats.recurringCompanyClients, goal: goals?.recurringCompanyClients ?? 50, unit: 'st', diff: dailyDiff?.diff?.recurringCompanyClients ?? null, revenueExVat: stats.recurringCompanyRevenue },
+              { label: 'Personalbas (aktiva i Timewave)', actual: personalbas?.antalAktiva ?? stats.employees, goal: goals?.staffCount ?? 20, unit: 'st', diff: dailyDiff?.diff?.staffCount ?? null },
+              { label: 'Bokningar online (Bokis)', actual: bokisBookings?.thisMonth ?? 0, goal: goals?.onlineBookings ?? 60, unit: 'st', diff: null, todayCount: bokisBookings?.today ?? null },
             ].map((item, i) => (
               <KpiGoalRow key={i} {...item} hasSnapshot={!!dailyDiff?.previous} />
             ))}
@@ -830,6 +970,16 @@ const OverviewView = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* Modal för att ändra mål */}
+      {goalsModalOpen && (
+        <GoalsModal
+          goals={goals}
+          currentMonthName={currentMonthName}
+          onClose={() => setGoalsModalOpen(false)}
+          onSaved={() => { setGoalsModalOpen(false); laddaGoals(); }}
+        />
+      )}
 
       {/* Dublett-larm — flaggar arbetsordrar med identiska missioner i Timewave */}
       {dubletter && dubletter.antalDubletter > 0 && (

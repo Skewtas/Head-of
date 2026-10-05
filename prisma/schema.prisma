@@ -1438,3 +1438,22 @@ model FinConfig {
 
   @@map("fin_config")
 }
+
+/**
+ * Månadsmål — ett rad per månad per KPI. Mikaela kan ändra i head-of UI
+ * via /api/dashboard/goals. Default-värden används när ingen rad finns.
+ */
+model MonthlyGoal {
+  id                       Int      @id @default(autoincrement())
+  month                    String   @unique // "2026-10"
+  bookedRevenue            Int      @map("booked_revenue")
+  avgPricePerHour          Int      @map("avg_price_per_hour")
+  recurringPrivateClients  Int      @map("recurring_private_clients")
+  recurringCompanyClients  Int      @map("recurring_company_clients")
+  staffCount               Int      @map("staff_count")
+  onlineBookings           Int      @map("online_bookings")
+  updatedAt                DateTime @updatedAt @map("updated_at")
+  updatedBy                String?  @map("updated_by")
+
+  @@map("monthly_goals")
+}
