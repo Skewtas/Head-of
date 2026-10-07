@@ -1,8 +1,14 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { saveFortnoxTokens, FortnoxTokens } from './_lib/fortnoxAuth.js';
 
-const FORTNOX_CLIENT_ID = "EojgbHJg0L7C";
-const FORTNOX_CLIENT_SECRET = "PqB4oT2hYj";
+// Fortnox OAuth-uppgifter läses från miljövariabler (aldrig hårdkodade)
+const requireFortnoxEnv = (name: 'FORTNOX_CLIENT_ID' | 'FORTNOX_CLIENT_SECRET'): string => {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(`Miljövariabeln ${name} saknas. Lägg till den i .env lokalt och i Vercel.`);
+  }
+  return value;
+};
 const FORTNOX_TOKEN_URL = "https://apps.fortnox.se/oauth-v1/token";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -26,7 +32,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       redirect_uri: redirectUri,
     });
 
-    const authHeader = Buffer.from(`${FORTNOX_CLIENT_ID}:${FORTNOX_CLIENT_SECRET}`).toString('base64');
+    const authHeader = Buffer.from(`${requireFortnoxEnv('FORTNOX_CLIENT_ID')}:${requireFortnoxEnv('FORTNOX_CLIENT_SECRET')}`).toString('base64');
 
     const tokenResp = await fetch(FORTNOX_TOKEN_URL, {
       method: "POST",

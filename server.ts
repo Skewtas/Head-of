@@ -370,8 +370,14 @@ const forceRefreshTimewaveToken = async (): Promise<string> => {
 
 // ==================== FORTNOX API INTEGRATION ====================
 
-const FORTNOX_CLIENT_ID = "EojgbHJg0L7C";
-const FORTNOX_CLIENT_SECRET = "rV7VR7Klt2MrlwFKxuzf2rYUE0oCRB5F";
+// Fortnox OAuth-uppgifter läses från miljövariabler (aldrig hårdkodade)
+const requireFortnoxEnv = (name: 'FORTNOX_CLIENT_ID' | 'FORTNOX_CLIENT_SECRET'): string => {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(`Miljövariabeln ${name} saknas. Lägg till den i .env lokalt och i Vercel.`);
+  }
+  return value;
+};
 const FORTNOX_AUTH_URL = "https://apps.fortnox.se/oauth-v1/auth";
 const FORTNOX_TOKEN_URL = "https://apps.fortnox.se/oauth-v1/token";
 const FORTNOX_API_BASE = "https://api.fortnox.se/3";
@@ -396,8 +402,8 @@ const refreshFortnoxToken = async (): Promise<string> => {
   const body = new URLSearchParams({
     grant_type: "refresh_token",
     refresh_token: fortnoxTokens.refreshToken,
-    client_id: FORTNOX_CLIENT_ID,
-    client_secret: FORTNOX_CLIENT_SECRET,
+    client_id: requireFortnoxEnv('FORTNOX_CLIENT_ID'),
+    client_secret: requireFortnoxEnv('FORTNOX_CLIENT_SECRET'),
   });
   const resp = await fetch(FORTNOX_TOKEN_URL, {
     method: "POST",
@@ -440,8 +446,15 @@ const fortnoxFetch = async (path: string): Promise<any> => {
 // Fortnox OAuth: Step 1 - Get auth URL
 app.get("/api/fortnox/auth-url", (req, res) => {
   const redirectUri = `http://localhost:3002/api/fortnox-callback`;
+  let clientId: string;
+  try {
+    clientId = requireFortnoxEnv('FORTNOX_CLIENT_ID');
+  } catch (err: any) {
+    console.error(err.message);
+    return res.status(500).json({ error: err.message });
+  }
   const params = new URLSearchParams({
-    client_id: FORTNOX_CLIENT_ID,
+    client_id: clientId,
     redirect_uri: redirectUri,
     scope: "invoice",
     state: "fortnox_auth",
@@ -466,8 +479,8 @@ app.get("/api/fortnox-callback", async (req, res) => {
     const body = new URLSearchParams({
       grant_type: "authorization_code",
       code: code as string,
-      client_id: FORTNOX_CLIENT_ID,
-      client_secret: FORTNOX_CLIENT_SECRET,
+      client_id: requireFortnoxEnv('FORTNOX_CLIENT_ID'),
+      client_secret: requireFortnoxEnv('FORTNOX_CLIENT_SECRET'),
       redirect_uri: redirectUri,
     });
 
