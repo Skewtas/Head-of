@@ -16,6 +16,7 @@
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getTimewaveToken } from '../_lib/timewaveAuth.js';
+import { arUndantagenFranSnittpris } from '../_lib/snittprisUndantag.js';
 import { prisma } from '../_lib/prisma.js';
 
 export const config = { maxDuration: 60 };
@@ -63,6 +64,7 @@ async function berakna(days: number) {
   }>();
 
   for (const m of missioner) {
+    if (arUndantagenFranSnittpris(m)) continue;
     // Mission-level revenue
     let missionRevenue = 0;
     for (const svc of (m.services || [])) {

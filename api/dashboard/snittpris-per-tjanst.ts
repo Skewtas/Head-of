@@ -13,6 +13,7 @@
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getTimewaveToken } from '../_lib/timewaveAuth.js';
+import { arUndantagenFranSnittpris } from '../_lib/snittprisUndantag.js';
 import { prisma } from '../_lib/prisma.js';
 
 export const config = { maxDuration: 60 };
@@ -80,6 +81,7 @@ async function berakna(month: string) {
   let totalTimmarAll = 0;
 
   for (const m of missioner) {
+    if (arUndantagenFranSnittpris(m)) continue;
     const services = m.services || [];
 
     // Räkna missionens arbetstimmar en gång (summera alla anställda som faktiskt städat)
