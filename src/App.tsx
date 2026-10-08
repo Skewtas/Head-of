@@ -380,15 +380,14 @@ function GoalsModal({
 }
 
 function KpiGoalRow({
-  label, actual, goal, unit, diff, todayCount, hasSnapshot, revenueExVat,
+  label, actual, goal, unit, perVecka = true, revenueExVat,
 }: {
   label: string;
   actual: number;
   goal: number;
   unit: string;
-  diff: number | null;
-  todayCount?: number | null;
-  hasSnapshot: boolean;
+  // false för mått som inte ackumuleras över månaden (t.ex. snittpris) — då visas ingen KTM V
+  perVecka?: boolean;
   revenueExVat?: number | null;
 }) {
   const pct = goal > 0 ? Math.min(100, Math.round((actual / goal) * 100)) : 0;
@@ -396,30 +395,25 @@ function KpiGoalRow({
   const barCls = isOver ? 'bg-emerald-500' : pct > 70 ? 'bg-amber-400' : 'bg-red-400';
   const valueCls = isOver ? 'text-emerald-600 font-semibold' : 'text-brand-muted';
 
-  const fmtDiff = (n: number): string => {
-    const abs = new Intl.NumberFormat('sv-SE').format(Math.abs(Math.round(n)));
-    return abs;
-  };
+  const nf = (n: number): string => new Intl.NumberFormat('sv-SE').format(Math.round(n));
 
-  // Delta VISAS ALLTID. Om jämförelse saknas visas ±0 (regel Mikaela).
-  // Explicit null-check så inte 0 behandlas som falsy.
-  const effectiveDiff = (diff === null || diff === undefined) ? 0 : diff;
-  let diffLabel: React.ReactNode;
-  const rounded = Math.round(effectiveDiff);
-  if (rounded === 0) {
-    diffLabel = <span className="text-brand-muted font-medium">±0 {unit} sedan igår</span>;
-  } else if (rounded > 0) {
-    diffLabel = <span className="text-emerald-600 font-medium">↑ +{fmtDiff(effectiveDiff)} {unit} sedan igår</span>;
-  } else {
-    diffLabel = <span className="text-red-600 font-medium">↓ −{fmtDiff(effectiveDiff)} {unit} sedan igår</span>;
-  }
+  // Kvar till mål + KTM V / KTM D (kvar till mål per vecka / per dag).
+  // Dagar kvar = kalenderdagar kvar i månaden inkl. idag. Veckor kvar = dagar / 7,
+  // minst 1 så att sista veckan inte blåser upp talet.
+  const kvar = goal - actual;
+  const nu = new Date();
+  const dagarKvar = new Date(nu.getFullYear(), nu.getMonth() + 1, 0).getDate() - nu.getDate() + 1;
+  const veckorKvar = Math.max(1, dagarKvar / 7);
+  const ktmV = kvar / veckorKvar;
+  const ktmD = kvar / dagarKvar;
+  const ktmText = (n: number): string => unit === 'kr' ? nf(n) : (Math.round(n * 10) / 10).toLocaleString('sv-SE');
 
   return (
     <div>
       <div className="flex justify-between text-xs mb-1">
         <span className="text-brand-dark font-medium">{label}</span>
         <span className={`tabular-nums ${valueCls}`}>
-          {new Intl.NumberFormat('sv-SE').format(Math.round(actual))} / {new Intl.NumberFormat('sv-SE').format(goal)} {unit} ({pct}%)
+          Mål {nf(goal)} {unit} · Nu {nf(actual)} {unit} ({pct}%)
         </span>
       </div>
       <div className="w-full bg-gray-100 rounded-full h-2">
@@ -429,7 +423,21 @@ function KpiGoalRow({
         />
       </div>
       <div className="mt-1 text-[11px] flex flex-wrap items-center gap-x-3 gap-y-0.5">
-        {diffLabel}
+        {kvar > 0 ? (
+          <>
+            <span className="text-brand-dark font-medium tabular-nums">Kvar till mål: {nf(kvar)} {unit}</span>
+            {perVecka && (
+              <>
+                <span className="text-brand-dark font-medium tabular-nums">· KTM V: {ktmText(ktmV)} {unit}/vecka</span>
+                <span className="text-brand-dark font-medium tabular-nums">· KTM D: {ktmText(ktmD)} {unit}/dag</span>
+              </>
+            )}
+          </>
+        ) : (
+          <span className="text-emerald-600 font-medium tabular-nums">
+            Mål nått{kvar < 0 ? ` · +${nf(-kvar)} ${unit} över` : ''}
+          </span>
+        )}
         {revenueExVat != null && revenueExVat > 0 && (
           <span className="text-brand-muted tabular-nums">
             · {new Intl.NumberFormat('sv-SE').format(Math.round(revenueExVat))} kr ex. moms
@@ -953,21 +961,16 @@ const OverviewView = () => {
           </div>
           <div className="space-y-4">
             {[
-              { label: 'Bokad försäljning', actual: stats.totalRevenueExVat, goal: goals?.bookedRevenue ?? 850000, unit: 'kr', diff: dailyDiff?.diff?.bookedRevenue ?? null },
-              { label: 'Snittpris', actual: stats.avgPricePerHour, goal: goals?.avgPricePerHour ?? 550, unit: 'kr/h', diff: dailyDiff?.diff?.avgPricePerHour ?? null },
-              { label: 'Återkommande kunder — privat', actual: stats.recurringPrivateClients, goal: goals?.recurringPrivateClients ?? 250, unit: 'st', diff: dailyDiff?.diff?.recurringPrivateClients ?? null, revenueExVat: stats.recurringPrivateRevenue },
-              { label: 'Återkommande kunder — företag', actual: stats.recurringCompanyClients, goal: goals?.recurringCompanyClients ?? 50, unit: 'st', diff: dailyDiff?.diff?.recurringCompanyClients ?? null, revenueExVat: stats.recurringCompanyRevenue },
-              { label: 'Personalbas (aktiva i Timewave)', actual: personalbas?.antalAktiva ?? stats.employees, goal: goals?.staffCount ?? 20, unit: 'st', diff: dailyDiff?.diff?.staffCount ?? null },
-              { label: 'Bokningar online (Bokis)', actual: bokisBookings?.thisMonth ?? 0, goal: goals?.onlineBookings ?? 60, unit: 'st', diff: null, todayCount: bokisBookings?.today ?? null },
+              { label: 'Bokad försäljning', actual: stats.totalRevenueExVat, goal: goals?.bookedRevenue ?? 850000, unit: 'kr' },
+              { label: 'Snittpris', actual: stats.avgPricePerHour, goal: goals?.avgPricePerHour ?? 550, unit: 'kr/h', perVecka: false },
+              { label: 'Återkommande kunder — privat', actual: stats.recurringPrivateClients, goal: goals?.recurringPrivateClients ?? 250, unit: 'st', revenueExVat: stats.recurringPrivateRevenue },
+              { label: 'Återkommande kunder — företag', actual: stats.recurringCompanyClients, goal: goals?.recurringCompanyClients ?? 50, unit: 'st', revenueExVat: stats.recurringCompanyRevenue },
+              { label: 'Personalbas (aktiva i Timewave)', actual: personalbas?.antalAktiva ?? stats.employees, goal: goals?.staffCount ?? 20, unit: 'st' },
+              { label: 'Bokningar online (Bokis)', actual: bokisBookings?.thisMonth ?? 0, goal: goals?.onlineBookings ?? 60, unit: 'st' },
             ].map((item, i) => (
-              <KpiGoalRow key={i} {...item} hasSnapshot={!!dailyDiff?.previous} />
+              <KpiGoalRow key={i} {...item} />
             ))}
           </div>
-          {!dailyDiff?.previous && (
-            <div className="mt-4 text-[11px] text-brand-muted italic text-center">
-              Dygnsförändring visas från morgondagen — första snapshot sparas i natt kl. 23:55.
-            </div>
-          )}
         </CardContent>
       </Card>
 
