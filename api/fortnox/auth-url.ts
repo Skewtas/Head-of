@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { requireFortnoxEnv } from '../_lib/fortnoxEnv.js';
 
-const FORTNOX_CLIENT_ID = "EojgbHJg0L7C";
 const FORTNOX_AUTH_URL = "https://apps.fortnox.se/oauth-v1/auth";
 
 export default function handler(req: VercelRequest, res: VercelResponse) {
@@ -9,8 +9,16 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
   const host = req.headers.host || 'localhost:3002';
   const redirectUri = `${protocol}://${host}/api/fortnox-callback`;
 
+  let clientId: string;
+  try {
+    clientId = requireFortnoxEnv('FORTNOX_CLIENT_ID');
+  } catch (err: any) {
+    console.error(err.message);
+    return res.status(500).json({ error: err.message });
+  }
+
   const params = new URLSearchParams({
-    client_id: FORTNOX_CLIENT_ID,
+    client_id: clientId,
     redirect_uri: redirectUri,
     scope: "invoice",
     state: "fortnox_auth",

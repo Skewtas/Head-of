@@ -13,6 +13,7 @@
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getTimewaveToken } from '../_lib/timewaveAuth.js';
+import { arUndantagenFranSnittpris } from '../_lib/snittprisUndantag.js';
 
 export const config = { maxDuration: 60 };
 
@@ -51,7 +52,7 @@ async function hamtaMissioner(start: string, end: string, token: string): Promis
     page++;
     if (page > 50) break;
   }
-  return out;
+  return out.filter((m) => !arUndantagenFranSnittpris(m));
 }
 
 interface MissionData { revenue: number; timmar: number; antalStadare: number; clientId: number | null; clientName: string; tjanst: string; dagar: string | null; missionId: number; }

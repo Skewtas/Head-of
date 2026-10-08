@@ -1,8 +1,5 @@
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
-const FORTNOX_CLIENT_ID = "EojgbHJg0L7C";
-const FORTNOX_CLIENT_SECRET = "PqB4oT2hYj";
+import { prisma } from './prisma.js';
+import { requireFortnoxEnv } from './fortnoxEnv.js';
 const FORTNOX_TOKEN_URL = "https://apps.fortnox.se/oauth-v1/token";
 const FORTNOX_API_BASE = "https://api.fortnox.se/3";
 
@@ -62,7 +59,7 @@ export async function refreshFortnoxToken(tokens: FortnoxTokens): Promise<Fortno
     refresh_token: tokens.refreshToken,
   });
 
-  const authHeader = Buffer.from(`${FORTNOX_CLIENT_ID}:${FORTNOX_CLIENT_SECRET}`).toString('base64');
+  const authHeader = Buffer.from(`${requireFortnoxEnv('FORTNOX_CLIENT_ID')}:${requireFortnoxEnv('FORTNOX_CLIENT_SECRET')}`).toString('base64');
 
   const tokenResp = await fetch(FORTNOX_TOKEN_URL, {
     method: "POST",

@@ -15,11 +15,12 @@
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getTimewaveToken } from '../_lib/timewaveAuth.js';
+import { arUndantagenFranSnittpris } from '../_lib/snittprisUndantag.js';
 import { prisma } from '../_lib/prisma.js';
 
 export const config = { maxDuration: 60 };
 
-const KEY_PREFIX = 'snittpris_per_kund_v1';
+const KEY_PREFIX = 'snittpris_per_kund_v2';
 const STALE_SECONDS = 300;
 
 const nonBillableServiceIds = new Set([3, 7, 401]);
@@ -80,6 +81,7 @@ async function berakna(month: string, minMissioner: number): Promise<any> {
   }>();
 
   for (const m of missioner) {
+    if (arUndantagenFranSnittpris(m)) continue;
     if (!m.client?.id) continue;
 
     let missionRevenue = 0;
