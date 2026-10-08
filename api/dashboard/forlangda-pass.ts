@@ -256,10 +256,10 @@ export interface EnskiltForlangtPass {
   tjanst: string;
   datum: string;
   stadare: string[];
-  vanligTim: number;      // median schemalagd tid på arbetsorderns tidigare pass
+  vanligTim: number;      // vanlig schemalagd tid på arbetsorderns tidigare pass
   passTim: number;
   extraTim: number;
-  vanligtPris: number;    // medianpris på tidigare pass
+  vanligtPris: number;    // vanligt pris på tidigare pass
   passPris: number;
   kommentarer: string[];  // städarnas kommentarer på tidsavvikelser
   nytt: boolean;          // passet låg inom de senaste 7 dagarna
@@ -271,14 +271,26 @@ const median = (a: number[]): number => {
   return n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2;
 };
 
+// Jobbets vanliga värde: det som förekommit flest gånger (minst 2). Finns inget
+// entydigt vanligast värde används medianen. Medianen ensam ger falska träffar
+// när några tidigare pass varit ovanligt korta (t.ex. en städare i stället för två).
+const vanligast = (a: number[]): number => {
+  const antal = new Map<number, number>();
+  for (const v of a) antal.set(v, (antal.get(v) || 0) + 1);
+  const topp = Math.max(...antal.values());
+  const kandidater = [...antal.entries()].filter(([, n]) => n === topp);
+  return topp >= 2 && kandidater.length === 1 ? kandidater[0][0] : median(a);
+};
+
 /**
  * Enskilda pass som blivit längre än arbetsorderns vanliga tid utan att priset
  * ändrats. Fångar även jobb som bara har ett pass i månaden och engångs-
  * förlängningar som inte syns i periodsnittet ovan.
  *
- *   historik = pass FÖRE de senaste 30 dagarna (baslinje, minst 2 pass krävs)
+ *   historik = pass FÖRE de senaste 30 dagarna (baslinje, minst 2 pass krävs).
+ *              Vanlig tid/pris = vanligaste värdet, annars medianen.
  *   aktuella = pass de senaste 30 dagarna
- * Flaggas: minst 30 min eller 15 % längre än medianen, och pris ≤ medianpris + 2 %.
+ * Flaggas: minst 30 min eller 15 % längre än vanlig tid, och pris ≤ vanligt pris + 2 %.
  */
 export function beraknaEnskildaForlangdaPass(aktuella: any[], historik: any[], now = new Date()): EnskiltForlangtPass[] {
   const ymd = (d: Date) => d.toISOString().slice(0, 10);
@@ -344,8 +356,8 @@ export function beraknaEnskildaForlangdaPass(aktuella: any[], historik: any[], n
     const bas = a.pass.filter((p) => p.datum < d30);
     const nu = a.pass.filter((p) => p.datum >= d30 && p.datum <= idag);
     if (bas.length < 2 || nu.length === 0) continue;
-    const vanligTim = median(bas.map((p) => p.tim));
-    const vanligtPris = median(bas.map((p) => p.pris));
+    const vanligTim = vanligast(bas.map((p) => p.tim));
+    const vanligtPris = vanligast(bas.map((p) => Math.round(p.pris)));
     for (const p of nu) {
       const extra = p.tim - vanligTim;
       if (extra <= 0) continue;
