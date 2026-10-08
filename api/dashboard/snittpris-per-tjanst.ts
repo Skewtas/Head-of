@@ -18,7 +18,7 @@ import { prisma } from '../_lib/prisma.js';
 
 export const config = { maxDuration: 60 };
 
-const KEY_PREFIX = 'snittpris_per_tjanst_v1';
+const KEY_PREFIX = 'snittpris_per_tjanst_v2';
 const STALE_SECONDS = 300; // 5 min — månadsdata ändras långsamt
 
 const nonBillableServiceIds = new Set([3, 7, 401]); // sjuk, ledig, ej-fakturerbar

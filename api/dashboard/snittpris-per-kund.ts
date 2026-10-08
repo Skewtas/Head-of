@@ -20,7 +20,7 @@ import { prisma } from '../_lib/prisma.js';
 
 export const config = { maxDuration: 60 };
 
-const KEY_PREFIX = 'snittpris_per_kund_v1';
+const KEY_PREFIX = 'snittpris_per_kund_v2';
 const STALE_SECONDS = 300;
 
 const nonBillableServiceIds = new Set([3, 7, 401]);

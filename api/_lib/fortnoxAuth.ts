@@ -1,12 +1,5 @@
 import { prisma } from './prisma.js';
-// Fortnox OAuth-uppgifter läses från miljövariabler (aldrig hårdkodade)
-const requireFortnoxEnv = (name: 'FORTNOX_CLIENT_ID' | 'FORTNOX_CLIENT_SECRET'): string => {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(`Miljövariabeln ${name} saknas. Lägg till den i .env lokalt och i Vercel.`);
-  }
-  return value;
-};
+import { requireFortnoxEnv } from './fortnoxEnv.js';
 const FORTNOX_TOKEN_URL = "https://apps.fortnox.se/oauth-v1/token";
 const FORTNOX_API_BASE = "https://api.fortnox.se/3";
 

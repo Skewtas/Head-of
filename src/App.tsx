@@ -516,22 +516,6 @@ const OverviewView = () => {
   const [staffOccLoading, setStaffOccLoading] = React.useState(true);
   const [workHoursPerMonth, setWorkHoursPerMonth] = React.useState<number | null>(null);
 
-  // Daglig KPI-jämförelse (för "↑ +X sedan igår"-visning)
-  type DailyDiff = {
-    current: {
-      bookedRevenue: number; invoicedRevenue: number; avgPricePerHour: number;
-      recurringPrivateClients: number; recurringCompanyClients: number;
-      staffCount: number; onlineBookings: number; onlineBookingsToday: number;
-    };
-    previous: any;
-    diff: {
-      bookedRevenue: number; invoicedRevenue: number; avgPricePerHour: number;
-      recurringPrivateClients: number; recurringCompanyClients: number;
-      staffCount: number; onlineBookings: number;
-    } | null;
-    previousSnapshotDate: string | null;
-  };
-  const [dailyDiff, setDailyDiff] = React.useState<DailyDiff | null>(null);
   const [bokisBookings, setBokisBookings] = React.useState<{
     today: number; last24h?: number; thisWeek: number; thisMonth: number; total: number; cancelled: number;
     recurringToday: number; recurringLast24h?: number; recurringPrev24h?: number;
@@ -653,12 +637,6 @@ const OverviewView = () => {
     fetch('/api/dashboard/revenue-trend?days=7')
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => d && !d.error && setRevenueTrend(d))
-      .catch(() => {});
-  }, []);
-  React.useEffect(() => {
-    fetch('/api/dashboard/daily-comparison')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => d && setDailyDiff(d))
       .catch(() => {});
   }, []);
   React.useEffect(() => {

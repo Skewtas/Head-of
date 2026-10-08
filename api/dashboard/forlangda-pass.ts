@@ -111,24 +111,31 @@ function parsePerAO(missioner: any[]): Map<number, AoData> {
   return perAO;
 }
 
-export async function hamta(start: string, end: string, token: string): Promise<any[]> {
+// strikt = kasta fel om någon sida inte kan hämtas, i stället för att returnera en ofullständig lista.
+export async function hamta(start: string, end: string, token: string, strikt = false): Promise<any[]> {
   const base = 'https://api.timewave.se/v3';
   const out: any[] = [];
   let page = 1;
+  let forsok = 0;
   while (true) {
     const url = `${base}/missions?filter[startdate]=${start}&filter[enddate]=${end}&page[size]=200&page[number]=${page}`;
     const r = await fetch(url, { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' } });
     if (!r.ok) {
-      if (r.status === 429 && page === 1) { await new Promise((res) => setTimeout(res, 2000)); continue; }
+      if (r.status === 429 && (page === 1 || (strikt && forsok < 5))) { forsok++; await new Promise((res) => setTimeout(res, 2000)); continue; }
+      if (strikt) throw new Error(`Timewave missions ${start}–${end} sida ${page}: HTTP ${r.status}`);
       break;
     }
+    forsok = 0;
     const j = await r.json() as any;
     const chunk = j?.data || [];
     out.push(...chunk);
     const last = j?.last_page ?? 1;
     if (page >= last || chunk.length === 0) break;
     page++;
-    if (page > 50) break;
+    if (page > 50) {
+      if (strikt) throw new Error(`Timewave missions ${start}–${end}: fler än 50 sidor`);
+      break;
+    }
   }
   return out;
 }

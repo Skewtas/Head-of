@@ -1,13 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { requireFortnoxEnv } from '../_lib/fortnoxEnv.js';
 
-// Fortnox OAuth-uppgifter läses från miljövariabler (aldrig hårdkodade)
-const requireFortnoxEnv = (name: 'FORTNOX_CLIENT_ID' | 'FORTNOX_CLIENT_SECRET'): string => {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(`Miljövariabeln ${name} saknas. Lägg till den i .env lokalt och i Vercel.`);
-  }
-  return value;
-};
 const FORTNOX_AUTH_URL = "https://apps.fortnox.se/oauth-v1/auth";
 
 export default function handler(req: VercelRequest, res: VercelResponse) {

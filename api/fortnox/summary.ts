@@ -1,12 +1,19 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { fortnoxFetch } from '../_lib/fortnoxAuth.js';
+import { FortnoxConfigError } from '../_lib/fortnoxEnv.js';
+
+// Fortnox-fel (t.ex. ej ansluten) ger tom lista, men saknade miljövariabler ska synas som fel.
+const tomVidFortnoxFel = (err: unknown) => {
+  if (err instanceof FortnoxConfigError) throw err;
+  return { Invoices: [] };
+};
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const [overdueData, unpaidData, allData] = await Promise.all([
-      fortnoxFetch("/invoices?filter=unpaidoverdue").catch(() => ({ Invoices: [] })),
-      fortnoxFetch("/invoices?filter=unpaid").catch(() => ({ Invoices: [] })),
-      fortnoxFetch("/invoices?filter=fullypaid&fromdate=" + new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]).catch(() => ({ Invoices: [] })),
+      fortnoxFetch("/invoices?filter=unpaidoverdue").catch(tomVidFortnoxFel),
+      fortnoxFetch("/invoices?filter=unpaid").catch(tomVidFortnoxFel),
+      fortnoxFetch("/invoices?filter=fullypaid&fromdate=" + new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]).catch(tomVidFortnoxFel),
     ]);
 
     const overdueInvoices = (overdueData.Invoices || []).map((inv: any) => ({

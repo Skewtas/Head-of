@@ -11,6 +11,7 @@ import cookieParser from "cookie-parser";
 import axios from "axios";
 import { clerkMiddleware } from "@clerk/express";
 import nodemailer from "nodemailer";
+import { requireFortnoxEnv } from "./api/_lib/fortnoxEnv.js";
 import clientsRouter from "./api/routes/clients.js";
 import employeesRouter from "./api/routes/employees.js";
 import teamsRouter from "./api/routes/teams.js";
@@ -370,14 +371,6 @@ const forceRefreshTimewaveToken = async (): Promise<string> => {
 
 // ==================== FORTNOX API INTEGRATION ====================
 
-// Fortnox OAuth-uppgifter läses från miljövariabler (aldrig hårdkodade)
-const requireFortnoxEnv = (name: 'FORTNOX_CLIENT_ID' | 'FORTNOX_CLIENT_SECRET'): string => {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(`Miljövariabeln ${name} saknas. Lägg till den i .env lokalt och i Vercel.`);
-  }
-  return value;
-};
 const FORTNOX_AUTH_URL = "https://apps.fortnox.se/oauth-v1/auth";
 const FORTNOX_TOKEN_URL = "https://apps.fortnox.se/oauth-v1/token";
 const FORTNOX_API_BASE = "https://api.fortnox.se/3";

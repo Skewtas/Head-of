@@ -28,6 +28,8 @@ const RECIPIENTS = (
 
 function escapeH(s: string): string { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function nf(n: number): string { return new Intl.NumberFormat('sv-SE').format(Math.round(n)); }
+// En decimal med svenskt decimalkomma (timmar)
+function tim(n: number): string { return (Math.round(n * 10) / 10).toLocaleString('sv-SE'); }
 
 type Data = Awaited<ReturnType<typeof beraknaForlangdaPass>>;
 
@@ -41,12 +43,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const dryRun = req.query.dry === '1';
 
   try {
+    // Strikt hämtning: misslyckas en sida avbryts mejlet hellre än att skicka en ofullständig rapport.
     // Fyra 30-dagarsperioder bakåt: [0] = aktuell, [1] = referens, [1..3] = baslinje för enskilda pass
     const token = await getTimewaveToken();
     const now = new Date();
     const ymd = (d: Date) => d.toISOString().slice(0, 10);
     const dag = (n: number) => ymd(new Date(now.getTime() - n * 24 * 3600 * 1000));
-    const perioder = await Promise.all([0, 1, 2, 3].map((k) => hamta(dag((k + 1) * 30), dag(k * 30), token)));
+    const perioder = await Promise.all([0, 1, 2, 3].map((k) => hamta(dag((k + 1) * 30), dag(k * 30), token, true)));
 
     const data = await beraknaForlangdaPass({ aktuella: perioder[0], referens: perioder[1] });
     const enskilda = beraknaEnskildaForlangdaPass(perioder[0], [...perioder[1], ...perioder[2], ...perioder[3]], now);
@@ -111,8 +114,8 @@ function buildEnskilda(enskilda: EnskiltForlangtPass[]): string {
         ${p.kommentarer.map((k) => `<br><span style="font-size:11px;color:#1a1a2e;font-style:italic">”${escapeH(k)}”</span>`).join('')}
       </td>
       <td style="padding:10px 12px;border-bottom:1px solid #eee;text-align:center;font-size:13px;white-space:nowrap">
-        ${p.vanligTim} h → <strong>${p.passTim} h</strong><br>
-        <span style="font-size:11px;color:#c2410c;font-weight:600">+${p.extraTim} h</span>
+        ${tim(p.vanligTim)} h → <strong>${tim(p.passTim)} h</strong><br>
+        <span style="font-size:11px;color:#c2410c;font-weight:600">+${tim(p.extraTim)} h</span>
       </td>
       <td style="padding:10px 12px;border-bottom:1px solid #eee;text-align:right;font-size:13px;white-space:nowrap">
         ${nf(p.passPris)} kr<br>
@@ -121,7 +124,7 @@ function buildEnskilda(enskilda: EnskiltForlangtPass[]): string {
     </tr>`).join('');
   return `
   <h2 style="font-family:Georgia,serif;font-size:18px;margin:28px 0 4px">📌 Enskilda pass som blev längre än vanligt</h2>
-  <p style="color:#666;font-size:13px;margin:0 0 12px">${enskilda.length} pass de senaste 30 dagarna, sammanlagt +${(Math.round(extra * 10) / 10).toLocaleString('sv-SE')} h, där priset inte ändrats. Jämfört med jobbets vanliga tid per pass.</p>
+  <p style="color:#666;font-size:13px;margin:0 0 12px">${enskilda.length} pass de senaste 30 dagarna, sammanlagt +${tim(extra)} h, där priset inte ändrats. Jämfört med jobbets vanliga tid per pass.</p>
   <table style="width:100%;background:white;border:1px solid #eae4d9;border-radius:12px;overflow:hidden;border-collapse:collapse;margin-bottom:20px">
     <thead>
       <tr style="background:#faf8f5;color:#666;font-size:10px;text-transform:uppercase;letter-spacing:.1em">
@@ -157,8 +160,8 @@ function buildHtml(d: Data, enskilda: EnskiltForlangtPass[]): string {
         ${f.stadare.length > 0 ? `<br><span style="font-size:11px;color:#999">Städare: ${escapeH(f.stadare.slice(0, 3).join(', '))}</span>` : ''}
       </td>
       <td style="padding:10px 12px;border-bottom:1px solid #eee;text-align:center;font-size:13px;color:#1a1a2e;white-space:nowrap">
-        ${f.refSnittTim} h → <strong>${f.aktuellSnittTim} h</strong><br>
-        <span style="font-size:11px;color:#c2410c;font-weight:600">+${f.diffTim} h (${f.diffProc}%)</span>
+        ${tim(f.refSnittTim)} h → <strong>${tim(f.aktuellSnittTim)} h</strong><br>
+        <span style="font-size:11px;color:#c2410c;font-weight:600">+${tim(f.diffTim)} h (${f.diffProc}%)</span>
       </td>
       <td style="padding:10px 12px;border-bottom:1px solid #eee;text-align:center;font-size:13px;color:#1a1a2e;white-space:nowrap">
         ${nf(f.refSnittPris)} kr → <strong>${nf(f.snittPris)} kr</strong><br>
@@ -168,7 +171,7 @@ function buildHtml(d: Data, enskilda: EnskiltForlangtPass[]): string {
         ${nf(f.snittKrPerTim)} kr/h
       </td>
       <td style="padding:10px 12px;border-bottom:1px solid #eee;text-align:right;font-weight:700;color:#b91c1c;white-space:nowrap">
-        +${f.extraTimPerManad} h
+        +${tim(f.extraTimPerManad)} h
       </td>
     </tr>`).join('');
 
