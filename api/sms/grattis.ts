@@ -18,8 +18,16 @@ import { normalizePhone, sendSms } from '../_lib/smsSender.js';
  * precis som alla andra marknadsförings-SMS. Endpointen är smal med avsikt:
  * den kan bara skicka det Marketing redan har godkänt och den kräver nyckel.
  * Nyhetsbrev skickar aldrig SMS den här vägen.
+ *
+ * Samma endpoint lagrar Marketings dagslistor (namn + mobilnummer), så att de
+ * inte ligger i den öppna /api/automations/templates:
+ *
+ *   GET  /api/sms/grattis                          → alla grattis-dokument
+ *   POST /api/sms/grattis  { "spara": { id, subject, blocks } }
  */
 
+// Samma prefix spärras i api/automations/templates.ts.
+const DOK_PREFIX = 'marketing_grattis_';
 const MAX_PER_ANROP = 50;
 const MAX_TECKEN = 306 - 80; // två SMS-delar, minus avregistreringsraden
 
@@ -35,8 +43,22 @@ function behorig(req: VercelRequest): boolean {
 type Meddelande = { id: string; namn: string; telefon: string; text: string };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (req.method !== 'POST' && req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
   if (!behorig(req)) return res.status(401).json({ error: 'Unauthorized' });
+
+  if (req.method === 'GET') {
+    const dokument = await prisma.automatedTemplate.findMany({ where: { id: { startsWith: DOK_PREFIX } } });
+    return res.json(dokument);
+  }
+
+  if (req.body?.spara) {
+    const { id, subject, blocks } = req.body.spara;
+    if (typeof id !== 'string' || !id.startsWith(DOK_PREFIX) || typeof subject !== 'string' || !subject) {
+      return res.status(400).json({ error: 'Ogiltigt grattis-dokument' });
+    }
+    await prisma.automatedTemplate.upsert({ where: { id }, update: { subject, blocks }, create: { id, subject, blocks } });
+    return res.json({ success: true });
+  }
 
   const rubrik = typeof req.body?.rubrik === 'string' ? req.body.rubrik.slice(0, 80) : 'Grattis-SMS';
   const raw: unknown[] = Array.isArray(req.body?.meddelanden) ? req.body.meddelanden : [];
