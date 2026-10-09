@@ -64,7 +64,8 @@ function utanBelopp(p: Period) {
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!(await inloggad(req))) return res.status(401).json({ error: 'Inte inloggad' });
 
-  const dagar = Math.min(Math.max(parseInt(String(req.query.days ?? '30'), 10) || 30, 1), 90);
+  const onskat = parseInt(String(req.query.days ?? '30'), 10);
+  const dagar = Math.min(Math.max(Number.isNaN(onskat) ? 30 : onskat, 1), 90);
   const nu = Date.now();
   const fran = nu - dagar * DAG;
 
@@ -73,6 +74,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       bokisQuery<Period>('bookingAttempts:growthSummary', { sinceMs: fran, untilMs: nu, nowMs: nu }),
       bokisQuery<Period>('bookingAttempts:growthSummary', { sinceMs: fran - dagar * DAG, untilMs: fran, nowMs: nu }),
     ]);
+    res.setHeader('Cache-Control', 'private, max-age=60');
     res.json({ days: dagar, current: utanBelopp(current), previous: utanBelopp(previous) });
   } catch (err: any) {
     console.error('[growth]', err?.message);

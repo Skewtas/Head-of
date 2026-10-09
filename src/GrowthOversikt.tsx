@@ -103,7 +103,7 @@ export default function GrowthOversikt() {
         </div>
       </div>
 
-      {loading && !data ? (
+      {loading || (data && data.days !== dagar) ? (
         <div className="px-4 py-8 text-center text-brand-muted">
           <Loader className="animate-spin mx-auto" size={18} />
           <div className="mt-2 text-xs">Hämtar från Bokis…</div>
