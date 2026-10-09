@@ -524,7 +524,7 @@ const OverviewView = () => {
   const [senasteAterkommande, setSenasteAterkommande] = React.useState<Array<{
     id: string; createdAt: number | null; customerName: string; city: string | null;
     service: string | null; frequency: string | null; sqm: number | null;
-    estimatedPrice: number | null; date: string | null;
+    prisExMoms: number | null; date: string | null;
   }>>([]);
   const [nyaSedanSenast, setNyaSedanSenast] = React.useState(0);
   const [personalbas, setPersonalbas] = React.useState<{
@@ -1095,9 +1095,9 @@ const OverviewView = () => {
                         </div>
                       </div>
                       <div className="text-right flex-shrink-0">
-                        {b.estimatedPrice != null && (
+                        {b.prisExMoms != null && (
                           <div className="text-sm font-semibold text-brand-dark tabular-nums">
-                            {new Intl.NumberFormat('sv-SE').format(Math.round(b.estimatedPrice))} kr
+                            {new Intl.NumberFormat('sv-SE').format(Math.round(b.prisExMoms))} kr ex. moms
                           </div>
                         )}
                         <div className="text-[10px] text-brand-muted tabular-nums">{relTid}</div>

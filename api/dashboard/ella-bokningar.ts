@@ -14,7 +14,7 @@
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { verifyToken } from '@clerk/backend';
-import { bokisQuery, ymdSthlm } from '../_lib/bokis.js';
+import { bokisQuery, fetchBokisBookings, prisExMomsForeRut, ymdSthlm } from '../_lib/bokis.js';
 
 export const config = { maxDuration: 30 };
 
@@ -26,7 +26,7 @@ type Rad = {
   date?: string;
   status?: string;
   customerName?: string;
-  estimatedPriceExMoms?: number;
+  estimatedPrice?: number;
   frequency?: string | null;
   createdAt: string;
 };
@@ -75,10 +75,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!ella) return res.status(404).json({ error: 'Hittar inget aktivt konto för Elvedina (Ella) i Bokis.' });
 
     const idag = ymdSthlm(new Date());
-    const [detalj, data] = await Promise.all([
+    const [detalj, data, alla] = await Promise.all([
       bokisQuery<KontoDetalj | null>('consultants:getConsultantById', { id: ella.id }),
       bokisQuery<{ bookings: Rad[] }>('consultants:listConsultantBookings', { consultantId: ella.id, todayIso: idag }),
+      fetchBokisBookings(),
     ]);
+    // Säljvyns rader saknar RUT-flaggan; den behövs för att räkna fram priset
+    // ex moms före RUT.
+    const useRut = new Map(alla.map((b) => [String(b.id), b.useRut]));
 
     const rader = (data.bookings ?? []).map((r) => ({ ...r, dag: ymdSthlm(new Date(r.createdAt)) }));
     const veckostart = mandag(idag);
@@ -111,7 +115,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           frequency: r.frequency ?? null,
           date: r.date ?? null,
           status: r.status ?? null,
-          prisExMoms: r.estimatedPriceExMoms ?? null,
+          prisExMoms: prisExMomsForeRut({ service: r.service, estimatedPrice: r.estimatedPrice, useRut: useRut.get(String(r.id)) }),
         })),
       computedAt: new Date().toISOString(),
     });

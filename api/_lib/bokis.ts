@@ -16,6 +16,8 @@ export type BokisBooking = {
   service?: string;
   date?: string;
   status?: string;
+  estimatedPrice?: number;
+  useRut?: boolean;
   createdAt?: number;
   _creationTime?: number;
 };
@@ -68,4 +70,28 @@ export function bokningsdagar(bokningar: BokisBooking[], franOchMed?: string): s
     if (!franOchMed || dag >= franOchMed) dagar.push(dag);
   }
   return dagar;
+}
+
+// Samma konstanter som Bokis prismodell (convex/lib/commissionEngine.ts).
+const MOMS = 1.25;
+const FRAMKORNING_EX_MOMS = 456;
+const TJANSTER_MED_FRAMKORNING = ['Flyttstädning', 'Byggstädning', 'Fönsterputsning', 'Textiltvätt'];
+
+/**
+ * Bokningens pris EX MOMS och FÖRE RUT-avdrag.
+ *
+ * Bokis `estimatedPrice` är det kunden betalar: inkl moms och EFTER RUT. Det
+ * ska aldrig visas i dashboarden — RUT är ett betalningssätt, inte en rabatt,
+ * och Stodona får hela beloppet. Räknas baklänges ur prismodellen:
+ *   estimatedPrice = arbete_ex_moms × 1,25 × rutFaktor + framkörning_ex_moms × 1,25
+ * Framkörningen har varken RUT eller rabatt och läggs tillbaka oförändrad.
+ */
+export function prisExMomsForeRut(b: { service?: string | null; estimatedPrice?: number | null; useRut?: boolean | null }): number | null {
+  const pris = Number(b.estimatedPrice);
+  if (!Number.isFinite(pris) || pris <= 0) return null;
+  const rutFaktor = b.useRut === false ? 1 : 0.5;
+  const framkorning = TJANSTER_MED_FRAMKORNING.includes(b.service ?? '') ? FRAMKORNING_EX_MOMS : 0;
+  const arbeteInklMomsEfterRut = pris - framkorning * MOMS;
+  if (arbeteInklMomsEfterRut <= 0) return Math.round(pris / MOMS);
+  return Math.round(arbeteInklMomsEfterRut / MOMS / rutFaktor + framkorning);
 }
