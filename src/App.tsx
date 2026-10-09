@@ -39,6 +39,7 @@ import {
   CalendarSearch,
   Target,
   ListChecks,
+  Landmark,
   FileText,
   Heart,
   MessageCircle
@@ -72,6 +73,7 @@ import PersonalbrevView from './PersonalbrevView';
 import OnlineBookingsTrend from './OnlineBookingsTrend';
 import SigningView from './SigningView';
 import ChatView from './ChatView';
+import EkonomiView from './EkonomiView';
 
 // Utility for Tailwind classes
 function cn(...inputs: ClassValue[]) {
@@ -274,16 +276,118 @@ const fmt = (val: number) => new Intl.NumberFormat('sv-SE').format(val);
  * Visar label, aktuellt värde / mål (unit), procent, progressbar och
  * dygnsförändring om diff finns.
  */
+function GoalsModal({
+  goals, currentMonthName, onClose, onSaved,
+}: {
+  goals: {
+    month: string;
+    bookedRevenue: number; avgPricePerHour: number;
+    recurringPrivateClients: number; recurringCompanyClients: number;
+    staffCount: number; onlineBookings: number;
+  } | null;
+  currentMonthName: string;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const d = goals || {
+    month: '', bookedRevenue: 850000, avgPricePerHour: 550,
+    recurringPrivateClients: 250, recurringCompanyClients: 50,
+    staffCount: 20, onlineBookings: 60,
+  };
+  const [bookedRevenue, setBookedRevenue] = React.useState<number>(d.bookedRevenue);
+  const [avgPricePerHour, setAvgPricePerHour] = React.useState<number>(d.avgPricePerHour);
+  const [recurringPrivateClients, setRecurringPrivateClients] = React.useState<number>(d.recurringPrivateClients);
+  const [recurringCompanyClients, setRecurringCompanyClients] = React.useState<number>(d.recurringCompanyClients);
+  const [staffCount, setStaffCount] = React.useState<number>(d.staffCount);
+  const [onlineBookings, setOnlineBookings] = React.useState<number>(d.onlineBookings);
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  const spara = async () => {
+    setSaving(true); setError(null);
+    try {
+      const r = await fetch('/api/dashboard/goals', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          month: d.month,
+          bookedRevenue, avgPricePerHour,
+          recurringPrivateClients, recurringCompanyClients,
+          staffCount, onlineBookings,
+        }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j?.error || `${r.status}`);
+      onSaved();
+    } catch (e: any) {
+      setError(e?.message ?? 'Kunde inte spara');
+    } finally { setSaving(false); }
+  };
+
+  const Row = ({ label, value, setValue, unit, step = 1 }: {
+    label: string; value: number; setValue: (n: number) => void; unit: string; step?: number;
+  }) => (
+    <div>
+      <label className="block text-xs font-semibold text-brand-muted mb-1 uppercase tracking-wide">{label}</label>
+      <div className="flex items-center gap-2">
+        <input
+          type="number"
+          value={value}
+          step={step}
+          onChange={(e) => setValue(Number(e.target.value) || 0)}
+          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm tabular-nums text-right"
+        />
+        <span className="text-sm text-brand-muted w-16">{unit}</span>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl p-6" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start justify-between mb-5">
+          <div>
+            <h3 className="text-lg font-serif text-brand-dark">Ändra månadsmål</h3>
+            <p className="text-xs text-brand-muted mt-1">{currentMonthName} ({d.month})</p>
+          </div>
+          <button onClick={onClose} className="text-brand-muted hover:text-brand-dark text-xl leading-none">×</button>
+        </div>
+        <div className="space-y-4">
+          <Row label="Bokad försäljning" value={bookedRevenue} setValue={setBookedRevenue} unit="kr" step={10000} />
+          <Row label="Snittpris" value={avgPricePerHour} setValue={setAvgPricePerHour} unit="kr/h" step={10} />
+          <Row label="Återkommande — privat" value={recurringPrivateClients} setValue={setRecurringPrivateClients} unit="st" />
+          <Row label="Återkommande — företag" value={recurringCompanyClients} setValue={setRecurringCompanyClients} unit="st" />
+          <Row label="Personalbas" value={staffCount} setValue={setStaffCount} unit="st" />
+          <Row label="Bokningar online" value={onlineBookings} setValue={setOnlineBookings} unit="st" />
+        </div>
+        {error && (
+          <div className="mt-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-2">{error}</div>
+        )}
+        <div className="mt-6 flex justify-end gap-2">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-brand-muted hover:text-brand-dark">Avbryt</button>
+          <button
+            onClick={spara}
+            disabled={saving}
+            className="px-5 py-2 bg-brand-dark text-white rounded-lg text-sm font-semibold hover:bg-brand-dark/90 disabled:opacity-50"
+          >
+            {saving ? 'Sparar…' : 'Spara mål'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function KpiGoalRow({
-  label, actual, goal, unit, diff, todayCount, hasSnapshot, revenueExVat,
+  label, actual, goal, unit, perVecka = true, revenueExVat,
 }: {
   label: string;
   actual: number;
   goal: number;
   unit: string;
-  diff: number | null;
-  todayCount?: number | null;
-  hasSnapshot: boolean;
+  // false för mått som inte ackumuleras över månaden (t.ex. snittpris) — då visas ingen KTM V
+  perVecka?: boolean;
   revenueExVat?: number | null;
 }) {
   const pct = goal > 0 ? Math.min(100, Math.round((actual / goal) * 100)) : 0;
@@ -291,30 +395,25 @@ function KpiGoalRow({
   const barCls = isOver ? 'bg-emerald-500' : pct > 70 ? 'bg-amber-400' : 'bg-red-400';
   const valueCls = isOver ? 'text-emerald-600 font-semibold' : 'text-brand-muted';
 
-  const fmtDiff = (n: number): string => {
-    const abs = new Intl.NumberFormat('sv-SE').format(Math.abs(Math.round(n)));
-    return abs;
-  };
+  const nf = (n: number): string => new Intl.NumberFormat('sv-SE').format(Math.round(n));
 
-  // Delta VISAS ALLTID. Om jämförelse saknas visas ±0 (regel Mikaela).
-  // Explicit null-check så inte 0 behandlas som falsy.
-  const effectiveDiff = (diff === null || diff === undefined) ? 0 : diff;
-  let diffLabel: React.ReactNode;
-  const rounded = Math.round(effectiveDiff);
-  if (rounded === 0) {
-    diffLabel = <span className="text-brand-muted font-medium">±0 {unit} sedan igår</span>;
-  } else if (rounded > 0) {
-    diffLabel = <span className="text-emerald-600 font-medium">↑ +{fmtDiff(effectiveDiff)} {unit} sedan igår</span>;
-  } else {
-    diffLabel = <span className="text-red-600 font-medium">↓ −{fmtDiff(effectiveDiff)} {unit} sedan igår</span>;
-  }
+  // Kvar till mål + KTM V / KTM D (kvar till mål per vecka / per dag).
+  // Dagar kvar = kalenderdagar kvar i månaden inkl. idag. Veckor kvar = dagar / 7,
+  // minst 1 så att sista veckan inte blåser upp talet.
+  const kvar = goal - actual;
+  const nu = new Date();
+  const dagarKvar = new Date(nu.getFullYear(), nu.getMonth() + 1, 0).getDate() - nu.getDate() + 1;
+  const veckorKvar = Math.max(1, dagarKvar / 7);
+  const ktmV = kvar / veckorKvar;
+  const ktmD = kvar / dagarKvar;
+  const ktmText = (n: number): string => unit === 'kr' ? nf(n) : (Math.round(n * 10) / 10).toLocaleString('sv-SE');
 
   return (
     <div>
       <div className="flex justify-between text-xs mb-1">
         <span className="text-brand-dark font-medium">{label}</span>
         <span className={`tabular-nums ${valueCls}`}>
-          {new Intl.NumberFormat('sv-SE').format(Math.round(actual))} / {new Intl.NumberFormat('sv-SE').format(goal)} {unit} ({pct}%)
+          Mål {nf(goal)} {unit} · Nu {nf(actual)} {unit} ({pct}%)
         </span>
       </div>
       <div className="w-full bg-gray-100 rounded-full h-2">
@@ -324,7 +423,21 @@ function KpiGoalRow({
         />
       </div>
       <div className="mt-1 text-[11px] flex flex-wrap items-center gap-x-3 gap-y-0.5">
-        {diffLabel}
+        {kvar > 0 ? (
+          <>
+            <span className="text-brand-dark font-medium tabular-nums">Kvar till mål: {nf(kvar)} {unit}</span>
+            {perVecka && (
+              <>
+                <span className="text-brand-dark font-medium tabular-nums">· KTM V: {ktmText(ktmV)} {unit}/vecka</span>
+                <span className="text-brand-dark font-medium tabular-nums">· KTM D: {ktmText(ktmD)} {unit}/dag</span>
+              </>
+            )}
+          </>
+        ) : (
+          <span className="text-emerald-600 font-medium tabular-nums">
+            Mål nått{kvar < 0 ? ` · +${nf(-kvar)} ${unit} över` : ''}
+          </span>
+        )}
         {revenueExVat != null && revenueExVat > 0 && (
           <span className="text-brand-muted tabular-nums">
             · {new Intl.NumberFormat('sv-SE').format(Math.round(revenueExVat))} kr ex. moms
@@ -403,22 +516,6 @@ const OverviewView = () => {
   const [staffOccLoading, setStaffOccLoading] = React.useState(true);
   const [workHoursPerMonth, setWorkHoursPerMonth] = React.useState<number | null>(null);
 
-  // Daglig KPI-jämförelse (för "↑ +X sedan igår"-visning)
-  type DailyDiff = {
-    current: {
-      bookedRevenue: number; invoicedRevenue: number; avgPricePerHour: number;
-      recurringPrivateClients: number; recurringCompanyClients: number;
-      staffCount: number; onlineBookings: number; onlineBookingsToday: number;
-    };
-    previous: any;
-    diff: {
-      bookedRevenue: number; invoicedRevenue: number; avgPricePerHour: number;
-      recurringPrivateClients: number; recurringCompanyClients: number;
-      staffCount: number; onlineBookings: number;
-    } | null;
-    previousSnapshotDate: string | null;
-  };
-  const [dailyDiff, setDailyDiff] = React.useState<DailyDiff | null>(null);
   const [bokisBookings, setBokisBookings] = React.useState<{
     today: number; last24h?: number; thisWeek: number; thisMonth: number; total: number; cancelled: number;
     recurringToday: number; recurringLast24h?: number; recurringPrev24h?: number;
@@ -464,16 +561,82 @@ const OverviewView = () => {
       comparedTo: string | null;
     }>;
   } | null>(null);
+  const [snittPerTjanst, setSnittPerTjanst] = React.useState<{
+    period: string;
+    totalSnittKrPerTim: number | null;
+    totalRevenue: number;
+    totalTimmar: number;
+    huvudtjanster: Array<{
+      tjanst: string;
+      antalMissioner: number;
+      totalRevenue: number;
+      totalTimmar: number;
+      snittKrPerTim: number | null;
+      snittPrisPerMission: number;
+    }>;
+    tillagg: Array<{ tjanst: string; antalMissioner: number; totalRevenue: number }>;
+  } | null>(null);
+  React.useEffect(() => {
+    fetch('/api/dashboard/snittpris-per-tjanst')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && !d.error && setSnittPerTjanst(d))
+      .catch(() => {});
+  }, []);
+  const [timVarning, setTimVarning] = React.useState<{
+    threshold: number; antalVarningar: number; totalOverskott: number;
+    varningar: Array<{
+      missionId: number; arbetsorder: number | null; klientNamn: string;
+      datum: string | null; tjanst: string; revenue: number;
+      schemaladaTimmar: number; antalStadare: number; effektivtPris: number; overskott: number;
+    }>;
+  } | null>(null);
+  React.useEffect(() => {
+    fetch('/api/dashboard/mission-timmar-varning?threshold=400&weeks=2')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && !d.error && setTimVarning(d))
+      .catch(() => {});
+  }, []);
+  const [goals, setGoals] = React.useState<{
+    month: string;
+    bookedRevenue: number; avgPricePerHour: number;
+    recurringPrivateClients: number; recurringCompanyClients: number;
+    staffCount: number; onlineBookings: number;
+    updatedAt: string | null; updatedBy: string | null; isDefault: boolean;
+  } | null>(null);
+  const [goalsModalOpen, setGoalsModalOpen] = React.useState(false);
+  const laddaGoals = React.useCallback(() => {
+    fetch('/api/dashboard/goals')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && !d.error && setGoals(d))
+      .catch(() => {});
+  }, []);
+  React.useEffect(() => { laddaGoals(); }, [laddaGoals]);
+
+  const [stadareSnitt, setStadareSnitt] = React.useState<{
+    period: string;
+    antalStadare: number;
+    bottom20: Array<{
+      employeeId: number; namn: string; antalMissioner: number;
+      totalTimmar: number; totalRevenue: number; snittKrPerTim: number;
+      antalLagaPass: number; andelLagaProc: number;
+    }>;
+    top20: Array<{
+      employeeId: number; namn: string; antalMissioner: number;
+      totalTimmar: number; totalRevenue: number; snittKrPerTim: number;
+      antalLagaPass: number; andelLagaProc: number;
+    }>;
+  } | null>(null);
+  const [visaTopStadare, setVisaTopStadare] = React.useState(false);
+  React.useEffect(() => {
+    fetch('/api/dashboard/stadare-snittpris?days=30')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && !d.error && setStadareSnitt(d))
+      .catch(() => {});
+  }, []);
   React.useEffect(() => {
     fetch('/api/dashboard/revenue-trend?days=7')
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => d && !d.error && setRevenueTrend(d))
-      .catch(() => {});
-  }, []);
-  React.useEffect(() => {
-    fetch('/api/dashboard/daily-comparison')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => d && setDailyDiff(d))
       .catch(() => {});
   }, []);
   React.useEffect(() => {
@@ -752,26 +915,52 @@ const OverviewView = () => {
       {/* Månadsmål — ligger alltid överst så du ser målen direkt när sidan öppnas */}
       <Card>
         <CardContent className="p-5">
-          <h4 className="text-sm font-semibold text-brand-dark mb-4">Månadsmål — {currentMonthName}</h4>
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+            <div>
+              <h4 className="text-sm font-semibold text-brand-dark">Månadsmål — {currentMonthName}</h4>
+              {goals && !goals.isDefault && goals.updatedBy && (
+                <p className="text-[11px] text-brand-muted mt-0.5">
+                  Senast ändrat av {goals.updatedBy}
+                  {goals.updatedAt ? ` · ${new Date(goals.updatedAt).toLocaleDateString('sv-SE')}` : ''}
+                </p>
+              )}
+              {goals?.isDefault && (
+                <p className="text-[11px] text-amber-700 mt-0.5">
+                  Standardmål används — klicka "Ändra mål" för att sätta egna för denna månad
+                </p>
+              )}
+            </div>
+            <button
+              onClick={() => setGoalsModalOpen(true)}
+              className="text-xs px-3 py-1.5 border border-gray-300 text-brand-dark rounded-lg hover:bg-gray-50"
+            >
+              ✏️ Ändra mål
+            </button>
+          </div>
           <div className="space-y-4">
             {[
-              { label: 'Bokad försäljning', actual: stats.totalRevenueExVat, goal: 850000, unit: 'kr', diff: dailyDiff?.diff?.bookedRevenue ?? null },
-              { label: 'Snittpris', actual: stats.avgPricePerHour, goal: 550, unit: 'kr/h', diff: dailyDiff?.diff?.avgPricePerHour ?? null },
-              { label: 'Återkommande kunder — privat', actual: stats.recurringPrivateClients, goal: 250, unit: 'st', diff: dailyDiff?.diff?.recurringPrivateClients ?? null, revenueExVat: stats.recurringPrivateRevenue },
-              { label: 'Återkommande kunder — företag', actual: stats.recurringCompanyClients, goal: 50, unit: 'st', diff: dailyDiff?.diff?.recurringCompanyClients ?? null, revenueExVat: stats.recurringCompanyRevenue },
-              { label: 'Personalbas (aktiva i Timewave)', actual: personalbas?.antalAktiva ?? stats.employees, goal: 20, unit: 'st', diff: dailyDiff?.diff?.staffCount ?? null },
-              { label: 'Bokningar online (Bokis)', actual: bokisBookings?.thisMonth ?? 0, goal: 60, unit: 'st', diff: null, todayCount: bokisBookings?.today ?? null },
+              { label: 'Bokad försäljning', actual: stats.totalRevenueExVat, goal: goals?.bookedRevenue ?? 850000, unit: 'kr' },
+              { label: 'Snittpris', actual: stats.avgPricePerHour, goal: goals?.avgPricePerHour ?? 550, unit: 'kr/h', perVecka: false },
+              { label: 'Återkommande kunder — privat', actual: stats.recurringPrivateClients, goal: goals?.recurringPrivateClients ?? 250, unit: 'st', revenueExVat: stats.recurringPrivateRevenue },
+              { label: 'Återkommande kunder — företag', actual: stats.recurringCompanyClients, goal: goals?.recurringCompanyClients ?? 50, unit: 'st', revenueExVat: stats.recurringCompanyRevenue },
+              { label: 'Personalbas (aktiva i Timewave)', actual: personalbas?.antalAktiva ?? stats.employees, goal: goals?.staffCount ?? 20, unit: 'st' },
+              { label: 'Bokningar online (Bokis)', actual: bokisBookings?.thisMonth ?? 0, goal: goals?.onlineBookings ?? 60, unit: 'st' },
             ].map((item, i) => (
-              <KpiGoalRow key={i} {...item} hasSnapshot={!!dailyDiff?.previous} />
+              <KpiGoalRow key={i} {...item} />
             ))}
           </div>
-          {!dailyDiff?.previous && (
-            <div className="mt-4 text-[11px] text-brand-muted italic text-center">
-              Dygnsförändring visas från morgondagen — första snapshot sparas i natt kl. 23:55.
-            </div>
-          )}
         </CardContent>
       </Card>
+
+      {/* Modal för att ändra mål */}
+      {goalsModalOpen && (
+        <GoalsModal
+          goals={goals}
+          currentMonthName={currentMonthName}
+          onClose={() => setGoalsModalOpen(false)}
+          onSaved={() => { setGoalsModalOpen(false); laddaGoals(); }}
+        />
+      )}
 
       {/* Dublett-larm — flaggar arbetsordrar med identiska missioner i Timewave */}
       {dubletter && dubletter.antalDubletter > 0 && (
@@ -991,6 +1180,207 @@ const OverviewView = () => {
                 })}
               </tbody>
             </table>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Timmar-varning — missioner där schemalagda timmar inte matchar priset */}
+      {timVarning && timVarning.antalVarningar > 0 && (
+        <Card>
+          <CardContent className="p-5 border-l-4 border-rose-500 bg-rose-50/40">
+            <div className="flex items-start gap-3 mb-3">
+              <AlertTriangle className="w-5 h-5 text-rose-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <h4 className="text-sm font-semibold text-rose-900">
+                  {timVarning.antalVarningar} missioner med för många schemalagda timmar
+                </h4>
+                <p className="text-[12px] text-rose-800 mt-0.5">
+                  Dessa missioner (nästa {Math.round(timVarning.varningar.length ? 14 : 14)} dagarna) har färre än <strong>{timVarning.threshold} kr/h</strong> effektivt pris
+                  — städaren har schemalagts fler timmar än kundens pris täcker.
+                  Totalt &quot;förlorar&quot; vi <strong>{new Intl.NumberFormat('sv-SE').format(timVarning.totalOverskott)} kr</strong> jämfört med målet.
+                </p>
+              </div>
+            </div>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-[10px] text-rose-900 uppercase tracking-wider border-b border-rose-200">
+                  <th className="text-left pb-1.5">Datum</th>
+                  <th className="text-left pb-1.5">Kund</th>
+                  <th className="text-left pb-1.5">Tjänst</th>
+                  <th className="text-right pb-1.5">Städare</th>
+                  <th className="text-right pb-1.5">Tim</th>
+                  <th className="text-right pb-1.5">Pris</th>
+                  <th className="text-right pb-1.5">kr/h</th>
+                  <th className="text-right pb-1.5">Fattas</th>
+                </tr>
+              </thead>
+              <tbody>
+                {timVarning.varningar.slice(0, 15).map((v) => (
+                  <tr key={v.missionId} className="border-b border-rose-100">
+                    <td className="py-1.5 text-brand-muted tabular-nums text-xs">{v.datum || '—'}</td>
+                    <td className="py-1.5 font-medium text-brand-dark">{v.klientNamn}</td>
+                    <td className="py-1.5 text-brand-muted text-xs">{v.tjanst}</td>
+                    <td className="py-1.5 text-right tabular-nums text-brand-muted">{v.antalStadare}</td>
+                    <td className="py-1.5 text-right tabular-nums text-brand-muted">{v.schemaladaTimmar} h</td>
+                    <td className="py-1.5 text-right tabular-nums text-brand-muted">{new Intl.NumberFormat('sv-SE').format(v.revenue)} kr</td>
+                    <td className="py-1.5 text-right tabular-nums font-semibold text-rose-700">{v.effektivtPris} kr/h</td>
+                    <td className="py-1.5 text-right tabular-nums text-rose-700">−{new Intl.NumberFormat('sv-SE').format(v.overskott)} kr</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="mt-3 text-[11px] text-rose-800 italic">
+              Fix: justera schemalagda tider i Timewave (ta bort en städare, korta pass) eller höj priset på avtalet. Alla priser är ex moms.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Snittpris per tjänstetyp — se vilken tjänst som drar ner / lyfter snittet */}
+      {snittPerTjanst && snittPerTjanst.huvudtjanster.length > 0 && (
+        <Card>
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+              <div>
+                <h4 className="text-sm font-semibold text-brand-dark">Snittpris per tjänstetyp</h4>
+                <p className="text-[11px] text-brand-muted mt-0.5">
+                  {snittPerTjanst.period} · {snittPerTjanst.antalMissioner ?? snittPerTjanst.huvudtjanster.reduce((n, r) => n + r.antalMissioner, 0)} missioner · räknar bort sjuk/ledig + tillägg visas separat
+                </p>
+              </div>
+              {snittPerTjanst.totalSnittKrPerTim != null && (
+                <div className="text-right">
+                  <div className="text-[10px] uppercase tracking-wide text-brand-muted">Totalt snitt</div>
+                  <div className={`text-2xl font-semibold tabular-nums ${
+                    snittPerTjanst.totalSnittKrPerTim >= 550 ? 'text-emerald-600' :
+                    snittPerTjanst.totalSnittKrPerTim >= 450 ? 'text-amber-600' : 'text-red-600'
+                  }`}>
+                    {new Intl.NumberFormat('sv-SE').format(snittPerTjanst.totalSnittKrPerTim)} kr/h
+                  </div>
+                  <div className="text-[11px] text-brand-muted">mål 550 kr/h</div>
+                </div>
+              )}
+            </div>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-[10px] text-brand-muted uppercase tracking-wider border-b border-gray-200">
+                  <th className="text-left pb-2">Tjänst</th>
+                  <th className="text-right pb-2">Antal</th>
+                  <th className="text-right pb-2">Timmar</th>
+                  <th className="text-right pb-2">Intäkter</th>
+                  <th className="text-right pb-2">Snitt kr/h</th>
+                </tr>
+              </thead>
+              <tbody>
+                {snittPerTjanst.huvudtjanster.map((r) => {
+                  const snitt = r.snittKrPerTim;
+                  const cls = snitt == null ? 'text-gray-400' :
+                    snitt >= 550 ? 'text-emerald-700 font-semibold' :
+                    snitt >= 450 ? 'text-amber-700 font-semibold' :
+                    'text-red-700 font-semibold';
+                  return (
+                    <tr key={r.tjanst} className="border-b border-gray-100 hover:bg-gray-50/50">
+                      <td className="py-2 text-brand-dark">{r.tjanst}</td>
+                      <td className="py-2 text-right text-brand-muted tabular-nums">{r.antalMissioner}</td>
+                      <td className="py-2 text-right text-brand-muted tabular-nums">{r.totalTimmar} h</td>
+                      <td className="py-2 text-right text-brand-dark tabular-nums">
+                        {new Intl.NumberFormat('sv-SE').format(r.totalRevenue)} kr
+                      </td>
+                      <td className={`py-2 text-right tabular-nums ${cls}`}>
+                        {snitt == null ? '—' : `${new Intl.NumberFormat('sv-SE').format(snitt)} kr/h`}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            {snittPerTjanst.tillagg.length > 0 && (
+              <div className="mt-4 pt-3 border-t border-gray-100">
+                <div className="text-[10px] uppercase tracking-wider text-brand-muted font-semibold mb-2">
+                  Tillägg (räknas inte i snittet — t.ex. framkörning, följdstädning, material)
+                </div>
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-brand-muted">
+                  {snittPerTjanst.tillagg.map((t) => (
+                    <span key={t.tjanst}>
+                      {t.tjanst}: <strong className="text-brand-dark tabular-nums">{new Intl.NumberFormat('sv-SE').format(t.totalRevenue)} kr</strong> ({t.antalMissioner} st)
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+            <p className="mt-4 text-[11px] text-brand-muted italic">
+              Grön ≥550 kr/h (mål), gul 450-549, röd &lt;450. Att höja: korta pass → framkörningsavgift, abonnemang &gt;1 år gamla → indexera, flera städare på ett jobb → kolla fakturerings-logiken.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Städar-snittpris — vilka städare som jobbar på missioner med lågt snitt */}
+      {stadareSnitt && stadareSnitt.bottom20.length > 0 && (
+        <Card>
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+              <div>
+                <h4 className="text-sm font-semibold text-brand-dark">Snittpris per städare</h4>
+                <p className="text-[11px] text-brand-muted mt-0.5">
+                  Senaste 30 dagarna · {stadareSnitt.antalStadare} aktiva städare · snitt är per manna-timme
+                </p>
+              </div>
+              <div className="flex items-center gap-1 text-xs">
+                <button
+                  onClick={() => setVisaTopStadare(false)}
+                  className={`px-2.5 py-1 rounded ${!visaTopStadare ? 'bg-red-100 text-red-900 font-semibold' : 'bg-white border border-gray-200 text-brand-muted'}`}
+                >
+                  Bottom 20
+                </button>
+                <button
+                  onClick={() => setVisaTopStadare(true)}
+                  className={`px-2.5 py-1 rounded ${visaTopStadare ? 'bg-emerald-100 text-emerald-900 font-semibold' : 'bg-white border border-gray-200 text-brand-muted'}`}
+                >
+                  Top 20
+                </button>
+              </div>
+            </div>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-[10px] text-brand-muted uppercase tracking-wider border-b border-gray-200">
+                  <th className="text-left pb-2">Städare</th>
+                  <th className="text-right pb-2">Missioner</th>
+                  <th className="text-right pb-2">Timmar</th>
+                  <th className="text-right pb-2">Intäkt-del</th>
+                  <th className="text-right pb-2">Snitt kr/h</th>
+                  <th className="text-right pb-2">Låga pass</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(visaTopStadare ? stadareSnitt.top20 : stadareSnitt.bottom20).map((s) => {
+                  const snittCls = s.snittKrPerTim >= 550 ? 'text-emerald-700 font-semibold' :
+                    s.snittKrPerTim >= 400 ? 'text-amber-700 font-semibold' :
+                    'text-red-700 font-semibold';
+                  const lagaCls = s.andelLagaProc >= 40 ? 'text-red-700 font-semibold' :
+                    s.andelLagaProc >= 20 ? 'text-amber-700' : 'text-brand-muted';
+                  return (
+                    <tr key={s.employeeId} className="border-b border-gray-100 hover:bg-gray-50/50">
+                      <td className="py-2 text-brand-dark">{s.namn}</td>
+                      <td className="py-2 text-right text-brand-muted tabular-nums">{s.antalMissioner}</td>
+                      <td className="py-2 text-right text-brand-muted tabular-nums">{s.totalTimmar} h</td>
+                      <td className="py-2 text-right text-brand-muted tabular-nums">
+                        {new Intl.NumberFormat('sv-SE').format(s.totalRevenue)} kr
+                      </td>
+                      <td className={`py-2 text-right tabular-nums ${snittCls}`}>
+                        {new Intl.NumberFormat('sv-SE').format(s.snittKrPerTim)} kr/h
+                      </td>
+                      <td className={`py-2 text-right tabular-nums text-xs ${lagaCls}`}>
+                        {s.antalLagaPass}/{s.antalMissioner} ({s.andelLagaProc}%)
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <p className="mt-3 text-[11px] text-brand-muted italic">
+              <strong>"Låga pass"</strong> = antal missioner städaren varit med på där hela missionens snitt är &lt; 300 kr/h.
+              Hög andel = de schemaläggs ofta på pass med dåligt pris. Kan vara en kundgrupp med gamla avtal, inte nödvändigtvis städarens fel.
+            </p>
           </CardContent>
         </Card>
       )}
@@ -2334,6 +2724,7 @@ export default function App() {
     { id: 'overview', label: 'ÖVERSIKT', icon: LayoutDashboard },
     { id: 'schedule2', label: 'SCHEMA', icon: CalendarDays },
     { id: 'ops', label: 'VECKOUPPFÖLJNING', icon: ListChecks },
+    { id: 'ekonomi', label: 'EKONOMI', icon: Landmark },
     { id: 'contracts', label: 'AVTAL', icon: FileText },
     // Dold: HR — inga utskick ska ske än, tom vy förvirrar.
     // { id: 'hr', label: 'HR', icon: Heart },
@@ -2431,6 +2822,7 @@ export default function App() {
               {activeTab === 'personalbrev' && <PersonalbrevView />}
               {activeTab === 'import' && <ImportView />}
               {activeTab === 'chatt' && <ChatView />}
+              {activeTab === 'ekonomi' && <EkonomiView />}
             </div>
           </main>
         </div>

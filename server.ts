@@ -11,6 +11,7 @@ import cookieParser from "cookie-parser";
 import axios from "axios";
 import { clerkMiddleware } from "@clerk/express";
 import nodemailer from "nodemailer";
+import { requireFortnoxEnv } from "./api/_lib/fortnoxEnv.js";
 import clientsRouter from "./api/routes/clients.js";
 import employeesRouter from "./api/routes/employees.js";
 import teamsRouter from "./api/routes/teams.js";
@@ -25,6 +26,7 @@ import notesRouter from "./api/routes/notes.js";
 import jobsRouter from "./api/routes/jobs.js";
 import importRouter from "./api/routes/import.js";
 import opsRouter from "./api/routes/ops.js";
+import ekonomiRouter from "./api/routes/ekonomi.js";
 import { errorMiddleware } from "./api/_lib/errors.js";
 
 const app = express();
@@ -49,6 +51,7 @@ app.use("/api/notes", notesRouter);
 app.use("/api/jobs", jobsRouter);
 app.use("/api/import", importRouter);
 app.use("/api/ops", opsRouter);
+app.use("/api/ekonomi", ekonomiRouter);
 
 // In-memory store for tokens (for prototype purposes)
 // In a real app, store this securely in a database associated with a user session
@@ -368,8 +371,6 @@ const forceRefreshTimewaveToken = async (): Promise<string> => {
 
 // ==================== FORTNOX API INTEGRATION ====================
 
-const FORTNOX_CLIENT_ID = "EojgbHJg0L7C";
-const FORTNOX_CLIENT_SECRET = "rV7VR7Klt2MrlwFKxuzf2rYUE0oCRB5F";
 const FORTNOX_AUTH_URL = "https://apps.fortnox.se/oauth-v1/auth";
 const FORTNOX_TOKEN_URL = "https://apps.fortnox.se/oauth-v1/token";
 const FORTNOX_API_BASE = "https://api.fortnox.se/3";
@@ -394,8 +395,8 @@ const refreshFortnoxToken = async (): Promise<string> => {
   const body = new URLSearchParams({
     grant_type: "refresh_token",
     refresh_token: fortnoxTokens.refreshToken,
-    client_id: FORTNOX_CLIENT_ID,
-    client_secret: FORTNOX_CLIENT_SECRET,
+    client_id: requireFortnoxEnv('FORTNOX_CLIENT_ID'),
+    client_secret: requireFortnoxEnv('FORTNOX_CLIENT_SECRET'),
   });
   const resp = await fetch(FORTNOX_TOKEN_URL, {
     method: "POST",
@@ -438,8 +439,15 @@ const fortnoxFetch = async (path: string): Promise<any> => {
 // Fortnox OAuth: Step 1 - Get auth URL
 app.get("/api/fortnox/auth-url", (req, res) => {
   const redirectUri = `http://localhost:3002/api/fortnox-callback`;
+  let clientId: string;
+  try {
+    clientId = requireFortnoxEnv('FORTNOX_CLIENT_ID');
+  } catch (err: any) {
+    console.error(err.message);
+    return res.status(500).json({ error: err.message });
+  }
   const params = new URLSearchParams({
-    client_id: FORTNOX_CLIENT_ID,
+    client_id: clientId,
     redirect_uri: redirectUri,
     scope: "invoice",
     state: "fortnox_auth",
@@ -464,8 +472,8 @@ app.get("/api/fortnox-callback", async (req, res) => {
     const body = new URLSearchParams({
       grant_type: "authorization_code",
       code: code as string,
-      client_id: FORTNOX_CLIENT_ID,
-      client_secret: FORTNOX_CLIENT_SECRET,
+      client_id: requireFortnoxEnv('FORTNOX_CLIENT_ID'),
+      client_secret: requireFortnoxEnv('FORTNOX_CLIENT_SECRET'),
       redirect_uri: redirectUri,
     });
 

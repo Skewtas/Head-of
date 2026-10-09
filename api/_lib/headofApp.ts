@@ -30,6 +30,7 @@ import contractsRouter from '../routes/contracts.js';
 import hrRouter from '../routes/hr.js';
 import personalbrevRouter from '../routes/personalbrev.js';
 import adminRouter from '../routes/admin.js';
+import ekonomiRouter from '../routes/ekonomi.js';
 import { errorMiddleware } from './errors.js';
 
 export function buildHeadofApp(): Express {
@@ -56,6 +57,7 @@ export function buildHeadofApp(): Express {
   app.use('/api/hr', hrRouter);
   app.use('/api/personalbrev', personalbrevRouter);
   app.use('/api/admin', adminRouter);
+  app.use('/api/ekonomi', ekonomiRouter);
 
   app.use('/api', errorMiddleware);
   return app;

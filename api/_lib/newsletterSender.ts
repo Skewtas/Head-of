@@ -65,6 +65,13 @@ function buildBlockHtml(opts: {
   appUrl: string;
 }) {
   const { htmlContent, trackingPixelUrl, appUrl, b64Email } = opts;
+  // Brev från Marketing kan ha en egen (centrerad) logga överst – markerat med
+  // <!--LOGGA:EGEN-->. Då hoppar vi över standardloggan så det inte blir två.
+  const logga = htmlContent.includes('<!--LOGGA:EGEN-->')
+    ? ''
+    : `<tr><td style="padding:40px 32px 0;">
+        <img src="${appUrl}/logotyp1.png" alt="Stodona" style="height:45px;width:auto;margin-bottom:24px;display:block;" />
+      </td></tr>`;
   return `<!DOCTYPE html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width"/>
 ${SIMPLE_TEMPLATE_HEAD}
 </head>
@@ -72,9 +79,7 @@ ${SIMPLE_TEMPLATE_HEAD}
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f3ef;padding:32px 0;">
   <tr><td align="center">
     <table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.06);">
-      <tr><td style="padding:40px 32px 0;">
-        <img src="${appUrl}/logotyp1.png" alt="Stodona" style="height:45px;width:auto;margin-bottom:24px;display:block;" />
-      </td></tr>
+      ${logga}
       <tr><td style="padding:0; padding-bottom:32px;">${htmlContent}</td></tr>
       <tr><td style="padding:24px 32px;background:#faf8f5;border-top:1px solid #eae4d9;text-align:center;">
         <p style="margin:0;font-size:13px;color:#666;"><a href="https://stodona.se" style="color:#c9a96e;text-decoration:none;font-weight:500;">stodona.se</a></p>
