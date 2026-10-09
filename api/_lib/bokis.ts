@@ -31,7 +31,8 @@ export function ymdSthlm(d: Date): string {
   return `${y}-${m}-${dag}`;
 }
 
-export async function fetchBokisBookings(): Promise<BokisBooking[]> {
+/** Kör en Convex-fråga mot Bokis. Admin-hemligheten läggs till i argumenten. */
+export async function bokisQuery<T = unknown>(path: string, args: Record<string, unknown> = {}): Promise<T> {
   const url = process.env.BOKIS_CONVEX_URL;
   const secret = process.env.BOKIS_CONVEX_ADMIN_SECRET;
   if (!url || !secret) {
@@ -40,7 +41,7 @@ export async function fetchBokisBookings(): Promise<BokisBooking[]> {
   const r = await fetch(`${url.replace(/\/$/, '')}/api/query`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ path: 'adminData:listBookings', args: { secret }, format: 'json' }),
+    body: JSON.stringify({ path, args: { ...args, secret }, format: 'json' }),
   });
   if (!r.ok) {
     const text = await r.text().catch(() => '');
@@ -48,7 +49,11 @@ export async function fetchBokisBookings(): Promise<BokisBooking[]> {
   }
   const body = await r.json();
   if (body.status === 'error') throw new Error(`Convex error: ${body.errorMessage || 'okänt fel'}`);
-  const rader = body.value || body;
+  return (body.value ?? body) as T;
+}
+
+export async function fetchBokisBookings(): Promise<BokisBooking[]> {
+  const rader = await bokisQuery<unknown>('adminData:listBookings');
   return Array.isArray(rader) ? (rader as BokisBooking[]) : [];
 }
 

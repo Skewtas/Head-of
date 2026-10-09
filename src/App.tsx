@@ -2802,7 +2802,7 @@ export default function App() {
                           Veckouppföljning
                         </h3>
                       </div>
-                      <OpsView />
+                      <OpsView sidopanel />
                     </div>
                   </aside>
                 </div>
