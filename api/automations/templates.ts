@@ -1,5 +1,6 @@
 import { prisma } from '../_lib/prisma.js';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { requireInternalAuth } from '../_lib/internalAuth.js';
 
 // In-memory fallback for local development when Prisma Postgres isn't running
 const memoryStore = new Map<string, { id: string; subject: string; blocks: any }>();
@@ -29,6 +30,8 @@ async function upsertTemplate(id: string, subject: string, blocks: any) {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (!(await requireInternalAuth(req, res))) return;
+
   if (req.method === 'GET') {
     const templates = await getTemplates();
     return res.json(templates);

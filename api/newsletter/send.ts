@@ -1,6 +1,7 @@
 import { prisma } from '../_lib/prisma.js';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { deliverNewsletter } from '../_lib/newsletterSender.js';
+import { requireInternalAuth } from '../_lib/internalAuth.js';
 
 // Stora nyhetsbrev med många bilder kan lätt passera 4.5 MB-defaultet,
 // och vid 100+ mottagare hinner inte default-timeouten på 10 s med —
@@ -11,6 +12,8 @@ export const config = {
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (!(await requireInternalAuth(req, res))) return;
+
   if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
   const {
     subject,

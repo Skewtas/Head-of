@@ -1,7 +1,10 @@
 import { prisma } from '../_lib/prisma.js';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { requireInternalAuth } from '../_lib/internalAuth.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (!(await requireInternalAuth(req, res))) return;
+
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }

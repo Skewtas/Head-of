@@ -7,10 +7,13 @@
 import { prisma } from '../../_lib/prisma.js';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { deliverNewsletter } from '../../_lib/newsletterSender.js';
+import { requireInternalAuth } from '../../_lib/internalAuth.js';
 
 export const config = { maxDuration: 60 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (!(await requireInternalAuth(req, res))) return;
+
   if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
 
   const { id } = req.query;

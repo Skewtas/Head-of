@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getTimewaveCustomers } from '../_lib/timewaveData.js';
 import { prisma } from '../_lib/prisma.js';
+import { requireInternalAuth } from '../_lib/internalAuth.js';
 
 // Sync-vägen drar all klientlista (paginerad) + 24 mån missions för att
 // klassificera pattern, plus alla återkommande uppdrag i abonnemangsfönstret.
@@ -10,6 +11,8 @@ import { prisma } from '../_lib/prisma.js';
 export const config = { maxDuration: 300 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (!(await requireInternalAuth(req, res))) return;
+
   if (req.method !== 'GET' && req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
