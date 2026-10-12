@@ -44,7 +44,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!id || !subject) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
-    if (String(id).startsWith(SKYDDAT_PREFIX)) {
+    if (typeof id !== 'string') {
+      return res.status(400).json({ error: 'Ogiltigt id' });
+    }
+    if (id.startsWith(SKYDDAT_PREFIX)) {
       return res.status(403).json({ error: 'Skyddat dokument' });
     }
 

@@ -114,18 +114,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
-  // Syns i head-ofs utskickshistorik som övriga SMS.
+  // Syns i head-ofs utskickshistorik som övriga SMS — men bara som antal.
+  // /api/newsletter/history är öppen, så varken mobilnummer eller
+  // per-mottagare-resultat sparas här; de finns i Marketings dagslista.
   try {
     await prisma.newsletter.create({
       data: {
         subject: `[SMS] ${rubrik}`,
         category: 'SMS',
         introText: `${meddelanden.length} personliga grattis-SMS från Marketing`,
-        recipients: meddelanden.map((m) => m.telefon),
-        status: misslyckade === 0 ? 'sent' : skickade > 0 ? 'partial' : 'failed',
+        recipients: [],
+        status: skickade === 0 ? 'failed' : misslyckade === 0 ? 'sent' : 'partial',
         successCount: skickade,
         failedCount: misslyckade,
-        failedRecipients: resultat.filter((r) => r.status === 'misslyckades') as any,
+        failedRecipients: [],
       },
     });
   } catch (e) {
