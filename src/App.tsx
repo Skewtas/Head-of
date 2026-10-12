@@ -71,6 +71,7 @@ import HRView from './HRView';
 import SjukfranvaroTestView from './SjukfranvaroTestView';
 import PersonalbrevView from './PersonalbrevView';
 import OnlineBookingsTrend from './OnlineBookingsTrend';
+import GrowthOversikt from './GrowthOversikt';
 import SigningView from './SigningView';
 import ChatView from './ChatView';
 import EkonomiView from './EkonomiView';
@@ -2793,7 +2794,10 @@ export default function App() {
             <div className="p-8 max-w-7xl mx-auto">
               {activeTab === 'overview' && (
                 <div className="grid grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_minmax(0,420px)] gap-6 items-start">
-                  <OverviewView />
+                  <div className="space-y-6 min-w-0">
+                    <OverviewView />
+                    <GrowthOversikt />
+                  </div>
                   <aside className="2xl:sticky 2xl:top-4 2xl:max-h-[calc(100vh-6rem)] 2xl:overflow-y-auto 2xl:pr-1">
                     <div className="border-l-2 border-brand-accent/20 2xl:pl-5">
                       <div className="flex items-center gap-2 mb-4">
