@@ -28,10 +28,14 @@ async function upsertTemplate(id: string, subject: string, blocks: any) {
   }
 }
 
+// Grattis-SMS:ens dagslistor (namn + mobilnummer) hör inte hemma i en öppen
+// endpoint. De läses och skrivs bara via /api/sms/grattis, som kräver nyckel.
+const SKYDDAT_PREFIX = 'marketing_grattis_';
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === 'GET') {
     const templates = await getTemplates();
-    return res.json(templates);
+    return res.json(templates.filter((t) => !String(t.id).startsWith(SKYDDAT_PREFIX)));
   }
 
   if (req.method === 'POST') {
@@ -39,6 +43,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     
     if (!id || !subject) {
       return res.status(400).json({ error: 'Missing required fields' });
+    }
+    if (typeof id !== 'string') {
+      return res.status(400).json({ error: 'Ogiltigt id' });
+    }
+    if (id.startsWith(SKYDDAT_PREFIX)) {
+      return res.status(403).json({ error: 'Skyddat dokument' });
     }
 
     const template = await upsertTemplate(id, subject, blocks);
