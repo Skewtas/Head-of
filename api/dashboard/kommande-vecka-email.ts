@@ -16,6 +16,7 @@
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getTimewaveToken } from '../_lib/timewaveAuth.js';
+import { radExMomsForeRut } from '../_lib/timewavePris.js';
 
 export const config = { maxDuration: 60 };
 
@@ -89,10 +90,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const tjansterLista: string[] = [];
       for (const svc of (m.services || [])) {
         if (nonBillableServiceIds.has(svc.id)) continue;
-        const qty = Number(svc.quantity || 0);
-        const price = Number(svc.price || 0);
-        const discount = Number(svc.discount || 0);
-        revenue += qty * price * (1 - discount / 100);
+        revenue += radExMomsForeRut(m, svc);
         tjansterLista.push((svc.name || svc.title || `#${svc.id}`).trim());
       }
       if (revenue === 0) continue;
@@ -279,7 +277,7 @@ function buildHtml(d: {
   return `
 <div style="font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;max-width:720px;margin:0 auto;padding:24px;color:#1a1a2e;background:#faf8f5">
   <h1 style="font-family:Georgia,serif;font-size:24px;margin:0 0 4px">📅 Snittpris kommande vecka</h1>
-  <p style="color:#666;font-size:13px;margin:0 0 24px">${d.startStr} → ${d.endStr} · alla priser ex moms · förebyggande rapport</p>
+  <p style="color:#666;font-size:13px;margin:0 0 24px">${d.startStr} → ${d.endStr} · alla priser ex moms, före RUT · förebyggande rapport</p>
 
   <table style="width:100%;background:white;border:1px solid #eae4d9;border-radius:12px;padding:20px;margin-bottom:20px;border-collapse:separate;border-spacing:0">
     <tr>
@@ -347,7 +345,7 @@ function buildHtml(d: {
   </ol>
 
   <p style="color:#999;font-size:11px;margin-top:32px;text-align:center">
-    Förebyggande rapport från Head Office · alla priser ex moms<br>
+    Förebyggande rapport från Head Office · alla priser ex moms, före RUT<br>
     Datakälla: Timewave missions nästa 7 dagar
   </p>
 </div>`;
