@@ -13,6 +13,7 @@
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { prisma } from '../_lib/prisma.js';
+import { prisExMomsForeRut } from '../_lib/bokis.js';
 
 export const config = { maxDuration: 30 };
 
@@ -47,6 +48,7 @@ type BokisBooking = {
   customerName?: string;
   city?: string;
   estimatedPrice?: number;
+  useRut?: boolean;
   sqm?: number;
   createdAt?: number;    // convex _creationTime ms
   _creationTime?: number;
@@ -184,7 +186,8 @@ function latestRecurring(bookings: BokisBooking[], n: number) {
       service: b.service || null,
       frequency: b.frequency || null,
       sqm: b.sqm ?? null,
-      estimatedPrice: b.estimatedPrice ?? null,
+      // Ex moms och före RUT — aldrig kundens pris efter RUT.
+      prisExMoms: prisExMomsForeRut(b),
       date: b.date || null,
     }));
 }

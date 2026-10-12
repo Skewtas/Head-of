@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { api } from './lib/api';
 import OnlineBookingsTrend from './OnlineBookingsTrend';
+import EllaBokningar from './EllaBokningar';
 
 // ─────────────────────────────────────────────────────────────────────────
 // Types
@@ -74,11 +75,15 @@ type TaskFilter = 'OPEN_AND_LATE' | 'OVERDUE' | 'THIS_WEEK' | 'UNASSIGNED' | 'DO
 // Main
 // ─────────────────────────────────────────────────────────────────────────
 
-export default function OpsView() {
+// sidopanel = Veckouppföljningen bredvid Översikten på startsidan. Där visas
+// varken Mål eller Bokningar online — båda finns redan i själva Översikten.
+// I stället visas Ellas aktivitet på bokningarna hon lagt in.
+export default function OpsView({ sidopanel = false }: { sidopanel?: boolean }) {
   return (
     <div className="space-y-8">
-      <OnlineBookingsTrend compact />
-      <GoalsBlock />
+      {sidopanel && <EllaBokningar />}
+      {!sidopanel && <OnlineBookingsTrend compact />}
+      {!sidopanel && <GoalsBlock />}
       <TasksBlock />
     </div>
   );

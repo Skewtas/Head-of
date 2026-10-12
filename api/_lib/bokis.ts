@@ -16,6 +16,8 @@ export type BokisBooking = {
   service?: string;
   date?: string;
   status?: string;
+  estimatedPrice?: number;
+  useRut?: boolean;
   createdAt?: number;
   _creationTime?: number;
 };
@@ -31,7 +33,8 @@ export function ymdSthlm(d: Date): string {
   return `${y}-${m}-${dag}`;
 }
 
-export async function fetchBokisBookings(): Promise<BokisBooking[]> {
+/** Kör en Convex-fråga mot Bokis. Admin-hemligheten läggs till i argumenten. */
+export async function bokisQuery<T = unknown>(path: string, args: Record<string, unknown> = {}): Promise<T> {
   const url = process.env.BOKIS_CONVEX_URL;
   const secret = process.env.BOKIS_CONVEX_ADMIN_SECRET;
   if (!url || !secret) {
@@ -40,7 +43,7 @@ export async function fetchBokisBookings(): Promise<BokisBooking[]> {
   const r = await fetch(`${url.replace(/\/$/, '')}/api/query`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ path: 'adminData:listBookings', args: { secret }, format: 'json' }),
+    body: JSON.stringify({ path, args: { ...args, secret }, format: 'json' }),
   });
   if (!r.ok) {
     const text = await r.text().catch(() => '');
@@ -48,7 +51,11 @@ export async function fetchBokisBookings(): Promise<BokisBooking[]> {
   }
   const body = await r.json();
   if (body.status === 'error') throw new Error(`Convex error: ${body.errorMessage || 'okänt fel'}`);
-  const rader = body.value || body;
+  return (body.value ?? body) as T;
+}
+
+export async function fetchBokisBookings(): Promise<BokisBooking[]> {
+  const rader = await bokisQuery<unknown>('adminData:listBookings');
   return Array.isArray(rader) ? (rader as BokisBooking[]) : [];
 }
 
@@ -63,4 +70,28 @@ export function bokningsdagar(bokningar: BokisBooking[], franOchMed?: string): s
     if (!franOchMed || dag >= franOchMed) dagar.push(dag);
   }
   return dagar;
+}
+
+// Samma konstanter som Bokis prismodell (convex/lib/commissionEngine.ts).
+const MOMS = 1.25;
+const FRAMKORNING_EX_MOMS = 456;
+const TJANSTER_MED_FRAMKORNING = ['Flyttstädning', 'Byggstädning', 'Fönsterputsning', 'Textiltvätt'];
+
+/**
+ * Bokningens pris EX MOMS och FÖRE RUT-avdrag.
+ *
+ * Bokis `estimatedPrice` är det kunden betalar: inkl moms och EFTER RUT. Det
+ * ska aldrig visas i dashboarden — RUT är ett betalningssätt, inte en rabatt,
+ * och Stodona får hela beloppet. Räknas baklänges ur prismodellen:
+ *   estimatedPrice = arbete_ex_moms × 1,25 × rutFaktor + framkörning_ex_moms × 1,25
+ * Framkörningen har varken RUT eller rabatt och läggs tillbaka oförändrad.
+ */
+export function prisExMomsForeRut(b: { service?: string | null; estimatedPrice?: number | null; useRut?: boolean | null }): number | null {
+  const pris = Number(b.estimatedPrice);
+  if (!Number.isFinite(pris) || pris <= 0) return null;
+  const rutFaktor = b.useRut === false ? 1 : 0.5;
+  const framkorning = TJANSTER_MED_FRAMKORNING.includes(b.service ?? '') ? FRAMKORNING_EX_MOMS : 0;
+  const arbeteInklMomsEfterRut = pris - framkorning * MOMS;
+  if (arbeteInklMomsEfterRut <= 0) return Math.round(pris / MOMS);
+  return Math.round(arbeteInklMomsEfterRut / MOMS / rutFaktor + framkorning);
 }

@@ -393,7 +393,6 @@ function KpiGoalRow({
   const pct = goal > 0 ? Math.min(100, Math.round((actual / goal) * 100)) : 0;
   const isOver = actual >= goal;
   const barCls = isOver ? 'bg-emerald-500' : pct > 70 ? 'bg-amber-400' : 'bg-red-400';
-  const valueCls = isOver ? 'text-emerald-600 font-semibold' : 'text-brand-muted';
 
   const nf = (n: number): string => new Intl.NumberFormat('sv-SE').format(Math.round(n));
 
@@ -408,12 +407,34 @@ function KpiGoalRow({
   const ktmD = kvar / dagarKvar;
   const ktmText = (n: number): string => unit === 'kr' ? nf(n) : (Math.round(n * 10) / 10).toLocaleString('sv-SE');
 
+  // KTM visas bara när målet inte är nått och måttet ackumuleras över månaden.
+  const visaKtm = kvar > 0 && perVecka;
+  const Varde = ({ namn, children, cls = 'text-brand-dark', bredd }: {
+    namn: string; children: React.ReactNode; cls?: string; bredd: string;
+  }) => (
+    <span className={`${bredd} text-right whitespace-nowrap tabular-nums`}>
+      <span className="text-brand-muted font-normal">{namn}: </span>
+      <span className={`font-semibold ${cls}`}>{children}</span>
+    </span>
+  );
+
   return (
     <div>
-      <div className="flex justify-between text-xs mb-1">
-        <span className="text-brand-dark font-medium">{label}</span>
-        <span className={`tabular-nums ${valueCls}`}>
-          Mål {nf(goal)} {unit} · Nu {nf(actual)} {unit} ({pct}%)
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-xs mb-1">
+        <span className="text-brand-dark font-medium">
+          {label}
+          {revenueExVat != null && revenueExVat > 0 && (
+            <span className="text-brand-muted font-normal tabular-nums"> · {nf(revenueExVat)} kr ex. moms</span>
+          )}
+        </span>
+        {/* Fasta kolumnbredder så att Utfall / Mål / KTM V / KTM D linjerar mellan raderna */}
+        <span className="flex flex-wrap justify-end gap-x-4 gap-y-0.5 ml-auto">
+          <Varde namn="Utfall" bredd="sm:w-48" cls={isOver ? 'text-emerald-600' : 'text-brand-dark'}>
+            {nf(actual)} {unit} ({pct}%)
+          </Varde>
+          <Varde namn="Mål" bredd="sm:w-36">{nf(goal)} {unit}</Varde>
+          <Varde namn="KTM V" bredd="sm:w-32">{visaKtm ? `${ktmText(ktmV)} ${unit}` : '–'}</Varde>
+          <Varde namn="KTM D" bredd="sm:w-32">{visaKtm ? `${ktmText(ktmD)} ${unit}` : '–'}</Varde>
         </span>
       </div>
       <div className="w-full bg-gray-100 rounded-full h-2">
@@ -421,28 +442,6 @@ function KpiGoalRow({
           className={`h-2 rounded-full transition-all duration-500 ${barCls}`}
           style={{ width: `${pct}%` }}
         />
-      </div>
-      <div className="mt-1 text-[11px] flex flex-wrap items-center gap-x-3 gap-y-0.5">
-        {kvar > 0 ? (
-          <>
-            <span className="text-brand-dark font-medium tabular-nums">Kvar till mål: {nf(kvar)} {unit}</span>
-            {perVecka && (
-              <>
-                <span className="text-brand-dark font-medium tabular-nums">· KTM V: {ktmText(ktmV)} {unit}/vecka</span>
-                <span className="text-brand-dark font-medium tabular-nums">· KTM D: {ktmText(ktmD)} {unit}/dag</span>
-              </>
-            )}
-          </>
-        ) : (
-          <span className="text-emerald-600 font-medium tabular-nums">
-            Mål nått{kvar < 0 ? ` · +${nf(-kvar)} ${unit} över` : ''}
-          </span>
-        )}
-        {revenueExVat != null && revenueExVat > 0 && (
-          <span className="text-brand-muted tabular-nums">
-            · {new Intl.NumberFormat('sv-SE').format(Math.round(revenueExVat))} kr ex. moms
-          </span>
-        )}
       </div>
     </div>
   );
@@ -525,7 +524,7 @@ const OverviewView = () => {
   const [senasteAterkommande, setSenasteAterkommande] = React.useState<Array<{
     id: string; createdAt: number | null; customerName: string; city: string | null;
     service: string | null; frequency: string | null; sqm: number | null;
-    estimatedPrice: number | null; date: string | null;
+    prisExMoms: number | null; date: string | null;
   }>>([]);
   const [nyaSedanSenast, setNyaSedanSenast] = React.useState(0);
   const [personalbas, setPersonalbas] = React.useState<{
@@ -1096,9 +1095,9 @@ const OverviewView = () => {
                         </div>
                       </div>
                       <div className="text-right flex-shrink-0">
-                        {b.estimatedPrice != null && (
+                        {b.prisExMoms != null && (
                           <div className="text-sm font-semibold text-brand-dark tabular-nums">
-                            {new Intl.NumberFormat('sv-SE').format(Math.round(b.estimatedPrice))} kr
+                            {new Intl.NumberFormat('sv-SE').format(Math.round(b.prisExMoms))} kr ex. moms
                           </div>
                         )}
                         <div className="text-[10px] text-brand-muted tabular-nums">{relTid}</div>
@@ -2803,7 +2802,7 @@ export default function App() {
                           Veckouppföljning
                         </h3>
                       </div>
-                      <OpsView />
+                      <OpsView sidopanel />
                     </div>
                   </aside>
                 </div>

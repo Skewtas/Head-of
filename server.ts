@@ -28,6 +28,7 @@ import importRouter from "./api/routes/import.js";
 import opsRouter from "./api/routes/ops.js";
 import ekonomiRouter from "./api/routes/ekonomi.js";
 import { errorMiddleware } from "./api/_lib/errors.js";
+import { arUndantagenFranSnittpris } from "./api/_lib/snittprisUndantag.js";
 
 const app = express();
 const INITIAL_PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
@@ -899,7 +900,8 @@ app.get("/api/timewave-summary/missions", async (req, res) => {
         totalHours += missionHours;
 
         // For avg price: exclude collaboration, followup, and zero-revenue missions
-        if (!isExcludedFromAvg && missionRevenue > 0) {
+        // Undantagna kunder (se _lib/snittprisUndantag) räknas inte heller med i snittet.
+        if (!isExcludedFromAvg && missionRevenue > 0 && !arUndantagenFranSnittpris(m)) {
           avgCalcHours += missionHours;
           avgCalcRevenue += missionRevenue;
         }

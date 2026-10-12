@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getTimewaveToken, forceRefreshTimewaveToken } from '../_lib/timewaveAuth.js';
+import { arUndantagenFranSnittpris } from '../_lib/snittprisUndantag.js';
 
 // Aggregeringen drar ihop missions + invoices + workorders → kan ta 15+ s.
 // Default-timeouten på 10 s avbryter ibland → funktionen returnerar
@@ -186,7 +187,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
         totalHours += missionHours;
 
-        if (!isExcludedFromAvg && missionRevenue > 0) {
+        // Undantagna kunder (se _lib/snittprisUndantag) räknas inte heller med i snittet.
+        if (!isExcludedFromAvg && missionRevenue > 0 && !arUndantagenFranSnittpris(m)) {
           avgCalcHours += missionHours;
           avgCalcRevenue += missionRevenue;
         }
