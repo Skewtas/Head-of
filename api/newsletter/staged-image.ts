@@ -9,10 +9,13 @@
  */
 import { prisma } from '../_lib/prisma.js';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { requireInternalAuth } from '../_lib/internalAuth.js';
 
 export const config = { api: { bodyParser: { sizeLimit: '8mb' } } };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (!(await requireInternalAuth(req, res))) return;
+
   if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
 
   const { data, mime } = (req.body || {}) as { data?: string; mime?: string };

@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { prisma } from '../_lib/prisma.js';
+import { requireInternalAuth } from '../_lib/internalAuth.js';
 
 function normalizePhone(raw: string | undefined | null): string | null {
   if (!raw) return null;
@@ -11,6 +12,8 @@ function normalizePhone(raw: string | undefined | null): string | null {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (!(await requireInternalAuth(req, res))) return;
+
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }

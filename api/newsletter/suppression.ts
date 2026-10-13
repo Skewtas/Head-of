@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { filterAllowedEmails, debugSuppression } from '../_lib/suppressionList.js';
+import { requireInternalAuth } from '../_lib/internalAuth.js';
 
 /**
  * Central spärr-gate för ALLA system som skickar mail i Stodona-stacken.
@@ -13,6 +14,8 @@ import { filterAllowedEmails, debugSuppression } from '../_lib/suppressionList.j
  * GET  ?debug=1             → hela spärrlistan (för felsökning)
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (!(await requireInternalAuth(req, res))) return;
+
   if (req.method === 'GET') {
     if (req.query.debug !== '1') {
       return res.status(400).json({ error: 'Använd POST { emails: [...] }, eller ?debug=1' });
