@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getTimewaveCustomers } from '../_lib/timewaveData.js';
 import { prisma } from '../_lib/prisma.js';
+import { loadWebSubscribers, mergeWebSubscribers } from '../_lib/webSubscribers.js';
 
 // Sync-vägen drar all klientlista (paginerad) + 24 mån missions för att
 // klassificera pattern, plus alla återkommande uppdrag i abonnemangsfönstret.
@@ -118,7 +119,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    const uniqueCustomers = dbContacts;
+    // Hemsidans nyhetsbrevsanmälningar ligger i ett eget dokument och läggs
+    // till här, efter synken – de sparas alltså aldrig in i system_contacts.
+    const uniqueCustomers = mergeWebSubscribers(dbContacts, await loadWebSubscribers());
     
     // Central suppression (hard blocks + system_optouts + domän-suffix)
     const { isBlockedEmail, isBlockedPhone } = await import('../_lib/suppressionList.js');
