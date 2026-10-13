@@ -14,6 +14,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getTimewaveToken } from '../_lib/timewaveAuth.js';
 import { arUndantagenFranSnittpris } from '../_lib/snittprisUndantag.js';
+import { radExMomsForeRut } from '../_lib/timewavePris.js';
 
 export const config = { maxDuration: 60 };
 
@@ -62,10 +63,7 @@ function parseMission(m: any): MissionData {
   const tjansterLista: string[] = [];
   for (const svc of (m.services || [])) {
     if (nonBillableServiceIds.has(svc.id)) continue;
-    const qty = Number(svc.quantity || 0);
-    const price = Number(svc.price || 0);
-    const discount = Number(svc.discount || 0);
-    revenue += qty * price * (1 - discount / 100);
+    revenue += radExMomsForeRut(m, svc);
     tjansterLista.push((svc.name || svc.title || `#${svc.id}`).trim());
   }
   let timmar = 0;
@@ -97,7 +95,7 @@ function snittPerVecka(missions: MissionData[], weekStart: Date, weekEnd: Date):
   let rev = 0, tim = 0;
   for (const m of missions) {
     if (!m.dagar) continue;
-    if (m.dagar >= s && m.dagar <= e && m.timmar > 0) {
+    if (m.dagar >= s && m.dagar <= e && m.timmar > 0 && m.revenue > 0) {
       rev += m.revenue;
       tim += m.timmar;
     }
@@ -139,13 +137,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const forraVeckan = { rev: 0, tim: 0, snitt: 0 };
     for (const m of veckoParsed) {
-      if (m.timmar > 0) { forraVeckan.rev += m.revenue; forraVeckan.tim += m.timmar; }
+      if (m.timmar > 0 && m.revenue > 0) { forraVeckan.rev += m.revenue; forraVeckan.tim += m.timmar; }
     }
     forraVeckan.snitt = forraVeckan.tim > 0 ? forraVeckan.rev / forraVeckan.tim : 0;
 
     const fyraVeckor = { rev: 0, tim: 0, snitt: 0 };
     for (const m of bakat) {
-      if (m.timmar > 0) { fyraVeckor.rev += m.revenue; fyraVeckor.tim += m.timmar; }
+      if (m.timmar > 0 && m.revenue > 0) { fyraVeckor.rev += m.revenue; fyraVeckor.tim += m.timmar; }
     }
     fyraVeckor.snitt = fyraVeckor.tim > 0 ? fyraVeckor.rev / fyraVeckor.tim : 0;
 
@@ -293,7 +291,7 @@ function buildHtml(d: {
   return `
 <div style="font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;max-width:720px;margin:0 auto;padding:24px;color:#1a1a2e;background:#faf8f5">
   <h1 style="font-family:Georgia,serif;font-size:24px;margin:0 0 4px;color:#1a1a2e">📊 Snittpris-rapport</h1>
-  <p style="color:#666;font-size:13px;margin:0 0 24px">Veckan som gick · alla priser ex moms</p>
+  <p style="color:#666;font-size:13px;margin:0 0 24px">Veckan som gick · alla priser ex moms, före RUT</p>
 
   <table style="width:100%;background:white;border:1px solid #eae4d9;border-radius:12px;padding:20px;margin-bottom:20px;border-collapse:separate;border-spacing:0">
     <tr>
