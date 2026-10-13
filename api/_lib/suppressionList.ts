@@ -35,6 +35,10 @@ const HARD_BLOCK_EMAILS = new Set<string>([
 const HARD_BLOCK_EMAIL_DOMAINS = [
   'kleer.se',
   'ihm.se',
+  // IHM:s övriga domäner — utskick hamnade i deras ärendesystem 2026-10-13
+  'ihmeducation.se',
+  'ihmbusinessschool.onmicrosoft.com',
+  'ihmbusinessschool.se',
   // Avregistrerade 2026-09-10 — begärt av Mikaela
   'elitfonster.se',
   'redcross.se',
@@ -46,6 +50,11 @@ const HARD_BLOCK_EMAIL_DOMAINS = [
 
 /** True om adressen ligger på en hårdblockad domän (inkl. subdomäner). */
 function isHardBlockedDomain(e: string): boolean {
+  // IHM får ALDRIG utskick, oavsett vilken av deras domäner adressen ligger
+  // på: varje domändel som börjar på "ihm" spärras (ihm.se, ihmeducation.se,
+  // ihmbusinessschool.onmicrosoft.com …).
+  const domain = e.slice(e.lastIndexOf('@') + 1);
+  if (/(^|\.)ihm[a-z0-9-]*\./.test(domain)) return true;
   return HARD_BLOCK_EMAIL_DOMAINS.some((d) => e.endsWith('@' + d) || e.endsWith('.' + d));
 }
 
